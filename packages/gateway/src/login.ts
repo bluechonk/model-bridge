@@ -31,16 +31,23 @@ import { createHash, randomBytes } from "node:crypto";
 /**
  * 用系统默认浏览器打开 URL。
  *
- * Windows 下走 `cmd /c start "" "{url}"`，两个坑叠在一起、缺一不可：
+ * Windows 下用 **`rundll32 url.dll,FileProtocolHandler <url>`**，不用 `cmd /c start`。
  *
- * 1. `start` 的第一个参数会被当成**窗口标题**，空标题 `""` 必须占位 ——
- *    否则 URL 本身被当标题，什么都不打开。
- * 2. URL 里的 `&` 是 **cmd 的命令分隔符**。Node 默认按 C 运行时的规则转义参数，
- *    那套规则对 cmd.exe **无效**，于是 cmd 在第一个 `&` 处截断命令行。
- *    实测：`spawn("cmd", ["/c","start","",url])` 时浏览器只拿到
- *    `...?sid=xxx`，`state` / `redirect` 全丢 —— 用户看到的是「未获取到登录票据」。
- *    修法是 `windowsVerbatimArguments` + 自己给 URL 加引号，让 cmd 把整个 URL
- *    当成一个词元（引号内的 `&` 不是分隔符）。
+ * ## 为什么不用 `start`（实测 2026-10-08，本机逐一验证）
+ *
+ * `start` 有两个叠加的坑，且**修不完**：
+ *
+ * 1. URL 里的 `&` 是 **cmd 的命令分隔符**。Node 默认按 C 运行时规则转义参数，
+ *    而那套规则对 cmd.exe **无效** —— cmd 在第一个 `&` 处截断命令行。
+ *    实测 `spawn("cmd", ["/c","start","",url])` 时浏览器只拿到 `...?sid=xxx`，
+ *    `state`/`redirect` 全丢，登录页报「未获取到登录票据」。
+ * 2. 补上 `windowsVerbatimArguments` + 自己加引号后，**参数拼接是对的**
+ *    （`echo` 验证：URL 完整、无 stderr），但**浏览器根本不再被启动**
+ *    （本地服务器 0 次请求）。三种 `start` 变体（含不加空标题的）都是 0 次。
+ *
+ * 而 `rundll32 url.dll,FileProtocolHandler <url>` 实测**成功打开且 URL 完整**
+ * （本地服务器收到 `?a=1&b=2&c=3`）。它不经 cmd，也就没有分隔符问题 ——
+ * 参考实现（`catpaw2api` 的 `openBrowser`）用的正是这条路。
  *
  * 打不开浏览器不影响登录：调用方继续轮询/等回调，用户可手动复制链接。
  */
@@ -63,7 +70,7 @@ export function openBrowser(url: string): void {
 export interface BrowserCommand {
   cmd: string;
   args: string[];
-  /** Windows 下必须为 true：否则 Node 的转义规则会让 cmd 在 `&` 处截断 URL。 */
+  /** Windows 下为 true 时按字面拼命令行（不经 Node 的转义规则）。 */
   windowsVerbatimArguments?: boolean;
   windowsHide?: boolean;
 }
@@ -71,18 +78,13 @@ export interface BrowserCommand {
 /**
  * 构造「用默认浏览器打开 url」的命令行。
  *
- * 单独抽成纯函数是为了**可断言**：Windows 上的截断 bug 只有真实执行才暴露，
- * 而这里能直接检查 args 里 URL 是否完整（含 `&` 与后续参数）。
+ * 单独抽成纯函数是为了**可断言**：Windows 上「URL 被截断 / 浏览器没启动」
+ * 这两类 bug 只有真实执行才暴露，纯函数至少能锁住「URL 原样传参」这一半。
  */
 export function browserCommand(url: string, platform: NodeJS.Platform = process.platform): BrowserCommand {
   if (platform === "win32") {
-    // `start` 的窗口标题占位 `""` + URL 自带引号 + verbatim，三者缺一不可。
-    return {
-      cmd: "cmd",
-      args: ["/c", "start", "", `"${url}"`],
-      windowsVerbatimArguments: true,
-      windowsHide: true,
-    };
+    // 不经 cmd：`&` 不是分隔符，URL 原样作为单个 argv 传入。
+    return { cmd: "rundll32", args: ["url.dll,FileProtocolHandler", url], windowsHide: true };
   }
   if (platform === "darwin") return { cmd: "open", args: [url] };
   return { cmd: "xdg-open", args: [url] };

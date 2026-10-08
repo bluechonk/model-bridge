@@ -215,136 +215,105 @@ describe("cred", () => {
     }
   });
 
-  it("浏览器命令：URL 完整传给 cmd（Windows 下 `&` 不会被截断）", async () => {
-    // 回归：早期用 spawn("cmd", ["/c","start","",url]) 且未用 verbatim，
-    // Node 的转义规则对 cmd.exe 无效 → cmd 在第一个 `&` 处截断命令行，
-    // 浏览器只拿到 `...?sid=xxx`，用户看到「未获取到登录票据」。
+  it("浏览器命令：不经 cmd（URL 不被截断、且真的能打开）", async () => {
+    // 回归（实测 2026-10-08，本机逐一验证）：
+    //  - `cmd /c start "" <url>` 未 verbatim → cmd 在第一个 `&` 处截断命令行，
+    //    浏览器只拿到 `...?sid=xxx`，用户看到「未获取到登录票据」；
+    //  - 补上 verbatim + 引号后参数拼对了，但**浏览器根本不再被启动**
+    //    （本地服务器 0 次请求）—— 三种 start 变体都是 0 次。
+    // 改用 `rundll32 url.dll,FileProtocolHandler`：不经 cmd，实测打开成功且 URL 完整。
     const { login } = await import("@model-bridge/gateway");
     const url =
       "https://catpaw.meituan.com/api/gateway/passport/login-entry?sid=AAA&state=BBB&redirect=http%3A%2F%2F127.0.0.1%3A62007%2Fcallback";
 
     const win = login.browserCommand(url, "win32");
-    assert.equal(win.cmd, "cmd");
-    assert.equal(win.windowsVerbatimArguments, true, "必须 verbatim，否则 cmd 会截断 `&`");
-    const joined = win.args.join(" ");
-    assert.ok(joined.includes(`"${url}"`), "URL 应整体带引号传入（引号内 `&` 不是分隔符）");
-    assert.ok(joined.includes("state=BBB"), "`&` 之后的参数不能丢");
-    assert.ok(joined.includes("redirect="), "`redirect` 不能丢");
+    assert.equal(win.cmd, "rundll32", "Windows 下不得再走 cmd start");
+    assert.deepEqual(
+      win.args,
+      ["url.dll,FileProtocolHandler", url],
+      "URL 必须作为**单个 argv** 原样传入（`&` 不经 shell，无需引号）",
+    );
+    assert.ok(!win.args.some((a) => a.includes("start")), "不得再出现 cmd start");
 
     const mac = login.browserCommand(url, "darwin");
     assert.deepEqual(mac.args, [url], "非 Windows 平台原样传 URL");
   });
 
-  it("回调服务器收 GET（query）与 POST（JSON/表单）；陌生 state 被拒绝但不中断登录", async () => {
-    // 通过 login() 间接验证。每种形态：本地假网关 + 假回调。
-    // ⚠ 最后一个用例是回归重点：坏 state 回调先到、真回调后到 ——
-    //   早期实现在坏 state 上 `throw`，整个 Promise.race 失败，真回调白等。
-    const cases: Array<{
-      name: string;
-      send: (url: string, state: string) => Promise<void>;
-      expectToken: string;
-    }> = [
-      {
-        name: "POST JSON",
-        expectToken: "tok-post-json-0123456789abcdef",
-        send: (url, state) =>
-          fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: "tok-post-json-0123456789abcdef", state }),
-          }).then(() => undefined),
-      },
-      {
-        name: "POST 表单",
-        expectToken: "tok-post-form-0123456789abcdef",
-        send: (url, state) =>
-          fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: `token=tok-post-form-0123456789abcdef&state=${state}`,
-          }).then(() => undefined),
-      },
-      {
-        name: "GET query",
-        expectToken: "tok-get-query-0123456789abcdef",
-        send: (url, state) =>
-          fetch(`${url}?token=tok-get-query-0123456789abcdef&state=${state}`).then(() => undefined),
-      },
-      {
-        name: "坏 state 先到、真回调后到 → 仍登录成功（用真 token）",
-        expectToken: "tok-good-0123456789abcdef",
-        send: async (url, state) => {
-          const bad = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: "tok-stale-0123456789abcdef", state: "deadbeef" }),
-          });
-          assert.equal(bad.status, 400, "陌生 state 应被就地拒绝");
-          await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: "tok-good-0123456789abcdef", state }),
-          });
-        },
-      },
-    ];
+  it("login 只走 poll-token（不再起本地回调服务器），并补上 current-user 的 uid", async () => {
+    // 回归：早期实现起 loopback 回调与轮询 race，但三次真机登录回调一次都没赢
+    // （source 恒为 catpaw-login-poll），已删除回调通道。这里锁住：
+    //   ① 全程不监听任何端口（无回调服务器）
+    //   ② token 来自 poll-token
+    //   ③ 落盘 source 为 catpaw-login-poll，uid 来自 current-user
+    const { login } = await import("@model-bridge/gateway");
+    let gwPort = 0;
+    let pollHits = 0;
 
-    for (const c of cases) {
-      // 假网关：login-config + login-entry(302) + poll-token(永远 null) + current-user
-      let gwPort = 0;
-      const gw = createServer((req, res) => {
-        const u = new URL(req.url ?? "/", "http://gw");
-        const json = (o: unknown): void => {
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(o));
-        };
-        if (u.pathname.endsWith("/login-config")) {
-          return json({ code: 0, data: { loginEntryUrl: `http://127.0.0.1:${gwPort}/api/gateway/passport/login-entry` } });
-        }
-        if (u.pathname.endsWith("/login-entry")) {
-          res.writeHead(302, { Location: String(u.searchParams.get("redirect") ?? "/") });
-          return res.end();
-        }
-        if (u.pathname.endsWith("/poll-token")) return json({ code: 0, data: null });
-        if (u.pathname.endsWith("/current-user")) {
-          return json({ code: 0, data: { userId: "uid-7654321", userName: "tester" } });
-        }
-        res.writeHead(404);
-        res.end();
-      });
-      gwPort = await new Promise<number>((r) =>
-        gw.listen(0, "127.0.0.1", () => r((gw.address() as { port: number }).port)),
-      );
-
-      // 把线上端点重定向到假网关（不改源码常量）
-      const realFetch = globalThis.fetch;
-      globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : String((input as { url?: string }).url ?? input);
-        return realFetch(url.replace("https://catx.nocode.cn", `http://127.0.0.1:${gwPort}`), init);
-      }) as typeof fetch;
-
-      try {
-        const loginP = cred.login("https://catx.nocode.cn", {
-          onUrl: (authUrl) => {
-            const u = new URL(authUrl);
-            const redirect = new URL(String(u.searchParams.get("redirect")));
-            const state = String(u.searchParams.get("state"));
-            setTimeout(() => {
-              void c.send(redirect.href, state);
-            }, 50);
-          },
-          onStatus: () => {},
-        });
-        const got = await loginP;
-        assert.equal(got.accessToken, c.expectToken, `${c.name}: 应拿到预期的 token`);
-        assert.equal(got.uid, "uid-7654321", `${c.name}: 应补上 current-user 的 uid`);
-        assert.ok(got.source.startsWith("catpaw-login-"), `${c.name}: 来源应记录通道`);
-      } finally {
-        globalThis.fetch = realFetch;
-        await new Promise<void>((r) => gw.close(() => r()));
+    const gw = createServer((req, res) => {
+      const u = new URL(req.url ?? "/", "http://gw");
+      const json = (o: unknown): void => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(o));
+      };
+      if (u.pathname.endsWith("/login-config")) {
+        return json({ code: 0, data: { loginEntryUrl: `http://127.0.0.1:${gwPort}/api/gateway/passport/login-entry` } });
       }
+      if (u.pathname.endsWith("/login-entry")) {
+        res.writeHead(302, { Location: String(u.searchParams.get("redirect") ?? "/") });
+        return res.end();
+      }
+      if (u.pathname.endsWith("/poll-token")) {
+        pollHits += 1;
+        // 第 2 次轮询才给 token（模拟用户授权需要一点时间）
+        return json({ code: 0, data: pollHits >= 2 ? "tok-from-poll-0123456789abcdef" : null });
+      }
+      if (u.pathname.endsWith("/current-user")) {
+        return json({ code: 0, data: { userId: 4522314126, userName: "塞西莉亚4412" } });
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    gwPort = await new Promise<number>((r) =>
+      gw.listen(0, "127.0.0.1", () => r((gw.address() as { port: number }).port)),
+    );
+
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : String((input as { url?: string }).url ?? input);
+      return realFetch(url.replace("https://catx.nocode.cn", `http://127.0.0.1:${gwPort}`), init);
+    }) as typeof fetch;
+
+    let authUrl = "";
+    try {
+      const c = await cred.login("https://catx.nocode.cn", {
+        onUrl: (u) => {
+          authUrl = u;
+        },
+        onStatus: () => {},
+      });
+      assert.equal(c.accessToken, "tok-from-poll-0123456789abcdef", "token 应来自 poll-token");
+      assert.equal(c.source, "catpaw-login-poll", "source 应标明 poll 通道");
+      assert.equal(c.uid, "4522314126", "uid 应来自 current-user（数字也要收）");
+      assert.ok(pollHits >= 2, `应轮询了多次，实际 ${pollHits}`);
+
+      // auth_url 仍是三参数形态（redirect 是网关必填，但只是形式要求）
+      const parsed = new URL(authUrl);
+      assert.ok(parsed.searchParams.get("sid"), "auth_url 必须带 sid");
+      assert.ok(parsed.searchParams.get("state"), "auth_url 必须带 state");
+      const redirect = parsed.searchParams.get("redirect") ?? "";
+      assert.ok(redirect.endsWith("/callback"), "auth_url 必须带 redirect（网关缺它会 400）");
+      // 关键：我们**没有**监听那个端口 —— 连上去应当失败（无服务）
+      const redirectPort = Number(new URL(redirect).port);
+      await assert.rejects(
+        () => realFetch(`http://127.0.0.1:${redirectPort}/callback`),
+        "不应有本地回调服务器在监听 redirect 端口",
+      );
+    } finally {
+      globalThis.fetch = realFetch;
+      await new Promise<void>((r) => gw.close(() => r()));
     }
   });
+
 });
 
 // ── 3. 请求头 ────────────────────────────────────────────────────────────────
