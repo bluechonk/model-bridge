@@ -84,6 +84,17 @@ signature    = hmac_sha256_hex(sk, stringToSign)
 
 **`gateway/config`（models.ts:180）**：只有签名头，**无任何额外头**
 
+⚠️ **签名头只能出现一次，大小写也必须一致**（**实测 2026-10-08，抓包定位**）：
+`signRequest` 返回参与签名的 `content-type`（小写）；若调用方再追加一个
+`Content-Type`，Node 的 fetch 会把两者**都发出去**、拼成
+`content-type: application/json, application/json`。服务端按**实际收到的值**重算
+canonical request，与签名时的 `application/json` 不符 ⇒
+`401 {"error_code":"APIG.0301","error_msg":"...verify ak sk signature fail"}`。
+
+这个坑的表现极具迷惑性：**同一个 host、同一套 AK/SK，GET 目录正常而 chat 全挂**
+（目录路径没有重复头），很容易误判成「凭证失效 / 签名算法错」。定位方法：把
+`chatUrl()` 指向本地 echo 服务，原样打印收到的头 —— 重复的 `content-type` 一眼可见。
+
 ⚠️ **`Agent-Type` / `X-Language` 绝不能参与签名**（codearts-credits.ts:113-129）：
 实测（2026-09-18 真实凭据）进入 canonical request 与 SignedHeaders 会得
 `401 {"error_code":"APIG.0301","error_msg":"...verify ak sk signature fail"}`；签名后追加则 200。

@@ -830,6 +830,32 @@ describe("5. 请求体改写", () => {
     const plain = upstream.buildHeaders(FAKE_CREDENTIAL);
     assert.equal(plain["maas_type"], undefined, "无后缀不是 benefit，带该头会 unsupported model");
   });
+
+  it("**签名头不得重复**：content-type 只能出现一次（否则 fetch 拼成 'a, a' 导致签名失败）", () => {
+    // 实测踩坑（2026-10-08）：`signRequest` 返回参与签名的 `content-type`，而
+    // `buildHeaders` 又追加了一个 `Content-Type`。两者只在大小写上不同，Node 的
+    // fetch 会**都发出去**并拼成 `application/json, application/json`；服务端按
+    // 实际收到的值重算 canonical request，与签名时的值不符 →
+    // `401 APIG.0301 verify ak sk signature fail`（chat 全挂，而 GET 目录正常，
+    // 因为那条路径没有重复头）。
+    upstream.buildChatBody(
+      { model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] },
+      "glm-5.3-flash",
+    );
+    const headers = upstream.buildHeaders(FAKE_CREDENTIAL);
+
+    const ctKeys = Object.keys(headers).filter((k) => k.toLowerCase() === "content-type");
+    assert.deepEqual(ctKeys, ["content-type"], "只能有一个 content-type 键，且是小写（参与签名那个）");
+    assert.equal(headers["content-type"], "application/json");
+
+    // 推广：任何「大小写不同但同名」的重复头都会踩同样的坑
+    const lowered = Object.keys(headers).map((k) => k.toLowerCase());
+    assert.equal(
+      new Set(lowered).size,
+      lowered.length,
+      `头名不得大小写重复（实测 fetch 会合并成逗号串）：${lowered.join(", ")}`,
+    );
+  });
 });
 
 describe("6. 错误分类", () => {
