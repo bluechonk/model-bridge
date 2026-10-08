@@ -7,6 +7,9 @@
  *   3. `GET {base}/v2/plugin/auth/token?state=...` 每 5s 轮询，≤5 分钟 → 令牌
  *   4. 落盘为 credentials.json（Go 风格字段名）
  * 刷新：`POST /v2/plugin/auth/refresh`（纯 HTTP，无需浏览器）
+ *
+ * ⚠ 本渠道**只有一个域**（国际版 workbuddy.ai）。国内版（codebuddy.ai）是**独立渠道**
+ * `workbuddy` —— 账号属于哪个域就用哪个渠道登录，不再有 `--realm` 二选一。
  */
 
 import { readFileSync } from "node:fs";
@@ -16,20 +19,10 @@ import {
   credentialsPath,
   ensureDir,
   login as sharedLogin,
-  prefsPath,
 } from "@model-bridge/gateway";
 
-/** 凭证无显式 domain 时使用的默认域名（国际版）。 */
+/** 登录基址（国际版 workbuddy.ai）。 */
 export const DEFAULT_BASE_URL = "https://www.workbuddy.ai";
-
-/**
- * 支持的登录域：国际版（workbuddy.ai）与国内版（codebuddy.ai，腾讯 CodeBuddy）。
- * 两个域是**同一套插件端点协议**，区别只在账号所在域；登录必须选对域才能授权成功。
- */
-export const REALMS: Record<string, string> = {
-  intl: "https://www.workbuddy.ai",
-  cn: "https://www.codebuddy.ai",
-};
 
 /** 向 WorkBuddyAI 插件端点标识本客户端。 */
 const PLATFORM_QS = "platform=workbuddy";
@@ -85,34 +78,14 @@ export const EMPTY_CREDENTIALS: Credentials = {
 /** 取值收窄（转发共享层原语，见 `@model-bridge/gateway` 的 `login.ts`）。 */
 const str = sharedLogin.str;
 
-function readPrefs(): Record<string, unknown> {
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(prefsPath(), "utf8"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
 /**
- * 把 realm 参数解析为登录用的 base url。
+ * 解析登录基址。
  *
- * auto：已有凭证 → 用凭证里的 domain（重登留在原域）；
- *      否则 → prefs 的 realm 设置 → 默认国际版。
+ * 国际版**只有一个域**（workbuddy.ai），`realm` 参数仅作兼容保留（共享层 CLI 会传进来）。
+ * 国内版是**独立渠道** `workbuddy`（codebuddy.ai）—— 域是渠道身份的一部分，
+ * 不在这里按参数分流（那会让登录链路与凭证落点随 `--realm` 漂移）。
  */
-export function resolveBaseUrl(realm = "auto"): string {
-  if (realm in REALMS) return REALMS[realm]!;
-  if (realm !== "" && realm !== "auto") throw new Error(`未知 realm: ${realm}`);
-  try {
-    const c = load();
-    if (c.domain) return `https://${c.domain}`;
-  } catch {
-    /* 未登录/损坏都走默认 */
-  }
-  const saved = readPrefs()["realm"];
-  if (typeof saved === "string" && saved in REALMS) return REALMS[saved]!;
+export function resolveBaseUrl(_realm = "auto"): string {
   return DEFAULT_BASE_URL;
 }
 

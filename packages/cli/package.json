@@ -30,6 +30,7 @@
     "qoder-bridge": "*",
     "raccoon-bridge": "*",
     "trae-bridge": "*",
+    "workbuddy-bridge": "*",
     "workbuddyai-bridge": "*"
   },
   "devDependencies": {

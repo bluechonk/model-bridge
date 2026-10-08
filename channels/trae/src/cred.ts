@@ -157,7 +157,7 @@ export const REALMS: Record<string, string> = {
 export function resolveBaseUrl(realm = "auto"): string {
   if (realm in REALMS) return REALMS[realm]!;
   if (realm === "intl") {
-    // 共享 CLI 的 --realm 列表里有 intl，但 TRAE 源码中不存在国际版配置：
+    // 早期文档里出现过 `--realm intl`；TRAE 源码中不存在国际版配置，
     // 明确报错比把用户导向一个不存在的域更好。
     throw new Error("TRAE 只有 CN 配置（trae-api-cn.mchost.guru），不支持 intl；请用 auto 或 cn");
   }

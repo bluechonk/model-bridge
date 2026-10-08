@@ -2,12 +2,6 @@
   "files": [],
   "references": [
     {
-      "path": "packages/gateway"
-    },
-    {
-      "path": "packages/cli"
-    },
-    {
       "path": "channels/catpaw"
     },
     {
@@ -38,7 +32,16 @@
       "path": "channels/trae"
     },
     {
+      "path": "channels/workbuddy"
+    },
+    {
       "path": "channels/workbuddyai"
+    },
+    {
+      "path": "packages/cli"
+    },
+    {
+      "path": "packages/gateway"
     }
   ]
 }

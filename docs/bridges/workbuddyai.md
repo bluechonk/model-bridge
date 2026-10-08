@@ -7,6 +7,12 @@ hooks + skills + commands。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 WorkBuddyAI 后端。
 
+> **国际版 / 国内版是两条渠道**：本文件是**国际版**（`workbuddy.ai`，cid `workbuddyai`）。
+> 国内版（腾讯 CodeBuddy，`codebuddy.ai`）是**独立渠道** `workbuddy`，见
+> [`workbuddy.md`](workbuddy.md)。两者共用一个插件与一套网关，但账号、
+> 凭证落点、模型池各自独立 —— 账号在哪个域就用哪个渠道登录。
+> 早期版本用一个 `--realm intl|cn` 参数在两者间切换，现已**移除**：域是渠道身份的一部分。
+
 > 本仓库原为 Python 实现，已重构为 TypeScript（Node ≥ 22.6）。
 > 旧实现保留在 git 历史里：`git show <commit>:src/workbuddy_bridge/gateway.py`。
 
@@ -107,10 +113,15 @@ tests/
 
 全部落点在统一存储根 `~/.model-bridge/` 下按渠道分层：凭证在
 `~/.model-bridge/workbuddyai/credentials.json`（权限 0600），不要提交到 git。
-历史顶层目录（`~/.workbuddy-bridge/`、`~/.workbuddyai2api/`、`~/.workbuddyai-gateway/` 等）
-首次访问时自动收拢进该层，无需重新登录。`MODEL_BRIDGE_HOME` 可把整个存储根指到别处
-（旧的 `WORKBUDDY_HOME` / `WBAI2API_HOME` 仍被识别但已弃用），便携/测试用。
-`workbuddy paths` 可只读列出全部落点。
+历史顶层目录（`~/.workbuddyai2api/`、`~/.workbuddyai-gateway/` 等）首次访问时自动收拢进该层，
+无需重新登录。`MODEL_BRIDGE_HOME` 可把整个存储根指到别处（旧的 `ZCB_HOME` / `WBAI2API_HOME`
+仍被识别但已弃用），便携/测试用。
+`model-bridge paths --all` 可只读列出全部落点。
+
+⚠ 拆分成两条渠道后，**裸 `workbuddy` 名字**（`~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
+`WORKBUDDY_DEBUG_DUMP`）**两条渠道都不再认领**：那个目录里是国际版旧凭证，而 `workbuddy`
+这个 cid 现在属于国内版 —— 认领会把国际数据迁进国内渠道（跨产品串号）。旧数据早已迁入
+`~/.model-bridge/workbuddyai/`，无需再迁。
 
 ## 模型短名映射
 
@@ -124,7 +135,7 @@ tests/
 npm test          # = node --test tests/selftest.test.ts
 ```
 
-测试**完全离线**：所有上游调用指向本机假服务，数据目录用 `WORKBUDDY_HOME`
+测试**完全离线**：所有上游调用指向本机假服务，数据目录用 `MODEL_BRIDGE_HOME`
 指向临时目录，不需要真实凭据，也不会碰真实账号。
 
 覆盖：路径与目录迁移、模型别名映射、凭据落盘/损坏容忍、上游 URL 与鉴权头、

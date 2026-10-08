@@ -9,7 +9,7 @@
  *  5. SSE 规范化（注释行剔除、空 tool_calls 剔除）与聚合
  *  6. 端到端网关（假上游）：system 注入、强制流式、指纹改写、非流式聚合、错误信封
  *
- * 数据目录用 WORKBUDDY_HOME 隔离，绝不碰真实凭据。
+ * 数据目录用 MODEL_BRIDGE_HOME 隔离，绝不碰真实凭据。
  */
 
 import assert from "node:assert/strict";
@@ -111,7 +111,7 @@ async function readSseFrames(url: string, body: unknown): Promise<string> {
 // ── 测试 ─────────────────────────────────────────────────────────────────────
 
 describe("1. 路径", () => {
-  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/workbuddy", () => {
+  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/workbuddyai", () => {
     assert.equal(paths.rootDir(), HOME);
     assert.equal(paths.channelDir(), join(HOME, "workbuddyai"));
     assert.ok(paths.credentialsPath().endsWith("credentials.json"));
@@ -204,16 +204,20 @@ describe("3. 凭据", () => {
     assert.throws(() => cred.load(), cred.NotLoggedInError);
   });
 
-  it("resolveBaseUrl 跟随凭证 domain", async () => {
+  it("登录基址恒为国际域（realm 参数被忽略）", async () => {
     const payload = Buffer.from(JSON.stringify({ sub: "u" })).toString("base64url");
     await cred.save({
       ...cred.EMPTY_CREDENTIALS,
       accessToken: `h.${payload}.s`,
       domain: "www.codebuddy.ai",
     });
-    assert.equal(cred.resolveBaseUrl("auto"), "https://www.codebuddy.ai");
+    assert.equal(cred.resolveBaseUrl("auto"), "https://www.workbuddy.ai");
     assert.equal(cred.resolveBaseUrl("intl"), "https://www.workbuddy.ai");
-    assert.equal(cred.resolveBaseUrl("cn"), "https://www.codebuddy.ai");
+    assert.equal(
+      cred.resolveBaseUrl("cn"),
+      "https://www.workbuddy.ai",
+      "国内版是独立渠道 workbuddy，不在这里分流",
+    );
   });
 });
 

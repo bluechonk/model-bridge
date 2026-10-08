@@ -1,12 +1,15 @@
 /**
- * WorkBuddyAI 渠道装配：静态配置 + 四个渠道独有模块，注册进共享 gateway 层。
+ * WorkBuddyAI 渠道装配（**国际版**：`workbuddy.ai`）。
  *
  * 本文件是**共享层与渠道层的唯一边界**：`@model-bridge/gateway` 里的
  * gateway / daemon / headless / auth-flow 都通过这里注册的 `Channel` 拿到
  * cred / upstream / catalog / billing。
  *
  * 旧实现里这些配置（目录名/端口/日志前缀…）靠 scaffold 的字符串替换注入到
- * 11 份共享模块副本里；现在集中在这里一处。
+ * 12 份共享模块副本里；现在集中在这里一处。
+ *
+ * ⚠ 国内版（腾讯 CodeBuddy，`codebuddy.ai`）是**独立渠道** `workbuddy`：
+ * 域是渠道身份的一部分，一个渠道一个域，不再按 `--realm` 分流。
  */
 
 import { setChannel, type BridgeConfig, type Channel } from "@model-bridge/gateway";
@@ -22,17 +25,19 @@ export const config: BridgeConfig = {
   version: "0.4.0",
   defaultAddr: "127.0.0.1:8787",
   uiPort: 8788,
-  // 迁移来源（新→旧）：首项是刚被取代的旧顶层目录名
+  // 迁移来源（新→旧）。**不含** `.workbuddy-bridge` / `WORKBUDDY_HOME` /
+  // `WORKBUDDY_DEBUG_DUMP`：这些「裸 workbuddy」名字现在归**独立渠道** `workbuddy`
+  // （国内版 codebuddy.ai）所有 —— 一个名字只能属于一个渠道，否则会跨产品串号。
+  // 旧数据早已迁到 `<root>/workbuddyai/`，无需再认它们。
   legacyDirs: [
-    ".workbuddy-bridge",
     ".zcode-workbuddy-bridge",
     ".zcode-connect-workbuddyai",
     ".workbuddyai2api",
     ".workbuddyai-gateway",
   ],
-  legacyEnvVars: ["WORKBUDDY_HOME", "ZCB_HOME", "WBAI2API_HOME"],
+  legacyEnvVars: ["ZCB_HOME", "WBAI2API_HOME"],
   debugDumpEnv: "WORKBUDDYAI_DEBUG_DUMP",
-  legacyDebugDumpEnv: ["WORKBUDDY_DEBUG_DUMP", "WBAI_DEBUG_DUMP"],
+  legacyDebugDumpEnv: ["WBAI_DEBUG_DUMP"],
   fileMigrations: [
     // Python 版 GUI 层的空目录残留（非空时只记日志，不删）
     { from: "webview", action: "delete" },

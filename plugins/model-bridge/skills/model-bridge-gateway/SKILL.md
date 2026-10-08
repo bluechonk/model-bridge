@@ -10,8 +10,8 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 
 ## 背景事实
 
-- **一个网关 + N 个池子**：本仓库注册 11 个渠道（`catpaw` `cline` `codearts` `gemini` `lobsterai`
-  `loomy` `minimax` `qoder` `raccoon` `trae` `workbuddyai`）。每个渠道是一个**模型池**：
+- **一个网关 + N 个池子**：本仓库注册 12 个渠道（`catpaw` `cline` `codearts` `gemini` `lobsterai`
+  `loomy` `minimax` `qoder` `raccoon` `trae` `workbuddy` `workbuddyai`）。每个渠道是一个**模型池**：
   自己的一套模型目录 + 凭证 + 上游协议。
 - **对外模型 id**：`<cid>/<模型>`，**恒为小写**（`workbuddyai/deepseek-v4.1-flash`、`trae/deepseek-v4-flash`）。
   解析大小写不敏感；上游 slug 仍用目录里的原始写法。
@@ -57,7 +57,7 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 `model-bridge trae checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
 
 `checkin` 对**所有**渠道口径统一：有端点的真查真领（codearts / lobsterai / loomy / minimax /
-raccoon / trae），没端点的返回渠道自己的一句说明（workbuddyai / catpaw / cline / gemini —— 上游自动发奖励），
+raccoon / trae），没端点的返回渠道自己的一句说明（workbuddy / workbuddyai / catpaw / cline / gemini —— 上游自动发奖励），
 qoder 是桩（报"尚未实现"）。「没有端点」不是故障、退出码仍为 0；只有查询/领取**抛错**（未登录等）才非零。
 
 ## 标准流程
@@ -65,7 +65,8 @@ qoder 是桩（报"尚未实现"）。「没有端点」不是故障、退出码
 1. 先 `model-bridge status --json` 判断现状。
 2. 网关不可达：`model-bridge start` → 再 `status`；仍失败看 `model-bridge logs`。
 3. 某渠道未登录：`model-bridge login --channel <cid>`，把授权链接原样展示给用户并请其授权；
-   不要并发重复跑。workbuddyai 注意域：`--realm intl|cn`。
+   不要并发重复跑。国内版与国际版是**两个渠道**：账号在 `codebuddy.ai` 用 `workbuddy`，
+   在 `workbuddy.ai` 用 `workbuddyai` —— 选错渠道会一直等授权超时。
 4. 「有哪些模型可用」→ `model-bridge channels`（不需要网关）。
 5. 「凭证/配置放哪」→ `model-bridge paths --all`；「有几个账号 / 换账号」→ `model-bridge accounts`。
 6. 用户要求停掉 → `model-bridge stop`；端口被第三方占用时如实报告，让用户自行处理。
