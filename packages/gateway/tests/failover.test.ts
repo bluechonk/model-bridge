@@ -110,7 +110,7 @@ function makeChannel(cid: string): Channel {
       resolveConfig: () => ({ baseUrl: "http://127.0.0.1:1" }),
       newTranslator: () => ({ feed: (c: Buffer) => [c], finish: () => [] }),
     },
-    catalog: { exposedIds: () => ["pool-x"], resolveModel: (n: string) => n },
+    catalog: { exposedIds: () => ["deepseek-v4-flash"], resolveModel: (n: string) => n },
     billing: {
       CreditsError: class CreditsError extends Error {},
       fetchCredits: async () => ({ ok: true, total: {}, packages: [] }),
@@ -132,7 +132,7 @@ async function chat(addr: string): Promise<{ status: number; text: string }> {
   const resp = await fetch(`http://${addr}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "pool-x", messages: [{ role: "user", content: "hi" }], stream: true }),
+    body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
   });
   return { status: resp.status, text: await resp.text() };
 }

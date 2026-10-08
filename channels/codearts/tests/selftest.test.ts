@@ -1317,8 +1317,8 @@ describe("10. 端到端网关（假上游）", () => {
     };
     assert.deepEqual(
       models.data.map((m) => m.id),
-      ["glm-5.3-flash", "deepseek-v4-flash"],
-      "flash-only 池策略（GLM-5.2 非 flash）",
+      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
+      "对外只有三个池模型（不带渠道前缀）",
     );
     const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<string, unknown>;
     assert.equal(health["logged_in"], true);
@@ -1356,7 +1356,7 @@ describe("10. 端到端网关（假上游）", () => {
     fake.captured.length = 0;
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "deepseek-v4-flash-0731", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -1364,7 +1364,7 @@ describe("10. 端到端网关（假上游）", () => {
     assert.equal(payload.object, "chat.completion");
     assert.equal(payload.choices[0]!.message.content, "网关通了");
     const record = lastAt(fake, "/api/v2/chat/completions")!;
-    assert.equal(record.body!["model"], "deepseek-v4-flash", "短名归一化去后缀");
+    assert.equal(record.body!["model"], "deepseek-v4-flash", "池 id 即该渠道目录里的名字");
     assert.equal(record.headers["maas_type"], undefined);
   });
 
@@ -1377,7 +1377,7 @@ describe("10. 端到端网关（假上游）", () => {
     try {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
-        body: JSON.stringify({ model: "GLM-5.2", messages: [{ role: "user", content: "hi" }], stream: true }),
+        body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
         headers: { "Content-Type": "application/json" },
       });
       assert.equal(resp.status, 502);

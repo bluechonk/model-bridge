@@ -57,10 +57,9 @@ channels/<cid>/
     └── billing.ts                ← **渠道特有**
 ```
 
-> **一个渠道 = 一个池子**：模型池 = `catalog` + 白名单（网关级）；账号池见
-> [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md)。
-> 多渠道路由下对外模型 id 是 `<cid>/<模型>`（如 `workbuddyai/deepseek-v4.1-flash`）；
-> 只注册一个渠道时仍是裸短名（兼容既有客户端配置）。
+> **一个渠道 = 一个池子**：渠道 `catalog` 提供模型，共享层的**公共模型池**把它们归并成
+> 三个跨渠道的对外模型（见 §4 与 [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md)）。
+> 账号池见同文档 §3。
 
 **每个 `channels/<cid>/` 的 `src/` 只有 7 个文件。** 任何不在上表里的 `src/*.ts`
 （`gateway.ts` / `daemon.ts` / `paths.ts` / `sse-stream.ts` …）都是旧副本残留，应删除。
@@ -148,7 +147,20 @@ interface Channel {
 
 ---
 
-## 4. 模型池策略（`model-family.ts`）
+## 4. 模型池策略
+
+### 4.1 对外 id：只有三个跨渠道模型（`pool-targets.ts`）
+
+网关对外**恒定三个模型** —— `deepseek-v4.1-flash` / `deepseek-v4-flash` / `glm-5.3-flash`，
+**不带渠道前缀**。请求落到哪家由账本决定（`pool-usage.ts`：账单已用量降序、失败当 0、
+冷却期内当 0）。匹配是「归一化 + **精确相等**」，且客户端请求名不剥路径段 ——
+带 `/` 的旧 `<cid>/<模型>` 形态一律 `400 unknown_model`（破坏性更新）。
+完整规则、账本落点与刷新节奏见 [`POOL-ARCHITECTURE.md` §2](./POOL-ARCHITECTURE.md)。
+
+> ⚠ 客户端请求名与渠道目录 id 走**两条归一化路径**（前者不剥厂商路径段），
+> 否则 `随便什么前缀/deepseek-v4-flash` 会被剥成池内 id 蒙混命中。
+
+### 4.2 白名单：`(deepseek|glm) && flash`（`model-family.ts`）
 
 **目录（数据层）与池子（呈现层）是两件事**：
 

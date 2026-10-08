@@ -11,10 +11,12 @@
  *   所以既有脚本与插件命令不用改。
  */
 
-import { channelCount, channels, getChannel, type Channel } from "./channel.js";
+import { channels, getChannel, type Channel } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
 import { catalogCacheFetchedAt } from "./catalog-cache.js";
-import { poolIds, qualifiedId } from "./model-pool.js";
+import { asPoolModel, canonicalModelId, POOL_MODELS, poolCandidates } from "./pool-targets.js";
+import { ledgerSnapshot, refreshBilling, scoreOf } from "./pool-usage.js";
+import { poolUsagePath } from "./paths.js";
 import * as accountCli from "./account-cli.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
@@ -116,6 +118,13 @@ function originNote(origin: CatalogOrigin): string {
   }
 }
 
+/**
+ * `<cid> models`：该渠道贡献了池内哪些模型。
+ *
+ * 对外 id 恒为**池 id**（`deepseek-v4-flash` 这种），不是 `<cid>/…` ——
+ * 后一种形态已经取消，客户端不需要也无法指定渠道。
+ * 渠道目录里没进池的条目只报数量（可能几十条，全列是噪音）。
+ */
 async function listLocalModels(
   channel: Channel,
   json: boolean,
@@ -128,13 +137,21 @@ async function listLocalModels(
     console.error(`${cid}: 刷新模型目录失败：${error.message}`);
     return 1;
   }
-  const ids = runInChannel(cid, () => {
+  // 匹配用目录里的**原始写法**（见 pool-targets.ts 的说明）；展示与去重分开处理
+  const catalogIds = runInChannel(cid, () => {
     try {
-      return poolIds(channel);
+      return channel.catalog.exposedIds();
     } catch {
       return [] as string[];
     }
   });
+  const contributed = POOL_MODELS.flatMap((model) => {
+    const hit = catalogIds.find((id) => canonicalModelId(id) === model);
+    return hit === undefined ? [] : [{ model, exposed_id: hit }];
+  });
+  const deduped = [...new Map(catalogIds.map((id) => [id.toLowerCase(), id])).values()];
+  const outside = deduped.filter((id) => asPoolModel(id) === null);
+
   if (json) {
     console.log(
       JSON.stringify(
@@ -146,7 +163,8 @@ async function listLocalModels(
             ? { fetched_at: origin.fetchedAt }
             : {}),
           ...(origin.kind === "failed" ? { reason: origin.reason } : {}),
-          models: ids.map((id) => `${cid}/${id}`),
+          pool_models: contributed,
+          out_of_pool_count: outside.length,
         },
         null,
         2,
@@ -157,28 +175,115 @@ async function listLocalModels(
   // 数据走 stdout（便于管道），**来源说明走 stderr**：缓存命中是常态，不必打扰；
   // 其余情形（刚拉取 / 拉取失败 / 内置表）用户需要知道自己在看哪份数据。
   if (origin.kind !== "cache") console.error(`${cid}: ${originNote(origin)}`);
-  if (ids.length === 0) {
-    console.log(`${cid}: 池内没有可用模型`);
-    return 0;
+  if (contributed.length === 0) {
+    console.log(`${cid}: 该渠道没有池内模型（池只有 ${POOL_MODELS.join(" / ")}）`);
+  } else {
+    console.log(`${cid} 贡献的池内模型：`);
+    for (const row of contributed) {
+      console.log(`  ${row.model.padEnd(22)} ← ${row.exposed_id}`);
+    }
   }
-  for (const id of ids) console.log(`${cid}/${id}`);
+  if (outside.length > 0) {
+    console.error(`${cid}: 另有 ${outside.length} 个模型不在池内（渠道 CLI 仍可直接调用）`);
+  }
   return 0;
 }
 
-/** 全部渠道的模型池一览（`model list` 与兼容的 `channels` 共用）。 */
-export async function listAllModels(json: boolean, force = false): Promise<number> {
+/** 某渠道目录里进了池的模型 id（池 id 形态）。 */
+function contributedOf(channel: Channel): string[] {
+  const catalogIds = runInChannel(channel.config.cid, () => {
+    try {
+      return channel.catalog.exposedIds();
+    } catch {
+      return [] as string[];
+    }
+  });
+  return POOL_MODELS.filter((model) => catalogIds.some((id) => canonicalModelId(id) === model));
+}
+
+/**
+ * `model list`：**公共模型池视图** —— 三个模型，各自挂出候选渠道与账本状态。
+ *
+ * 展示顺序与实际路由顺序一致（账单已用量降序、冷却中当 0、同分保持注册顺序），
+ * 所以看到的第一行就是网关会先试的那家。
+ */
+export async function listPoolModels(json: boolean): Promise<number> {
   const list = channels();
   if (list.length === 0) {
     console.error("没有渠道被注册（入口忘了 import 渠道包？）");
     return 2;
   }
-  const multi = channelCount() > 1;
+  const now = Date.now();
+  const ledger = ledgerSnapshot();
+  const rows = POOL_MODELS.map((model) => ({
+    model,
+    candidates: poolCandidates(model)
+      .map((candidate) => {
+        const entry = ledger.channels[candidate.cid];
+        return {
+          cid: candidate.cid,
+          display: candidate.channel.upstream.DISPLAY_NAME,
+          exposed_id: candidate.exposedId,
+          score: scoreOf(candidate.cid, now),
+          used: entry?.used ?? 0,
+          unit: entry?.unit ?? "",
+          cooling: (entry?.cooldown_until ?? 0) > now,
+          ok: entry?.ok ?? 0,
+          fail: entry?.fail ?? 0,
+          billing_at: entry?.billing_at ?? null,
+        };
+      })
+      .sort((a, b) => b.score - a.score),
+  }));
+
+  if (json) {
+    console.log(JSON.stringify(rows, null, 2));
+    return 0;
+  }
+
+  console.log(
+    `公共模型池（对外 ${POOL_MODELS.length} 个模型；请求落到哪家由网关按账单已用量决定）\n`,
+  );
+  for (const row of rows) {
+    console.log(`  ${row.model}`);
+    if (row.candidates.length === 0) {
+      console.log("    （没有渠道提供它）\n");
+      continue;
+    }
+    for (const candidate of row.candidates) {
+      const used = `${candidate.used}${candidate.unit ? ` ${candidate.unit}` : ""}`;
+      const marks = [
+        candidate.cooling ? "冷却中" : "",
+        candidate.ok > 0 ? `ok=${candidate.ok}` : "",
+        candidate.fail > 0 ? `fail=${candidate.fail}` : "",
+      ]
+        .filter(Boolean)
+        .join("  ");
+      console.log(`    ${candidate.cid.padEnd(14)} used=${used.padEnd(16)} ${marks}`);
+    }
+    console.log();
+  }
+  console.log(`账本: ${poolUsagePath()}（账单额度每 8 小时自动刷一次）`);
+  return 0;
+}
+
+/**
+ * `channels`：**渠道视角** —— 每个渠道各自贡献了池内哪些模型。
+ *
+ * 与 `model list`（模型视角）互补：排查「某个模型为什么没人接」时看前者，
+ * 排查「某个渠道到底还能提供什么」时看这个。
+ */
+export async function listChannels(json: boolean, force = false): Promise<number> {
+  const list = channels();
+  if (list.length === 0) {
+    console.error("没有渠道被注册（入口忘了 import 渠道包？）");
+    return 2;
+  }
   const rows: Array<{
     cid: string;
     display: string;
     version: string;
     models: string[];
-    raw: string[];
     source: CatalogOrigin["kind"];
     fetched_at?: string;
   }> = [];
@@ -191,35 +296,21 @@ export async function listAllModels(json: boolean, force = false): Promise<numbe
       failures += 1;
       if (!json) console.error(`${cid}: 刷新模型目录失败：${error.message}`);
     }
-    const ids = runInChannel(cid, () => {
-      try {
-        return poolIds(channel);
-      } catch {
-        return [] as string[];
-      }
-    });
     rows.push({
       cid,
       display: channel.upstream.DISPLAY_NAME,
       version: channel.config.version,
-      models: ids.map((id) => qualifiedId(cid, id, multi)),
-      raw: ids,
+      models: contributedOf(channel),
       source: origin.kind,
       ...(origin.kind === "cache" && origin.fetchedAt ? { fetched_at: origin.fetchedAt } : {}),
     });
   }
 
   if (json) {
-    console.log(
-      JSON.stringify(
-        rows.map(({ raw, ...rest }) => ({ ...rest, raw_models: raw })),
-        null,
-        2,
-      ),
-    );
+    console.log(JSON.stringify(rows, null, 2));
     return failures > 0 ? 1 : 0;
   }
-  console.log(`${list.length} 个渠道（模型池）${multi ? "；对外模型 id 形如 <cid>/<模型>" : ""}：`);
+  console.log(`${list.length} 个渠道（每个渠道是池子的一个来源；对外模型只有 ${POOL_MODELS.length} 个）：`);
   for (const row of rows) {
     const note =
       row.source === "cache" && row.fetched_at
@@ -230,19 +321,19 @@ export async function listAllModels(json: boolean, force = false): Promise<numbe
             ? "  [已刷新]"
             : "";
     console.log(
-      `  ${row.cid.padEnd(12)} ${row.display.padEnd(18)} ${row.models.join(", ") || "（无可用模型）"}${note}`,
+      `  ${row.cid.padEnd(12)} ${row.display.padEnd(18)} ${row.models.join(", ") || "（不贡献池内模型）"}${note}`,
     );
   }
   return failures > 0 ? 1 : 0;
 }
 
-/** `model <list|show <cid>>`。 */
+/** `model <list|show <cid>|usage|refresh [cid]>`。 */
 export async function runModelGroup(args: string[], ctx: CommandContext): Promise<number> {
   const sub = args[0] ?? "list";
   switch (sub) {
     case "list":
     case "ls":
-      return listAllModels(ctx.json, ctx.refresh);
+      return listPoolModels(ctx.json);
     case "show":
     case "get": {
       const cid = args[1];
@@ -252,17 +343,45 @@ export async function runModelGroup(args: string[], ctx: CommandContext): Promis
       }
       return listLocalModels(getChannel(cid), ctx.json, ctx.refresh);
     }
+    case "usage":
+    case "billing":
+    case "ledger":
+      return showPoolUsage(ctx.json, ctx.refresh);
     case "refresh":
     case "update": {
-      // 全部渠道或指定渠道强制重拉（`model refresh [cid]`）
+      // 这里的 `--refresh` 是「重拉上游**目录**」；刷账单走 `model usage --refresh`。
       const cid = args[1];
       if (cid) return listLocalModels(getChannel(cid), ctx.json, true);
-      return listAllModels(ctx.json, true);
+      return listChannels(ctx.json, true);
     }
     default:
-      console.error(`未知的 model 子命令: ${sub}（可用: list / show <cid> / refresh [cid]）`);
+      console.error(
+        `未知的 model 子命令: ${sub}（可用: list / show <cid> / usage / refresh [cid]）`,
+      );
       return 2;
   }
+}
+
+/**
+ * `model usage [--refresh]`：看池账本；`--refresh` 立刻重查一遍各渠道账单。
+ *
+ * 展示的仍是池视图（模型 → 候选渠道 + 已用量 + 冷却）—— 账本的意义是
+ * 「下一次请求会先落到谁」，单看一串数字看不出这个。
+ */
+export async function showPoolUsage(json: boolean, force = false): Promise<number> {
+  if (force) {
+    const result = await refreshBilling((m) => {
+      if (!json) console.error(m);
+    });
+    if (!json) {
+      const failed = result.failed.map((f) => f.cid).join("、");
+      console.error(
+        `账单已刷新：成功 ${result.refreshed.length} 个渠道` +
+          (result.failed.length > 0 ? `，失败 ${result.failed.length} 个（${failed}）` : ""),
+      );
+    }
+  }
+  return listPoolModels(json);
 }
 
 /** `model-bridge <cid> <动词> [参数]`。 */

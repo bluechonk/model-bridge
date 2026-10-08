@@ -927,10 +927,15 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     const resp = await fetch(`http://${gw.addr}/v1/models`);
     const payload = (await resp.json()) as { data: Array<{ id: string }> };
     const ids = payload.data.map((m) => m.id);
-    assert.deepEqual(ids, ["deepseek-v4-flash"], "flash-only 池策略：远端目录只剩 flash；对外 id 恒小写");
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能是 flash 家族");
-    assert.ok(!ids.includes("glm-5.2"), "GLM-5.2 非 flash，不进池");
-    assert.ok(!ids.includes("only-in-chat"), "白名单外通道整组丢弃");
+    assert.deepEqual(
+      ids,
+      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
+      "对外只有三个池模型（不带渠道前缀）",
+    );
+    assert.ok(
+      ids.every((id) => !id.includes("/")),
+      "不再暴露 <cid>/<模型> 形态",
+    );
     // 远端目录确实被采信：非白名单条目被过滤但数据没丢（solo-agent-only 只在远端载荷里）
     const detailIds = catalog.details().map((e) => e["id"]);
     assert.ok(detailIds.includes("solo-agent-only") && detailIds.includes("kimi-k3"), "过滤发生在呈现层，底层目录未丢数据");
@@ -944,7 +949,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "glm-5.2",
+        model: "deepseek-v4-flash",
         messages: [{ role: "user", content: "hi" }],
         stream: true,
       }),
@@ -961,9 +966,9 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     assert.equal(sent.headers["x-ide-token"], "tok-e2e");
     assert.equal(sent.headers["x-device-id"], "b".repeat(32));
     const body = sent.body!;
-    assert.equal(body["function"], "solo_work_lite");
-    assert.equal(body["model"], "glm-5.2");
-    assert.equal(body["config_name"], "glm-5.2");
+    assert.equal(body["function"], "solo_agent", "deepseek 走 solo_agent 通道");
+    assert.equal(body["model"], "DeepSeek-V4-Flash", "上游收到目录里的原始写法（大小写敏感）");
+    assert.equal(body["config_name"], "DeepSeek-V4-Flash", "model 与 config_name 双字段同值");
     assert.equal(body["stream"], true);
     const messages = body["messages"] as Array<{ content: Array<Record<string, unknown>> }>;
     assert.equal(messages[0]!.content[0]!["type"], "text");
@@ -972,7 +977,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
   it("非流式：本层聚合成 chat.completion", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "glm-5.2", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -1002,7 +1007,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     try {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
-        body: JSON.stringify({ model: "glm-5.2", messages: [{ role: "user", content: "hi" }], stream: true }),
+        body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
         headers: { "Content-Type": "application/json" },
       });
       assert.equal(resp.status, 502);

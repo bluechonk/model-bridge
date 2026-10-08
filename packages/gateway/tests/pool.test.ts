@@ -1,8 +1,11 @@
 /**
- * 模型池路由：`<cid>/<模型>` → 渠道；`/v1/models` 并集；`/health` 逐渠道。
+ * 公共模型池：**端到端**（真起 HTTP 网关 + 假上游）。
  *
- * 用两个**合成渠道**（各自的假上游 + 假凭据），完全不碰磁盘与真实账号。
- * 单渠道模式的兼容行为（裸短名、`logged_in` 形状）另有用例锁定。
+ * 覆盖对外形态（`/v1/models` 恒三条、不带渠道前缀）与池路由（按账本挑渠道、
+ * 失败转移、旧的 `<cid>/<模型>` 形态已失效）。
+ *
+ * 匹配/归一化的细粒度用例见 `pool-routing.test.ts`；这里只走真实请求路径。
+ * 全程离线：假上游是本机 http server，存储根指向 `mkdtemp`。
  */
 
 import assert from "node:assert/strict";
@@ -12,19 +15,30 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import {
-  channelCount,
-  channels,
-  clearChannels,
-  setChannel,
-  type Channel,
-} from "../dist/channel.js";
+import { channels, clearChannels, setChannel, type Channel } from "../dist/channel.js";
 import * as daemon from "../dist/daemon.js";
 import * as gateway from "../dist/gateway.js";
 import * as paths from "../dist/paths.js";
-import { resolveTarget } from "../dist/gateway.js";
+import * as poolUsage from "../dist/pool-usage.js";
 
-// ── 合成渠道 ─────────────────────────────────────────────────────────────────
+// ── 隔离存储根（账本会落 <root>/pool-usage.json） ─────────────────────────────
+
+let root = "";
+let savedRoot: string | undefined;
+
+before(() => {
+  root = mkdtempSync(join(tmpdir(), "mb-pool-"));
+  savedRoot = process.env["MODEL_BRIDGE_HOME"];
+  process.env["MODEL_BRIDGE_HOME"] = root;
+});
+
+after(() => {
+  if (savedRoot === undefined) delete process.env["MODEL_BRIDGE_HOME"];
+  else process.env["MODEL_BRIDGE_HOME"] = savedRoot;
+  rmSync(root, { recursive: true, force: true });
+});
+
+// ── 假上游 ───────────────────────────────────────────────────────────────────
 
 interface Captured {
   url: string;
@@ -32,10 +46,19 @@ interface Captured {
   headers: Record<string, string | string[] | undefined>;
 }
 
-/** 起一个假上游，记录收到的请求。 */
-async function fakeUpstream(tag: string): Promise<{ server: Server; url: string; captured: Captured[] }> {
+interface FakeUpstream {
+  server: Server;
+  url: string;
+  captured: Captured[];
+  /** 置 true 后一律回 500（测失败转移）。 */
+  fail: boolean;
+}
+
+/** 起一个假上游，记录收到的请求；`fail` 置位后回 500。 */
+async function fakeUpstream(tag: string): Promise<FakeUpstream> {
   const captured: Captured[] = [];
-  const server = createServer((req, res) => {
+  const fake: FakeUpstream = { server: null as unknown as Server, url: "", captured, fail: false };
+  fake.server = createServer((req, res) => {
     let raw = "";
     req.on("data", (c) => {
       raw += String(c);
@@ -48,6 +71,11 @@ async function fakeUpstream(tag: string): Promise<{ server: Server; url: string;
         body = null;
       }
       captured.push({ url: req.url ?? "", body, headers: { ...req.headers } });
+      if (fake.fail) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: { message: "boom" } }));
+        return;
+      }
       res.writeHead(200, { "Content-Type": "text/event-stream" });
       res.write(
         `data: ${JSON.stringify({ id: tag, model: tag, created: 1, choices: [{ index: 0, delta: { content: tag }, finish_reason: null }] })}\n\n`,
@@ -60,21 +88,27 @@ async function fakeUpstream(tag: string): Promise<{ server: Server; url: string;
     });
   });
   const port = await new Promise<number>((resolve) => {
-    server.listen(0, "127.0.0.1", () => resolve((server.address() as { port: number }).port));
+    fake.server.listen(0, "127.0.0.1", () =>
+      resolve((fake.server.address() as { port: number }).port),
+    );
   });
-  return { server, url: `http://127.0.0.1:${port}`, captured };
+  fake.url = `http://127.0.0.1:${port}`;
+  return fake;
 }
 
-/** 造一个合成渠道：模型池只暴露 `pool-<tag>` 与大小写混排的 `Mixed-<tag>`，上游是假服务。 */
-function makeChannel(cid: string, tag: string, upstreamUrl: string): Channel {
-  const models: Record<string, string> = {
-    [`pool-${tag}`]: `upstream-${tag}`,
-    [`Mixed-${tag}`]: `Upstream-Mixed-${tag}`,
-  };
+function closeFake(fake: FakeUpstream): Promise<void> {
+  return new Promise<void>((resolve) => fake.server.close(() => resolve()));
+}
+
+/**
+ * 合成渠道：目录是 `[对外名, 上游 slug]` 表，`resolveModel` 做大小写不敏感匹配
+ * （与真实渠道同构，用来验证「小写进池、原始写法出上游」）。
+ */
+function makeChannel(cid: string, upstreamUrl: string, models: Array<[string, string]>): Channel {
   return {
     config: {
       cid,
-      display: `Synth ${tag}`,
+      display: `Synth ${cid}`,
       version: "0.0.0",
       defaultAddr: "127.0.0.1:1",
       uiPort: 2,
@@ -84,16 +118,16 @@ function makeChannel(cid: string, tag: string, upstreamUrl: string): Channel {
     cred: {
       DEFAULT_BASE_URL: upstreamUrl,
       NotLoggedInError: class NotLoggedInError extends Error {},
-      load: () => ({ accessToken: `tok-${tag}`, uid: `uid-${tag}`, domain: "" }),
+      load: () => ({ accessToken: `tok-${cid}`, uid: `uid-${cid}`, domain: "" }),
       save: async () => {},
-      login: async () => ({ accessToken: `tok-${tag}`, uid: `uid-${tag}`, domain: "" }),
+      login: async () => ({ accessToken: `tok-${cid}`, uid: `uid-${cid}`, domain: "" }),
       refresh: async (c: unknown) => c,
       resolveBaseUrl: () => upstreamUrl,
     },
     upstream: {
       DEFAULT_BASE_URL: upstreamUrl,
       WIRE: "openai" as const,
-      DISPLAY_NAME: `Synth ${tag}`,
+      DISPLAY_NAME: `Synth ${cid}`,
       UpstreamUnauthorized: class UpstreamUnauthorized extends Error {},
       defaultConfig: () => ({ baseUrl: upstreamUrl }),
       loadConfig: () => [{ baseUrl: upstreamUrl }, false],
@@ -107,15 +141,18 @@ function makeChannel(cid: string, tag: string, upstreamUrl: string): Channel {
       buildChatBody: (req: Record<string, unknown>, upstreamModel: string) => ({
         ...req,
         model: upstreamModel,
-        routed_to: tag,
+        routed_to: cid,
       }),
       fetchModels: async () => ({}),
       resolveConfig: () => ({ baseUrl: upstreamUrl }),
       newTranslator: () => ({ feed: (c: Buffer) => [c], finish: () => [] }),
     },
     catalog: {
-      exposedIds: () => Object.keys(models),
-      resolveModel: (name: string) => models[name] ?? name,
+      exposedIds: () => models.map(([exposed]) => exposed),
+      resolveModel: (name: string) => {
+        const hit = models.find(([exposed]) => exposed.toLowerCase() === name.toLowerCase());
+        return hit ? hit[1]! : name;
+      },
     },
     billing: {
       CreditsError: class CreditsError extends Error {},
@@ -133,140 +170,238 @@ async function readSse(url: string, body: unknown): Promise<{ status: number; te
   return { status: resp.status, text: await resp.text() };
 }
 
-// ── 多渠道路由 ───────────────────────────────────────────────────────────────
+function chat(gw: gateway.RunningGateway, model: string) {
+  return readSse(`http://${gw.addr}/v1/chat/completions`, {
+    model,
+    messages: [{ role: "user", content: "hi" }],
+    stream: true,
+  });
+}
 
-describe("1. 多渠道路由（两张池子）", () => {
-  let alpha: Awaited<ReturnType<typeof fakeUpstream>>;
-  let beta: Awaited<ReturnType<typeof fakeUpstream>>;
+// ── 1. 对外形态与池路由 ──────────────────────────────────────────────────────
+
+describe("1. /v1/models 只有三个模型，请求由池决定落到谁", () => {
+  let deep: FakeUpstream; // 提供 deepseek-v4-flash（目录里是混排大小写 + 一个 glm）
+  let four: FakeUpstream; // 提供 deepseek-v4.1-flash（raccoon 式连字符写法）
   let gw: gateway.RunningGateway;
 
   before(async () => {
-    alpha = await fakeUpstream("alpha");
-    beta = await fakeUpstream("beta");
+    deep = await fakeUpstream("deep");
+    four = await fakeUpstream("four");
     clearChannels();
-    setChannel(makeChannel("alpha", "alpha", alpha.url));
-    setChannel(makeChannel("beta", "beta", beta.url));
+    poolUsage.resetPoolLedgerForTest();
+    setChannel(
+      makeChannel("alpha", deep.url, [
+        ["DeepSeek-V4-Flash", "DeepSeek-V4-Flash-Official"],
+        ["glm-5.3-flash", "GLM-5.3-Flash"],
+        ["glm-5.3-flashx", "GLM-5.3-FlashX"], // 不在池内
+      ]),
+    );
+    setChannel(
+      makeChannel("beta", four.url, [["sn-deepseek-v4-1-flash", "sn-deepseek-v4-1-flash"]]),
+    );
+    // 预写账本：既设定用量，也让 needsBillingRefresh 为 false（否则请求会触发后台刷新）
+    poolUsage.writeBilling("alpha", { total: { used: 0 } });
+    poolUsage.writeBilling("beta", { total: { used: 0 } });
     gw = await gateway.start("127.0.0.1:0", { logger: () => {} });
   });
 
   after(async () => {
     await gw?.close().catch(() => {});
-    await new Promise<void>((r) => alpha.server.close(() => r()));
-    await new Promise<void>((r) => beta.server.close(() => r()));
+    await closeFake(deep);
+    await closeFake(four);
     clearChannels();
   });
 
-  it("/v1/models 是两张池子的并集，且带 cid 前缀（模型部分恒小写）", async () => {
+  it("/v1/models 恒返回三个模型，不带渠道前缀", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string; owned_by: string }> };
-    const ids = payload.data.map((m) => m.id).sort();
-    assert.deepEqual(ids, [
-      "alpha/mixed-alpha",
-      "alpha/pool-alpha",
-      "beta/mixed-beta",
-      "beta/pool-beta",
-    ]);
-    assert.ok(ids.every((id) => id === id.toLowerCase()), "对外 id 必须全小写");
-    assert.equal(payload.data.find((m) => m.id === "alpha/pool-alpha")!.owned_by, "Synth alpha");
-  });
-
-  it("小写 id 大小写不敏感地解析回上游的原始写法", async () => {
-    alpha.captured.length = 0;
-    const { status } = await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "alpha/mixed-alpha",
-      messages: [{ role: "user", content: "hi" }],
-      stream: true,
-    });
-    assert.equal(status, 200);
-    assert.equal(
-      alpha.captured[0]!.body!["model"],
-      "Upstream-Mixed-alpha",
-      "池内 id 小写，但上游 slug 用目录里的原始大小写",
+    assert.deepEqual(
+      payload.data.map((m) => m.id),
+      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
     );
+    assert.equal(payload.data[0]!.owned_by, "model-bridge", "池身份，不泄露候选渠道");
   });
 
-  it("带前缀的模型路由到对应渠道，且模型名按该渠道的目录解析", async () => {
-    alpha.captured.length = 0;
-    beta.captured.length = 0;
-    const first = await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "alpha/pool-alpha",
-      messages: [{ role: "user", content: "hi" }],
-      stream: true,
-    });
-    assert.equal(first.status, 200);
-    assert.ok(first.text.includes("alpha"));
-    assert.equal(alpha.captured.length, 1, "只打到 alpha 的假上游");
-    assert.equal(beta.captured.length, 0);
-    assert.equal(alpha.captured[0]!.body!["routed_to"], "alpha");
-    assert.equal(alpha.captured[0]!.body!["model"], "upstream-alpha", "短名经该渠道目录映射");
-    assert.equal(alpha.captured[0]!.headers["authorization"], "Bearer tok-alpha");
-
-    const second = await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "beta/pool-beta",
-      messages: [{ role: "user", content: "hi" }],
-      stream: true,
-    });
-    assert.equal(second.status, 200);
-    assert.equal(beta.captured.length, 1);
-    assert.equal(beta.captured[0]!.headers["authorization"], "Bearer tok-beta", "用该渠道自己的凭证");
+  it("请求 deepseek-v4-flash → 打到唯一能提供它的渠道，且用目录里的原始 slug", async () => {
+    deep.captured.length = 0;
+    four.captured.length = 0;
+    const { status } = await chat(gw, "deepseek-v4-flash");
+    assert.equal(status, 200);
+    assert.equal(deep.captured.length, 1);
+    assert.equal(four.captured.length, 0);
+    assert.equal(deep.captured[0]!.body!["routed_to"], "alpha");
+    assert.equal(
+      deep.captured[0]!.body!["model"],
+      "DeepSeek-V4-Flash-Official",
+      "池内 id 是小写规范名，上游收到的是目录里的原始写法",
+    );
+    assert.equal(deep.captured[0]!.headers["authorization"], "Bearer tok-alpha");
   });
 
-  it("前缀未知 → 400 unknown_channel（不静默回落到别的渠道）", async () => {
-    const { status, text } = await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "nope/pool-x",
-      messages: [{ role: "user", content: "hi" }],
-    });
+  it("大小写不敏感：DeepSeek-V4-Flash 同样命中", async () => {
+    deep.captured.length = 0;
+    const { status } = await chat(gw, "DeepSeek-V4-Flash");
+    assert.equal(status, 200);
+    assert.equal(deep.captured.length, 1);
+  });
+
+  it("4.0 与 4.1 不串号：deepseek-v4.1-flash 只打到提供 4.1 的渠道", async () => {
+    deep.captured.length = 0;
+    four.captured.length = 0;
+    const { status } = await chat(gw, "deepseek-v4.1-flash");
+    assert.equal(status, 200);
+    assert.equal(four.captured.length, 1);
+    assert.equal(deep.captured.length, 0, "4.0 的渠道不该被 4.1 的请求命中");
+  });
+
+  it("glm-5.3-flash 命中对应上游；flashx 不在池内", async () => {
+    deep.captured.length = 0;
+    const ok = await chat(gw, "glm-5.3-flash");
+    assert.equal(ok.status, 200);
+    assert.equal(deep.captured[0]!.body!["model"], "GLM-5.3-Flash");
+    // flashx 不在池内 → 当作未知模型
+    const fx = await chat(gw, "glm-5.3-flashx");
+    assert.equal(fx.status, 400);
+  });
+
+  it("没有任何渠道提供的池模型 → 503", async () => {
+    const keep = channels();
+    clearChannels();
+    try {
+      const solo = await gateway.start("127.0.0.1:0", { logger: () => {} });
+      try {
+        const { status, text } = await chat(solo, "glm-5.3-flash");
+        assert.equal(status, 503);
+        assert.equal(
+          (JSON.parse(text) as { error: { code: string } }).error.code,
+          "not_authenticated",
+        );
+      } finally {
+        await solo.close();
+      }
+    } finally {
+      for (const c of keep) setChannel(c);
+    }
+  });
+
+  it("未知模型 → 400 并列出三个可用 id", async () => {
+    const { status, text } = await chat(gw, "gpt-4o");
     assert.equal(status, 400);
-    assert.equal((JSON.parse(text) as { error: { code: string } }).error.code, "unknown_channel");
+    const err = JSON.parse(text) as { error: { code: string; message: string } };
+    assert.equal(err.error.code, "unknown_model");
+    assert.ok(err.error.message.includes("deepseek-v4.1-flash"));
+    assert.ok(err.error.message.includes("glm-5.3-flash"));
   });
 
-  it("多渠道路由下不带前缀 → 400（不知道发给谁）", async () => {
-    const { status, text } = await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "pool-alpha",
-      messages: [{ role: "user", content: "hi" }],
-    });
+  it("旧的 `<cid>/<模型>` 形态已失效（破坏性更新）", async () => {
+    const { status, text } = await chat(gw, "alpha/deepseek-v4-flash");
     assert.equal(status, 400);
-    assert.equal((JSON.parse(text) as { error: { code: string } }).error.code, "unknown_channel");
+    assert.equal((JSON.parse(text) as { error: { code: string } }).error.code, "unknown_model");
   });
 
   it("/health 逐渠道报告；/ 列出渠道与服务身份", async () => {
-    const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<string, unknown>;
+    const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<
+      string,
+      unknown
+    >;
     assert.equal(health["ok"], true);
     assert.equal(health["service"], "model-bridge");
     assert.equal(health["logged_in"], true);
     const per = health["channels"] as Array<{ cid: string; logged_in: boolean }>;
     assert.deepEqual(per.map((c) => c.cid).sort(), ["alpha", "beta"]);
 
-    const root = (await (await fetch(`http://${gw.addr}/`)).json()) as Record<string, unknown>;
-    assert.deepEqual(root["channels"], ["alpha", "beta"]);
-    assert.equal(root["service"], "model-bridge");
+    const rootInfo = (await (await fetch(`http://${gw.addr}/`)).json()) as Record<string, unknown>;
+    assert.deepEqual(rootInfo["channels"], ["alpha", "beta"]);
+    assert.equal(rootInfo["service"], "model-bridge");
   });
 });
 
-describe("2. 仓库级命令在多渠道路由下可用", () => {
-  let solo: Awaited<ReturnType<typeof fakeUpstream>>;
-  let root = "";
-  let savedRoot: string | undefined;
+// ── 2. 账单已用量决定落到谁 ──────────────────────────────────────────────────
+
+describe("2. 账单已用量排序：用得多的先走，失败当 0", () => {
+  let first: FakeUpstream; // 用量高
+  let second: FakeUpstream; // 用量低
+  let gw: gateway.RunningGateway;
+
+  const both = (): Array<[string, string]> => [["deepseek-v4-flash", "deepseek-v4-flash"]];
 
   before(async () => {
-    // 隔离存储根：这些命令会解析根级路径（rootDir/rootPidPath/rootLogPath），
-    // 不能碰真实主目录
-    root = mkdtempSync(join(tmpdir(), "mb-repocmd-"));
-    savedRoot = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = root;
-    solo = await fakeUpstream("x");
+    first = await fakeUpstream("first");
+    second = await fakeUpstream("second");
     clearChannels();
-    setChannel(makeChannel("alpha", "alpha", solo.url));
-    setChannel(makeChannel("beta", "beta", solo.url));
+    poolUsage.resetPoolLedgerForTest();
+    setChannel(makeChannel("first", first.url, both()));
+    setChannel(makeChannel("second", second.url, both()));
+    poolUsage.writeBilling("first", { total: { used: 100, unit: "credits" } });
+    poolUsage.writeBilling("second", { total: { used: 10, unit: "credits" } });
+    gw = await gateway.start("127.0.0.1:0", { logger: () => {} });
   });
 
   after(async () => {
-    await new Promise<void>((r) => solo.server.close(() => r()));
+    await gw?.close().catch(() => {});
+    await closeFake(first);
+    await closeFake(second);
     clearChannels();
-    if (savedRoot === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-    else process.env["MODEL_BRIDGE_HOME"] = savedRoot;
-    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("已用量大的渠道优先", async () => {
+    first.captured.length = 0;
+    second.captured.length = 0;
+    const { status } = await chat(gw, "deepseek-v4-flash");
+    assert.equal(status, 200);
+    assert.equal(first.captured.length, 1, "used=100 的渠道先走");
+    assert.equal(second.captured.length, 0);
+  });
+
+  it("首选失败 → 落到次选，并把失败的渠道记进账本冷却", async () => {
+    first.captured.length = 0;
+    second.captured.length = 0;
+    first.fail = true;
+    try {
+      const { status } = await chat(gw, "deepseek-v4-flash");
+      assert.equal(status, 200, "次选顶上，客户端拿到正常响应");
+      assert.equal(first.captured.length, 1, "先试了用量高的那家");
+      assert.equal(second.captured.length, 1, "失败后落到次选");
+      assert.ok(poolUsage.ledgerSnapshot().channels["first"]!.fail >= 1, "失败要记进账本");
+      assert.ok(
+        poolUsage.ledgerSnapshot().channels["first"]!.cooldown_until > Date.now(),
+        "失败的渠道进入冷却",
+      );
+    } finally {
+      first.fail = false;
+    }
+  });
+
+  it("冷却期内排序当 0 → 直接走另一家（不再白试一次）", async () => {
+    first.captured.length = 0;
+    second.captured.length = 0;
+    assert.equal(poolUsage.scoreOf("first"), 0, "冷却中得分当 0");
+    assert.equal(poolUsage.scoreOf("second"), 10);
+    const { status } = await chat(gw, "deepseek-v4-flash");
+    assert.equal(status, 200);
+    assert.equal(first.captured.length, 0, "冷却中的渠道不再被优先尝试");
+    assert.equal(second.captured.length, 1);
+  });
+});
+
+// ── 3. 仓库级命令在多渠道路由下可用 ─────────────────────────────────────────
+
+describe("3. 仓库级命令在多渠道路由下可用", () => {
+  let solo: FakeUpstream;
+
+  before(async () => {
+    solo = await fakeUpstream("x");
+    clearChannels();
+    poolUsage.resetPoolLedgerForTest();
+    setChannel(makeChannel("alpha", solo.url, [["deepseek-v4-flash", "deepseek-v4-flash"]]));
+    setChannel(makeChannel("beta", solo.url, [["deepseek-v4-flash", "deepseek-v4-flash"]]));
+  });
+
+  after(async () => {
+    await closeFake(solo);
+    clearChannels();
   });
 
   it("daemon.status 不抛错（根级路径解析不再要求「唯一渠道」）", async () => {
@@ -284,77 +419,52 @@ describe("2. 仓库级命令在多渠道路由下可用", () => {
   });
 });
 
-describe("3. 单渠道兼容（裸短名）", () => {
-  let only: Awaited<ReturnType<typeof fakeUpstream>>;
+// ── 4. 单渠道模式 ────────────────────────────────────────────────────────────
+
+describe("4. 单渠道模式也走池（不再暴露裸短名）", () => {
+  let only: FakeUpstream;
   let gw: gateway.RunningGateway;
 
   before(async () => {
     only = await fakeUpstream("solo");
     clearChannels();
-    setChannel(makeChannel("solo", "solo", only.url));
+    poolUsage.resetPoolLedgerForTest();
+    setChannel(makeChannel("solo", only.url, [["deepseek-v4-flash", "deepseek-v4-flash"]]));
+    poolUsage.writeBilling("solo", { total: { used: 0 } });
     gw = await gateway.start("127.0.0.1:0", { logger: () => {} });
   });
 
   after(async () => {
     await gw?.close().catch(() => {});
-    await new Promise<void>((r) => only.server.close(() => r()));
+    await closeFake(only);
     clearChannels();
   });
 
-  it("只注册一个渠道时 /v1/models 仍是裸短名，/health 仍是旧形状", async () => {
+  it("/v1/models 仍是三个池模型；service 身份是 solo-bridge", async () => {
     const models = (await (await fetch(`http://${gw.addr}/v1/models`)).json()) as {
-      data: Array<{ id: string }>;
+      data: Array<{ id: string; owned_by: string }>;
     };
     assert.deepEqual(
       models.data.map((m) => m.id),
-      ["pool-solo", "mixed-solo"],
-      "单渠道保持裸短名（既有客户端配置不用改）；池内 id 恒小写",
+      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
     );
+    assert.equal(models.data[0]!.owned_by, "solo-bridge");
 
-    const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<string, unknown>;
+    const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<
+      string,
+      unknown
+    >;
     assert.equal(health["service"], "solo-bridge");
     assert.equal(health["logged_in"], true);
-    assert.equal(health["channels"], undefined, "单渠道不额外塞 channels 字段");
   });
 
-  it("不带前缀的模型仍可用（单渠道模式）", async () => {
-    const { status } = await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "pool-solo",
-      messages: [{ role: "user", content: "hi" }],
-      stream: true,
-    });
+  it("池内模型可用", async () => {
+    const { status } = await chat(gw, "deepseek-v4-flash");
     assert.equal(status, 200);
   });
 
-  it("带自身前缀也可以（客户端配置可移植）", async () => {
-    const { status } = await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "solo/pool-solo",
-      messages: [{ role: "user", content: "hi" }],
-      stream: true,
-    });
-    assert.equal(status, 200);
-  });
-});
-
-describe("4. resolveTarget 解析规则", () => {
-  it("多渠道路由下逐条判定", () => {
-    clearChannels();
-    setChannel(makeChannel("alpha", "alpha", "http://127.0.0.1:1"));
-    setChannel(makeChannel("beta", "beta", "http://127.0.0.1:1"));
-    assert.equal(channelCount(), 2);
-    assert.equal(channels().length, 2);
-
-    assert.equal(resolveTarget("alpha/pool-alpha").channel.config.cid, "alpha");
-    assert.equal(resolveTarget("alpha/pool-alpha").upstreamModel, "pool-alpha");
-    assert.equal(resolveTarget("beta/x").channel.config.cid, "beta");
-    assert.throws(() => resolveTarget("gamma/x"), /未知渠道前缀/);
-    assert.throws(() => resolveTarget("pool-alpha"), /必须带渠道前缀/);
-
-    clearChannels();
-    setChannel(makeChannel("alpha", "alpha", "http://127.0.0.1:1"));
-    assert.equal(resolveTarget("pool-alpha").channel.config.cid, "alpha");
-    // 单渠道模式下前缀不像渠道名 → 交给该渠道原样处理（上游 slug 可能含 `/`）
-    assert.equal(resolveTarget("vendor/model").upstreamModel, "vendor/model");
-    clearChannels();
+  it("该渠道提供不了的池模型 → 503", async () => {
+    const { status } = await chat(gw, "glm-5.3-flash");
+    assert.equal(status, 503);
   });
 });

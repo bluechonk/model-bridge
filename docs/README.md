@@ -25,7 +25,7 @@
 | --- | --- |
 | [CONTRACT-TS.md](./CONTRACT-TS.md) | **工作区实现契约**：共享层 / 渠道层 7 文件 / 零运行依赖 / 测试要求 / 交付清单 |
 | [STORAGE-CONVENTION.md](./STORAGE-CONVENTION.md) | **存储落点与文件命名规范**：统一根 `~/.model-bridge/` + 按 cid 分层、迁移规则 |
-| [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) | **池化架构**：模型池（已落地）+ 账号池（形状已定、待实现）；仓库即插件 |
+| [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) | **池化架构**：公共模型池（三个跨渠道模型 + 账单额度排序，§2）+ 账号池；仓库即插件 |
 | [CONTRACT.md](./CONTRACT.md) | 早期契约（历史存档，描述字符串替换时代的约定） |
 
 ## 2. 渠道协议规格 `docs/protocols/<cid>/PROTOCOL.md`
@@ -74,6 +74,7 @@
 | --- | --- | --- |
 | workbuddyai | [findings](./journals/workbuddyai/findings.md) · [progress](./journals/workbuddyai/progress.md) · [task_plan](./journals/workbuddyai/task_plan.md) | 调研结论 / 进度日志 / 任务计划 |
 | catpaw | [findings](./journals/catpaw/findings.md) · [progress](./journals/catpaw/progress.md) · [task_plan](./journals/catpaw/task_plan.md) | 同上 |
+| pool（跨渠道） | [findings](./journals/pool/findings.md) · [progress](./journals/pool/progress.md) · [task_plan](./journals/pool/task_plan.md) | 公共模型池：命名形态调研 / 归一化规则 / 候选表 / 进度 |
 
 `progress.md` 是**追加式日志**（按会话追加，不删旧条目）；`task_plan.md` 是阶段与勾选项；
 `findings.md` 是上游事实（登录流程、端点、踩坑）—— 与 `docs/protocols/` 的区别是：
@@ -97,7 +98,10 @@
 ## 7. 其它客户端怎么接（Hermes / 任意 OpenAI 客户端）
 
 网关是一个**普通 HTTP 端点**，不依赖 ZCode：任何能配 OpenAI 兼容 base url 的客户端直接指向
-`http://127.0.0.1:8787/v1` 就能用，模型 id 取 `model-bridge channels` 列出的 `<cid>/<模型>`。
+`http://127.0.0.1:8787/v1` 就能用，模型 id 只有三个（`deepseek-v4.1-flash` /
+`deepseek-v4-flash` / `glm-5.3-flash`）—— 请求落到哪家渠道由网关按账单已用量自己决定，
+客户端不关心、也不能指定（旧的 `<cid>/<模型>` 形态已移除，见
+[POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) §2）。
 
 **不需要**为每个客户端再做一层插件。以前给 Hermes 单独做过 `.hermes-plugin/`（把技能注册给
 Hermes 的技能加载器），已移除：主力是 ZCode，它启动的网关本来就是共享的，Hermes 直接请求即可

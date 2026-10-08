@@ -40,14 +40,15 @@ import {
   channelFor,
   channels,
   getChannel,
-  hasChannel,
   type Channel,
   type Credential,
   type UpstreamConfig,
 } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
 import { activateAccount, markActiveHealth, pickAccount, readIndex } from "./account-pool.js";
-import { poolIds, qualifiedId, resolvePoolModel } from "./model-pool.js";
+import { resolvePoolModel } from "./model-pool.js";
+import { asPoolModel, poolCandidates, POOL_MODELS } from "./pool-targets.js";
+import { maybeRefreshBilling, noteFailure, noteSuccess, scoreOf } from "./pool-usage.js";
 import * as sseStream from "./sse-stream.js";
 import { baseUrlOf, bindFreeServer, displayBase } from "./portfree.js";
 
@@ -137,39 +138,28 @@ function isCustomWire(channel: Channel): boolean {
 }
 
 /**
- * 从模型 id 解析路由目标：**模型池的唯一入口**。
+ * 池路由一次请求最多尝试几个候选渠道。
  *
- * | 模型 id | 结果 |
- * |---|---|
- * | `<cid>/<模型>` 且前缀已注册 | 该渠道；模型名去掉前缀 |
- * | 无前缀 + 只注册了一个渠道 | 该渠道；模型名原样（兼容既有客户端配置） |
- * | 无前缀 + 多渠道路由 | 抛错（必须带前缀，否则不知道发给谁） |
- * | 前缀未知 | 单渠道模式按原样交给该渠道（上游 slug 可能含 `/`）；多渠道路由抛错 |
+ * 为什么要有上限：候选可能有一大片（三个模型各有 4~5 家），逐个串行尝试会让
+ * 最坏情况的延迟成倍增长。默认 3 与账号池的转移上限一致。
+ * `BRIDGE_POOL_MAX_TRIES` 可覆盖。
  */
-export function resolveTarget(
-  model: string,
-): { channel: Channel; upstreamModel: string; cid?: string } {
-  const slash = model.indexOf("/");
-  if (slash > 0) {
-    const prefix = model.slice(0, slash);
-    const rest = model.slice(slash + 1);
-    if (rest && hasChannel(prefix)) {
-      return { channel: channelFor(prefix), upstreamModel: rest, cid: prefix };
-    }
-    if (channelCount() === 1) {
-      return { channel: channels()[0]!, upstreamModel: model };
-    }
-    throw new Error(
-      `未知渠道前缀 "${prefix}"（已注册: ${channels().map((c) => c.config.cid).join(", ")}）`,
-    );
-  }
-  if (channelCount() === 1) {
-    return { channel: channels()[0]!, upstreamModel: model };
-  }
-  throw new Error(
-    `多渠道路由下模型 id 必须带渠道前缀（如 "workbuddyai/deepseek-v4.1-flash"）；` +
-      `已注册: ${channels().map((c) => c.config.cid).join(", ")}`,
-  );
+const DEFAULT_POOL_ATTEMPTS = 3;
+
+function maxPoolAttempts(): number {
+  const raw = process.env["BRIDGE_POOL_MAX_TRIES"];
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_POOL_ATTEMPTS;
+}
+
+/**
+ * 按账本给候选排序：**账单已用量降序**，冷却期内当 0，同分保持注册顺序。
+ *
+ * `poolCandidates()` 已按注册顺序返回，而 `Array.prototype.sort` 稳定，
+ * 所以并列时天然保持注册顺序 —— 不需要额外的 tie-break 字段。
+ */
+function rankCandidates<T extends { cid: string }>(candidates: T[]): T[] {
+  return [...candidates].sort((a, b) => scoreOf(b.cid) - scoreOf(a.cid));
 }
 
 interface UpstreamCall {
@@ -440,94 +430,144 @@ async function handleChat(
     return;
   }
 
-  // 模型池路由：`<cid>/<模型>` → 该渠道；单渠道模式下可省略前缀
-  let target: ReturnType<typeof resolveTarget>;
-  try {
-    target = resolveTarget(model);
-  } catch (err) {
-    opts.logger(`路由失败: ${String(err)}`);
-    writeJsonError(res, 400, "unknown_channel", String(err));
+  // 公共模型池：对外只认三个模型，请求落到哪家渠道由账本决定
+  // （匹配见 pool-targets.ts，排序见 pool-usage.ts）。
+  maybeRefreshBilling(opts.logger); // 账单额度到期就在后台刷，不阻塞本次请求
+
+  const target = asPoolModel(model);
+  if (!target) {
+    writeJsonError(
+      res,
+      400,
+      "unknown_model",
+      `未知模型 ${model}；可用模型：${POOL_MODELS.join("、")}`,
+    );
     return;
   }
-  const { channel, upstreamModel, cid } = target;
-  const { catalog, cred, upstream } = channel;
+  const candidates = poolCandidates(target);
+  if (candidates.length === 0) {
+    writeJsonError(
+      res,
+      503,
+      "not_authenticated",
+      `没有任何渠道提供 ${target}（渠道未登录或目录未就绪）`,
+    );
+    return;
+  }
 
+  // 按账本排序：账单已用量降序、失败冷却中当 0；最多试 maxPoolAttempts() 个候选。
+  const attempts = rankCandidates(candidates).slice(0, maxPoolAttempts());
   const wantStream = Boolean(payload["stream"]);
+  const tried: string[] = [];
+  let lastError: { status: number; code: string; message: string } | null = null;
 
-  // 模型名解析：**渠道说了算**（目录里查不到就抛错）。
-  //
-  // ⚠ 必须接住这个错 —— 否则「模型名打错」这种**用户输入问题**会被上游异常
-  // 处理器兜成 `500 internal_error`，让人误以为网关/登录坏了（实测踩过：
-  // 用户把 workbuddyai 的 `deepseek-v4.1-flash` 用在 catpaw 上，收到的是
-  // 「网关内部错误」）。这里回 400 并列出该渠道的可用模型，直接指出怎么改。
-  let resolvedModel: string;
-  try {
-    resolvedModel = inChannel(channel, () => resolvePoolModel(channel, upstreamModel));
-  } catch (err) {
-    const available = inChannel(channel, () => {
-      try {
-        return catalog.exposedIds();
-      } catch {
-        return [] as string[];
-      }
-    });
-    const list = available.length > 0 ? `；可用模型：${available.map((m) => `${cid}/${m}`).join("、")}` : "";
-    opts.logger(`模型名无法解析（渠道 ${cid}）: ${String(err)}`);
-    writeJsonError(res, 400, "unknown_model", `渠道 ${cid} 没有模型 ${upstreamModel}${list}`);
-    return;
-  }
+  for (const candidate of attempts) {
+    tried.push(candidate.cid);
+    const { channel } = candidate;
+    const { upstream } = channel;
+    const cid = candidate.cid;
 
-  let body: Record<string, unknown>;
-  try {
-    body = inChannel(channel, () => upstream.buildChatBody(payload, resolvedModel));
-  } catch (err) {
-    // 渠道层可能抛各种错误（上下文超限、system 超长、缺必填字段…）
-    opts.logger(`请求构造失败: ${String(err)}`);
-    writeJsonError(res, 400, "invalid_request", String(err));
-    return;
-  }
-
-  // 可选的异步前置（渠道声明了才有）：必须在发上游**之前完成**。
-  // 例如 catpaw 要求 round → event（置 running）→ turn 的顺序，错一步上游就拒。
-  // ⚠ 传入**同一个 body**：渠道不能再调一次 buildChatBody（会生成新会话 id）。
-  if (upstream.prepareChat) {
+    // 模型名解析：**渠道说了算**（目录里查不到 → 这个候选不可用，换下一家）。
+    let resolvedModel: string;
     try {
-      await inChannel(channel, () => upstream.prepareChat!(body));
+      resolvedModel = inChannel(channel, () => resolvePoolModel(channel, candidate.exposedId));
     } catch (err) {
-      opts.logger(`上游前置失败: ${String(err)}`);
-      writeJsonError(res, 502, "upstream_error", "上游前置请求失败，请查看网关日志");
+      opts.logger(`模型名无法解析（渠道 ${cid}）: ${String(err)}`);
+      noteFailure(cid);
+      lastError = {
+        status: 400,
+        code: "unknown_model",
+        message: `渠道 ${cid} 没有模型 ${candidate.exposedId}`,
+      };
+      continue;
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = inChannel(channel, () => upstream.buildChatBody(payload, resolvedModel));
+    } catch (err) {
+      // 渠道层抛的是**用户输入问题**（上下文超限、system 超长、缺必填字段…）——
+      // 换一家渠道同样会失败，直接 400，不浪费尝试次数。
+      opts.logger(`请求构造失败: ${String(err)}`);
+      writeJsonError(res, 400, "invalid_request", String(err));
       return;
     }
-  }
 
-  const sendBody = Buffer.from(JSON.stringify(body), "utf8");
-
-  const outcome = await callUpstream(channel, sendBody, opts.logger);
-  if (outcome.kind === "not_authenticated") {
-    writeJsonError(res, 503, "not_authenticated", `未登录: ${outcome.error}`);
-    return;
-  }
-  if (outcome.kind === "auth_exhausted") {
-    writeJsonError(res, 502, "upstream_unauthenticated", outcome.error);
-    return;
-  }
-  const call = outcome.call;
-
-  if (!call.ok) {
-    if (call.connectFailed) {
-      opts.logger(`上游请求失败: ${String(call.error)}`);
-      writeJsonError(res, 502, "upstream_error", "上游请求失败，请查看网关日志");
-      return;
+    // 可选的异步前置（渠道声明了才有）：必须在发上游**之前完成**。
+    // 例如 catpaw 要求 round → event（置 running）→ turn 的顺序，错一步上游就拒。
+    // ⚠ 传入**同一个 body**：渠道不能再调一次 buildChatBody（会生成新会话 id）。
+    if (upstream.prepareChat) {
+      try {
+        await inChannel(channel, () => upstream.prepareChat!(body));
+      } catch (err) {
+        opts.logger(`上游前置失败（渠道 ${cid}）: ${String(err)}`);
+        noteFailure(cid);
+        lastError = {
+          status: 502,
+          code: "upstream_error",
+          message: "上游前置请求失败，请查看网关日志",
+        };
+        continue;
+      }
     }
-    // 上游错误体只进本地日志，不回传客户端（可能含内部信息）
-    opts.logger(`上游返回非 200: ${String(call.error?.message ?? "")}`);
-    writeJsonError(res, 502, "upstream_error", "上游请求失败，请查看网关日志");
+
+    const sendBody = Buffer.from(JSON.stringify(body), "utf8");
+
+    // ⚠ 只有**上游响应头到达之前**的失败才能转移 —— 一旦进入 relayUpstream，
+    //    响应头已发给客户端，换渠道会变成两个响应。
+    const outcome = await callUpstream(channel, sendBody, opts.logger);
+    if (outcome.kind === "not_authenticated") {
+      opts.logger(`渠道 ${cid} 未登录: ${outcome.error}`);
+      noteFailure(cid);
+      lastError = { status: 503, code: "not_authenticated", message: `未登录: ${outcome.error}` };
+      continue;
+    }
+    if (outcome.kind === "auth_exhausted") {
+      noteFailure(cid);
+      lastError = { status: 502, code: "upstream_unauthenticated", message: outcome.error };
+      continue;
+    }
+    const call = outcome.call;
+
+    if (!call.ok) {
+      // 上游错误体只进本地日志，不回传客户端（可能含内部信息）
+      if (call.connectFailed) opts.logger(`上游请求失败（渠道 ${cid}）: ${String(call.error)}`);
+      else opts.logger(`上游返回非 200（渠道 ${cid}）: ${String(call.error?.message ?? "")}`);
+      noteFailure(cid);
+      lastError = { status: 502, code: "upstream_error", message: "上游请求失败，请查看网关日志" };
+      continue;
+    }
+
+    // 上游收下了这次请求 → 该渠道可用（清冷却）→ 交给转发层，池路由到此为止
+    noteSuccess(cid);
+    markActiveHealth("ok", cid);
+    await relayUpstream(res, channel, cid, call, wantStream, opts.logger);
     return;
   }
 
-  // 上游收下了这次请求 → 当前账号可用
-  markActiveHealth("ok", channel.config.cid);
+  opts.logger(`池内候选都失败了（${target}，试过 ${tried.join("、")}）`);
+  const final = lastError ?? {
+    status: 502,
+    code: "upstream_error",
+    message: "上游请求失败，请查看网关日志",
+  };
+  writeJsonError(res, final.status, final.code, final.message);
+}
 
+/**
+ * 把胜出候选的上游响应交给客户端：非流式聚合、流式透传。
+ *
+ * ⚠ 一旦开始写响应头就**不能再转移渠道** —— 所以它只在池路由的最后一跳调用，
+ *   池路由的尝试循环里不许出现它。
+ */
+async function relayUpstream(
+  res: ServerResponse,
+  channel: Channel,
+  cid: string,
+  call: UpstreamCall,
+  wantStream: boolean,
+  logger: (m: string) => void,
+): Promise<void> {
   const streamBody = call.body;
   if (!streamBody) {
     writeJsonError(res, 502, "upstream_error", "上游返回空响应体");
@@ -540,7 +580,7 @@ async function handleChat(
       const buf = await inChannel(channel, () => collectAsOpenAiSse(streamBody, channel, cid));
       writeJson(res, sseStream.aggregateChatSse(buf));
     } catch (err) {
-      opts.logger(`读取上游响应中断: ${String(err)}`);
+      logger(`读取上游响应中断: ${String(err)}`);
       writeJsonError(res, 502, "upstream_error", "上游请求失败，请查看网关日志");
     }
     return;
@@ -559,48 +599,30 @@ async function handleChat(
   }
   res.writeHead(call.status, outHeaders);
   await inChannel(channel, () =>
-    relayStream(res, streamBody, call.headers.get("content-type") ?? "", opts.logger, channel, cid),
+    relayStream(res, streamBody, call.headers.get("content-type") ?? "", logger, channel, cid),
   );
 }
 
 /**
- * 模型池：`/v1/models`。
+ * 公共模型池：`/v1/models` **恒返回三个模型**。
  *
- * 多渠道路由下 id 带 `<cid>/` 前缀（否则几个渠道可能给出同一个短名）；
- * 单渠道模式保持裸短名（兼容既有客户端配置）。对外 id **恒为小写**（见 model-pool.ts）。
+ * 客户端只看到池内 id（`POOL_MODELS`），**不带渠道前缀** —— 请求落到哪家由网关
+ * 按账本决定，客户端不参与也无法指定。某个模型暂时没有可用渠道时照样列出
+ * （模型可见性与登录状态解耦），请求时才报 503。
  */
 function handleModels(res: ServerResponse): void {
   const now = Math.floor(Date.now() / 1000);
-  const multi = channelCount() > 1;
-  const data: Array<Record<string, unknown>> = [];
-  const errors: string[] = [];
-
-  for (const channel of channels()) {
-    let ids: string[];
-    try {
-      // 对外 id 恒小写（见 model-pool.ts）
-      ids = inChannel(channel, () => poolIds(channel));
-    } catch (err) {
-      errors.push(`${channel.config.cid}: ${String(err)}`);
-      continue;
-    }
-    for (const id of ids) {
-      const exposed = qualifiedId(channel.config.cid, id, multi);
-      data.push({
-        id: exposed,
-        object: "model",
-        created: now,
-        owned_by: channel.upstream.DISPLAY_NAME,
-        name: exposed,
-      });
-    }
-  }
-
-  if (data.length === 0 && errors.length > 0) {
-    writeJsonError(res, 500, "catalog_error", `模型目录不可用: ${errors.join("; ")}`);
-    return;
-  }
-  writeJson(res, { object: "list", data });
+  const owner = serviceName();
+  writeJson(res, {
+    object: "list",
+    data: POOL_MODELS.map((id) => ({
+      id,
+      object: "model",
+      created: now,
+      owned_by: owner,
+      name: id,
+    })),
+  });
 }
 
 function handleHealth(res: ServerResponse): void {
