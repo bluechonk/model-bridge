@@ -16,7 +16,9 @@ import {
   setChannel,
   type Channel,
 } from "../dist/channel.js";
+import * as daemon from "../dist/daemon.js";
 import * as gateway from "../dist/gateway.js";
+import * as paths from "../dist/paths.js";
 import { resolveTarget } from "../dist/gateway.js";
 
 // ── 合成渠道 ─────────────────────────────────────────────────────────────────
@@ -239,7 +241,35 @@ describe("1. 多渠道路由（两张池子）", () => {
   });
 });
 
-describe("2. 单渠道兼容（裸短名）", () => {
+describe("2. 仓库级命令在多渠道路由下可用", () => {
+  let solo: Awaited<ReturnType<typeof fakeUpstream>>;
+
+  before(async () => {
+    solo = await fakeUpstream("x");
+    clearChannels();
+    setChannel(makeChannel("alpha", "alpha", solo.url));
+    setChannel(makeChannel("beta", "beta", solo.url));
+  });
+
+  after(async () => {
+    await new Promise<void>((r) => solo.server.close(() => r()));
+    clearChannels();
+  });
+
+  it("daemon.status 不抛错（根级路径解析不再要求「唯一渠道」）", async () => {
+    // 回归：曾因 paths.rootDir() 走 getChannel() 而在多渠道路由下直接抛错
+    const code = await daemon.status({ json: true, addr: "127.0.0.1:1", uiPort: 1 });
+    assert.equal(code, 0);
+  });
+
+  it("daemon.logs / paths 同样不抛错", () => {
+    assert.equal(daemon.logs(1, true), 1, "没有日志文件 → 返回 1（不是抛错）");
+    assert.ok(paths.rootDir().length > 0);
+    assert.ok(paths.rootPidPath().endsWith("gateway.pid"));
+  });
+});
+
+describe("3. 单渠道兼容（裸短名）", () => {
   let only: Awaited<ReturnType<typeof fakeUpstream>>;
   let gw: gateway.RunningGateway;
 
@@ -291,7 +321,7 @@ describe("2. 单渠道兼容（裸短名）", () => {
   });
 });
 
-describe("3. resolveTarget 解析规则", () => {
+describe("4. resolveTarget 解析规则", () => {
   it("多渠道路由下逐条判定", () => {
     clearChannels();
     setChannel(makeChannel("alpha", "alpha", "http://127.0.0.1:1"));

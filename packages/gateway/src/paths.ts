@@ -22,7 +22,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { getChannel, channelFor, type BridgeConfig } from "./channel.js";
+import { channels, channelCount, channelFor, getChannel, type BridgeConfig } from "./channel.js";
 import { activeCid } from "./channel-context.js";
 import { collectLegacyDirs, enforcePermissions, migrateChannelFiles } from "./migrate.js";
 
@@ -58,10 +58,15 @@ export function noteOnce(key: string, message: string): void {
 }
 
 /** 解析存储根，并记下它是否由环境变量**显式**指定。 */
-function resolveRoot(config: BridgeConfig): { root: string; fromEnv: boolean } {
+function resolveRoot(config?: BridgeConfig): { root: string; fromEnv: boolean } {
   const explicit = process.env[ROOT_ENV];
   if (explicit) return { root: explicit, fromEnv: true };
-  for (const name of config.legacyEnvVars ?? []) {
+  // config 省略 = 仓库级（多渠道路由）：根是**共享的**，不需要单个渠道的配置，
+  // 历史环境变量按注册顺序逐个检查（任一渠道的历史变量仍按存储根处理）。
+  const names = config
+    ? (config.legacyEnvVars ?? [])
+    : channels().flatMap((c) => c.config.legacyEnvVars ?? []);
+  for (const name of names) {
     const value = process.env[name];
     if (!value) continue;
     noteOnce(`env:${name}`, `${name} 已弃用：现在只认 MODEL_BRIDGE_HOME（该变量仍按存储根处理）`);
@@ -106,7 +111,10 @@ function configOf(cid?: string): BridgeConfig {
 
 /** 存储根（不触发迁移）。 */
 export function rootDir(cid?: string): string {
-  return rootDirFor(configOf(cid));
+  if (cid !== undefined) return rootDirFor(channelFor(cid).config);
+  // 仓库级：根与任何单个渠道无关，直接解析（不能要求"唯一渠道"，多渠道路由下没有）
+  if (channelCount() === 1) return rootDirFor(getChannel().config);
+  return resolveRoot().root;
 }
 
 /** 每个 (根, cid) 只做一次收拢：缓存键 → 实际渠道目录（收拢失败时可能仍指向旧目录）。 */
