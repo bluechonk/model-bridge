@@ -16,6 +16,8 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 - **对外模型 id**：`<cid>/<模型>`，**恒为小写**（`workbuddy/deepseek-flash`、`trae/deepseek-v4-flash`）。
   解析大小写不敏感；上游 slug 仍用目录里的原始写法。
 - **只放行 flash 家族**（网关级白名单）。某渠道池子为空通常是未登录或上游目录拉取失败，不是插件坏了。
+- **不只服务 ZCode**：网关是普通 HTTP 端点，其它客户端（Hermes、任意 OpenAI 客户端）直接把 base url
+  指到 `http://127.0.0.1:8787/v1` 即可 —— **不需要**各自的插件层，凭据与账号池由网关统一管理。
 - **网关默认地址** `http://127.0.0.1:8787`（`/v1/chat/completions`、`/v1/models`、`/health`）。
   仓库级网关注册全部渠道；单渠道 CLI 仍暴露裸短名（如 `deepseek-flash`）。
 - **存储落点**：统一根 `~/.model-bridge/`，按 cid 分层 `~/.model-bridge/<cid>/`（`credentials.json`

@@ -135,3 +135,4 @@
 - 文档同步：`README.md` / `AGENTS.md` 重写为 TypeScript 版。
 - 待验证：真实机器端到端（catpaw login → start → 一次流式 chat），
   重点确认 fire-and-forget round/event 预发的时序无竞态。
+- **后续（2026-10-08）**：`channels/catpaw/.hermes-plugin/` 已移除。Hermes 不必再有一层插件 —— ZCode 侧启动的仓库级网关（`http://127.0.0.1:8787/v1`）本身就是一个普通 HTTP 端点，Hermes 直接把它当 OpenAI 兼容服务请求即可（凭据/账号池由网关统一管理）。

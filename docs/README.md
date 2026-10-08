@@ -91,7 +91,19 @@
 | `channels/catpaw/AGENTS.md` | 该目录的 agent 级指令（工具从目录读取，不能搬） |
 | `packages/*/README.md`、`channels/<cid>/README.md` | 指针，指向本目录 |
 
-## 7. 新增一个渠道要动哪些地方
+## 7. 其它客户端怎么接（Hermes / 任意 OpenAI 客户端）
+
+网关是一个**普通 HTTP 端点**，不依赖 ZCode：任何能配 OpenAI 兼容 base url 的客户端直接指向
+`http://127.0.0.1:8787/v1` 就能用，模型 id 取 `model-bridge channels` 列出的 `<cid>/<模型>`。
+
+**不需要**为每个客户端再做一层插件。以前给 Hermes 单独做过 `.hermes-plugin/`（把技能注册给
+Hermes 的技能加载器），已移除：主力是 ZCode，它启动的网关本来就是共享的，Hermes 直接请求即可
+（凭据与账号池都由网关统一管理）。
+
+ZCode 侧仍需要插件（`plugins/model-bridge/`）—— 只有插件能提供会话启动自动挂载、命令与技能；
+这一层对其它客户端不适用。
+
+## 8. 新增一个渠道要动哪些地方
 
 1. 建 `channels/<cid>/`：7 个 `src/*.ts`（`channel`/`cli`/`index` + `cred`/`upstream`/`catalog`/`billing`）
    + `tests/selftest.test.ts` + `package.json` + `tsconfig.json` + 指针 `README.md`

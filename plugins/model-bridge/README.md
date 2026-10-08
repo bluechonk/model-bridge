@@ -25,6 +25,14 @@ npm link @model-bridge/cli  # 让 model-bridge 命令进 PATH
 ZCode 里的 provider（**必须用户手配**）：类型 `openai-chat-completions`、
 baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型填 `<cid>/<模型>`。
 
+## 其它客户端（Hermes / 任意 OpenAI 客户端）
+
+网关不依赖 ZCode：任何 OpenAI 兼容客户端把 base url 指到 `http://127.0.0.1:8787/v1`
+就能用，模型 id 用 `model-bridge channels` 列出的 `<cid>/<模型>`。
+
+这类客户端**不需要**各自的插件层（曾经给 Hermes 做过 `.hermes-plugin/`，已移除）——
+只要 ZCode 侧把网关跑起来，其它客户端直接共享同一个端点，凭据与账号池由网关统一管理。
+
 ## 排障
 
 - 网关起不来：`model-bridge logs`（`~/.model-bridge/gateway.log`）
