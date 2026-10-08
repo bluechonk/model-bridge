@@ -257,16 +257,20 @@ describe("2. 模型目录", () => {
     assert.equal(catalog.isBenefitModel("some-new-benefit"), false, "reset 后不再命中");
   });
 
-  it("兜底表 9 条；exposedIds 只放行 flash（4 条）；resolveModel 归一化已知 id", () => {
+  it("兜底表 9 条；exposedIds 只放行 (deepseek|glm)×flash（3 条）；resolveModel 归一化已知 id", () => {
     catalog.resetRemoteCache();
     assert.equal(catalog.FALLBACK_MODEL_IDS.length, 9);
     const ids = catalog.exposedIds();
     assert.deepEqual(
       ids,
-      ["glm-5.3-flash", "openpangu-2.0-flash", "deepseek-v4-flash", "deepseek-v4.1-flash"],
-      "flash-only 池策略：9 条兜底里只有 4 条是 flash 家族",
+      ["glm-5.3-flash", "deepseek-v4-flash", "deepseek-v4.1-flash"],
+      "池策略 (deepseek|glm)×flash：9 条兜底里 3 条命中；openpangu 是 flash 但非 deepseek/glm → 挡下",
     );
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能是 flash 家族");
+    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里必须带 flash");
+    assert.ok(
+      ids.every((id) => /deepseek|glm/i.test(id)),
+      "且必须属于 deepseek 或 glm 家族",
+    );
     // 过滤只发生在呈现层：底层表仍含非 flash 条目
     const underlying = catalog.details().map((e) => e["id"] as string);
     assert.equal(underlying.length, 9, "details 仍给出全部 9 条");
@@ -1281,7 +1285,7 @@ describe("10. 端到端网关（假上游）", () => {
     assert.deepEqual(
       catalog.exposedIds(),
       ["glm-5.3-flash", "deepseek-v4-flash"],
-      "GLM-5.2 非 flash，不进池（数据仍在底层目录）",
+      "GLM-5.2 非 flash → 不进池；openpangu-2.0-flash 是 flash 但非 deepseek/glm → 也挡下（数据仍在底层目录）",
     );
     assert.equal(catalog.isBenefitModel("glm-5.3-flash"), true);
     assert.equal(

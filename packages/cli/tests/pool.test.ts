@@ -105,9 +105,27 @@ describe("仓库级模型池", () => {
       "workbuddyai 池子里应有 deepseek-v4.1-flash",
     );
     assert.deepEqual(rows.find((r) => r.cid === "qoder")!.models, [], "qoder 是桩 → 空池");
+
+    // 池策略 =(deepseek|glm)×flash。所以「池子为空」有两类原因，别混为一谈：
+    //  ① 桩渠道（qoder，目录本身为空）
+    //  ② 兜底表里没有这两族的模型（cline：兜底表是 space-bunny / mimo / muse-spark）
+    // 这里用**裸 HOME（无缓存）**，所以 cline 拉不到远端目录，只能看兜底表。
+    // 两者都不是渠道坏了 —— 底层目录/`details()` 仍完整，只是池策略不放行。
+    const empty = rows.filter((r) => r.models.length === 0).map((r) => r.cid).sort();
+    assert.deepEqual(
+      empty,
+      ["cline", "qoder"],
+      `空池渠道集合变了（裸 HOME 下）: ${empty.join(", ")}`,
+    );
     assert.ok(
       rows.filter((r) => r.models.length > 0).length >= 8,
       "至少 8 个渠道有可用模型",
     );
+    // 每条都要过共享策略（不在这里重写判据，避免与共享层脱节）
+    for (const row of rows) {
+      for (const id of row.models) {
+        assert.ok(gw.isAllowedFamily(id), `${row.cid} 的 ${id} 不该在池里`);
+      }
+    }
   });
 });

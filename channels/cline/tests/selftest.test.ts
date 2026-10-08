@@ -299,7 +299,7 @@ process.env["CLINE_API_BASE_URL"] = fakeBase();
 
 // 被测模块（设置 env 后再 import）
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
-const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
+const { paths, sseStream: sse, gateway, isAllowedFamily } = await import("@model-bridge/gateway");
 await import("../dist/channel.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");
@@ -859,11 +859,19 @@ describe("7. 模型目录", () => {
       "Extra",
       "档位展示名与 wire 值刻意不同",
     );
-    // 模型池策略：只有带 flash 的条目进池子；非 flash（含 glm-4.7 / space-bunny）
-    // 被挡在池外，但上面的 details() 断言仍覆盖它们的三来源合并顺序
+    // 模型池策略 =(deepseek|glm)×flash：只有 deepseek-v4.1-flash 两道闸门都过。
+    // 被挡下的（含 glm-4.7 / space-bunny / cline-free/mimo）仍在上面的 details() 里 —— 数据没丢。
     const ids = catalog.exposedIds();
-    assert.deepEqual(ids, ["cline-free/mimo-v2.6-flash", "deepseek/deepseek-v4.1-flash"]);
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能有 flash 模型");
+    assert.deepEqual(
+      ids,
+      ["deepseek/deepseek-v4.1-flash"],
+      `池内应只剩 deepseek 系 flash；实际: ${ids.join(", ")}`,
+    );
+    assert.ok(
+      ids.every((id) => isAllowedFamily(id)),
+      "池内每一条都必须过共享池策略（避免在测试里重写一遍判据而与它脱节）",
+    );
+    assert.ok(!ids.includes("cline-free/mimo-v2.6-flash"), "别家 flash（mimo）不进池子");
     assert.ok(!ids.includes("stealth/space-bunny-alpha"), "非 flash 的免费条目不进池子");
     assert.ok(!ids.includes("z-ai/glm-4.7"), "同家族的非 flash 型号也挡在池外");
   });
@@ -901,12 +909,13 @@ describe("7. 模型目录", () => {
     catalog.clearCache();
     await catalog.refreshCatalog();
     try {
-      // 兜底表 3 条里只有 mimo-v2.6-flash 带 flash，其余（space-bunny/muse-spark）
-      // 被白名单过滤 —— 这是策略过滤，不是渠道坏了
+      // 兜底表 3 条（space-bunny / mimo-v2.6-flash / muse-spark）**没有一条**属于
+      // deepseek 或 glm 家族 —— 池策略 (deepseek|glm)×flash 下全被挡在池外，
+      // 所以远端不可用时池子是**空的**。这是策略过滤，不是渠道坏了（底层表仍完整）。
       assert.deepEqual(
         catalog.exposedIds(),
-        ["cline-free/mimo-v2.6-flash"],
-        "兜底表只有 flash 那条进池子（预期行为）",
+        [],
+        "兜底表 3 条都不是 deepseek/glm → 池子为空（预期行为）",
       );
       // 兜底表整表仍在底层（过滤只发生在呈现层），其免费元数据不受影响
       const byId = new Map(catalog.details().map((r) => [r["id"] as string, r]));
@@ -1103,12 +1112,12 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
       data: Array<{ id: string }>;
     };
     const ids = models.data.map((m) => m.id);
-    // flash-only 池策略：免费池的 mimo-flash 与推荐池的 deepseek-v4.1-flash 进池；
-    // 非 flash（如 z-ai/glm-4.7）被挡在池外
+    // 池策略 (deepseek|glm)×flash：目录里只有 deepseek-v4.1-flash 两道闸门都过；
+    // 免费池的 mimo-v2.6-flash（带 flash 但不是这两族）与非 flash 的 glm-4.7 都被挡在池外
     assert.deepEqual(
       ids,
-      ["cline-free/mimo-v2.6-flash", "deepseek/deepseek-v4.1-flash"],
-      `flash-only 池策略，实际 ${ids.join(",")}`,
+      ["deepseek/deepseek-v4.1-flash"],
+      `池策略 (deepseek|glm)×flash，实际 ${ids.join(",")}`,
     );
     assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能是 flash 家族");
     assert.ok(

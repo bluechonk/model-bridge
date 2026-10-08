@@ -61,7 +61,7 @@ catpaw status / models / credits / stop
 |------|------|
 | `src/cred.ts` | 真实 URL 登录（login-config → poll-token）+ 凭据落盘 |
 | `src/upstream.ts` | conversation 三段式协议翻译 + SSE 累积帧 → OpenAI delta |
-| `src/catalog.ts` | 模型目录（flash-only 白名单） |
+| `src/catalog.ts` | 模型目录（池策略：`(deepseek\|glm)` × flash） |
 | `src/billing.ts` | 额度（无端点，如实报错） |
 
 渠道差异通过 `src/channel.ts` 的 `setChannel()` 注册到共享层。
@@ -70,7 +70,7 @@ catpaw status / models / credits / stop
 
 - 凭据零入库、零回显：token 原文只存在于进程内存，对外只给指纹与脱敏形态
 - 登录必须是真实 URL 链路，不得读其它应用的本地文件
-- 模型池只放 flash 家族（`/flash/i`，大小写不敏感），判据在共享层
+- 模型池只放 **deepseek / glm 家族的 flash 模型**（判据在共享层 `isAllowedFamily()`）
 - 文档与代码同 commit 更新：改了实现就要同步 `docs/` 与本文档
 
 ## 许可证

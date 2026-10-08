@@ -124,7 +124,7 @@ describe("cred", () => {
     await saveFakeCredential();
     const c = cred.load();
 
-    // 起一个本地假 ping 端点（离线；照 MINIMAX_ACCOUNT_BASE_URL 的覆盖惯例）
+    // 起一个本地假 ping 端点（离线；照 CLINE_API_BASE_URL 的覆盖惯例）
     let status = 401;
     const ping = createServer((_req, res) => {
       res.writeHead(status, { "Content-Type": "application/json" });
@@ -342,13 +342,13 @@ describe("buildChatBody", () => {
   it("把 OpenAI messages 转成 upstream 需要的形态", () => {
     const body = upstream.buildChatBody(
       {
-        model: "catpaw-flash",
+        model: "glm-5.3-flash",
         messages: [
           { role: "system", content: "你是一个助手" },
           { role: "user", content: "你好" },
         ],
       },
-      "catpaw-flash",
+      "glm-5.3-flash",
     );
     assert.equal(typeof body["conversationId"], "string");
     assert.equal(body["action"], "turn");
@@ -365,8 +365,8 @@ describe("buildChatBody", () => {
     assert.throws(
       () =>
         upstream.buildChatBody(
-          { model: "catpaw-flash", messages: [{ role: "system", content: long }, { role: "user", content: "hi" }] },
-          "catpaw-flash",
+          { model: "glm-5.3-flash", messages: [{ role: "system", content: long }, { role: "user", content: "hi" }] },
+          "glm-5.3-flash",
         ),
       /超过上游上限/,
     );
@@ -376,8 +376,8 @@ describe("buildChatBody", () => {
     assert.throws(
       () =>
         upstream.buildChatBody(
-          { model: "catpaw-flash", messages: [{ role: "assistant", content: "ok" }] },
-          "catpaw-flash",
+          { model: "glm-5.3-flash", messages: [{ role: "assistant", content: "ok" }] },
+          "glm-5.3-flash",
         ),
       /最后一条消息必须是 user/,
     );
@@ -386,11 +386,11 @@ describe("buildChatBody", () => {
   it("包含 toolConfigs", () => {
     const body = upstream.buildChatBody(
       {
-        model: "catpaw-flash",
+        model: "glm-5.3-flash",
         messages: [{ role: "user", content: "hi" }],
         tools: [{ type: "function", function: { name: "f1", parameters: { type: "object" } } }],
       },
-      "catpaw-flash",
+      "glm-5.3-flash",
     );
     const tools = body["toolConfigs"] as Array<Record<string, unknown>>;
     assert.ok(Array.isArray(tools));
@@ -446,10 +446,10 @@ describe("catalog", () => {
   });
 
   it("toModelInfo 归一化字段名", () => {
-    const info = catalog.toModelInfo({ id: "catpaw-flash", modelType: 5, displayName: "CatPaw Flash" });
-    assert.equal(info!.id, "catpaw-flash");
+    const info = catalog.toModelInfo({ id: "raw-id-1", modelType: 5, displayName: "Raw One" });
+    assert.equal(info!.id, "raw-id-1");
     assert.equal(info!.modelType, 5);
-    assert.equal(info!.name, "CatPaw Flash");
+    assert.equal(info!.name, "Raw One");
   });
 });
 
@@ -503,7 +503,7 @@ describe("end-to-end gateway", () => {
           res.end(
             JSON.stringify({
               code: 0,
-              data: { models: [{ id: "catpaw-flash", modelType: 1, displayName: "CatPaw Flash" }] },
+              data: { models: [{ id: "glm-5.3-flash", modelType: 1, displayName: "GLM-5.3-Flash" }] },
             }),
           );
           return;
@@ -523,8 +523,8 @@ describe("end-to-end gateway", () => {
   it("非流式返回聚合的 chat.completion", async () => {
     await saveFakeCredential();
     const body = upstream.buildChatBody(
-      { model: "catpaw-flash", messages: [{ role: "user", content: "hi" }] },
-      "catpaw-flash",
+      { model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] },
+      "glm-5.3-flash",
     );
     // 验证 body 有 conversationId 和 turnRequestId
     assert.ok(body["conversationId"]);

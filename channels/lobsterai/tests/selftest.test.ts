@@ -178,16 +178,24 @@ describe("1. 路径", () => {
 });
 
 describe("2. 模型目录", () => {
-  it("兜底 30 条（对齐一次真实上游拉取）、窗口 131072、底层表含 kimi-k2.7-code（白名单过滤后池内 8 条 flash）、不含价格快照", () => {
+  it("兜底 30 条（对齐一次真实上游拉取）、窗口 131072、底层表含 kimi-k2.7-code（池策略过滤后 5 条）、不含价格快照", () => {
     catalog.resetRemoteCache();
     assert.equal(catalog.FALLBACK_MODELS.length, 30);
     assert.equal(catalog.FALLBACK_MODELS[0]!.context_window, 131_072);
     const ids = catalog.exposedIds();
-    assert.equal(ids.length, 8, "30 条兜底里有 8 条带 flash");
+    // 池策略 =(deepseek|glm) × flash：30 条兜底里 3 条 deepseek + 2 条 glm
+    assert.equal(ids.length, 5, `池内应 5 条，实际: ${ids.join(", ")}`);
     assert.ok(ids.includes("deepseek-v4-flash"), "含上游真名 deepseek-v4-flash");
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能有 flash 模型");
-    assert.ok(!ids.some((id) => /^kimi-k2\.7-code$/.test(id)), "非 flash 被白名单过滤");
+    assert.ok(ids.includes("glm-5.3-flash") && ids.includes("glm-5.3-flashx"), "含 glm 系 flash");
+    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里必须带 flash");
+    assert.ok(ids.every((id) => /deepseek|glm/i.test(id)), "且必须属于 deepseek 或 glm 家族");
+    assert.ok(!ids.some((id) => /^kimi-k2\.7-code$/.test(id)), "非 flash 被过滤");
     assert.ok(!ids.includes("deepseek-v4-pro") && !ids.includes("glm-5.2"), "同家族的非 flash 型号也挡在池外");
+    // 别家的 flash 同样挡下（本次策略收窄的关键）
+    assert.ok(
+      !ids.includes("qwen3.8-flash"),
+      "别家 flash（qwen 等）不进池",
+    );
     // 过滤只发生在呈现层：底层表/合并逻辑仍保留被过滤的条目
     const underlying = catalog.details().map((r) => r["id"]);
     assert.equal(underlying.length, 30, "details 仍给出全部 30 条兜底");
@@ -198,7 +206,12 @@ describe("2. 模型目录", () => {
   it("拉到远端即落盘 cache/models.json；新进程（全新实例）读到真实目录而不是兜底表", async () => {
     catalog.resetRemoteCache();
     catalog.setRemoteModels([
-      { id: "seeded-flash-xyz", name: "seeded-flash-xyz", context_window: 131_072, source: "remote" },
+      {
+        id: "seeded-deepseek-flash-xyz",
+        name: "seeded-deepseek-flash-xyz",
+        context_window: 131_072,
+        source: "remote",
+      },
     ]);
 
     // 落点固定为 <root>/<cid>/cache/models.json（见 docs/STORAGE-CONVENTION.md §4.5）
@@ -213,16 +226,17 @@ describe("2. 模型目录", () => {
     assert.ok(envelope.fetched_at, "信封带拉取时刻，便于排查「这份目录是什么时候的」");
     assert.deepEqual(
       envelope.models.map((m) => m.id),
-      ["seeded-flash-xyz"],
+      ["seeded-deepseek-flash-xyz"],
     );
 
     // 模拟新进程：重新求值模块（内存状态全空），只该看到磁盘上那份目录
     const fresh = (await import("../dist/catalog.js?cache-seed")) as typeof catalog;
     assert.deepEqual(
       fresh.remoteModels()!.map((m) => m.id),
-      ["seeded-flash-xyz"],
+      ["seeded-deepseek-flash-xyz"],
     );
-    assert.deepEqual(fresh.exposedIds(), ["seeded-flash-xyz"]);
+    // 池策略 (deepseek|glm)×flash：这个种子 id 同时命中两者，才会出现在池里
+    assert.deepEqual(fresh.exposedIds(), ["seeded-deepseek-flash-xyz"]);
     assert.equal(fresh.details().length, 1, "磁盘缓存优先于兜底表：不是 30 条");
 
     rmSync(file, { force: true });
