@@ -27,6 +27,7 @@ import { runInChannel } from "./channel-context.js";
 import * as gateway from "./gateway.js";
 import * as paths from "./paths.js";
 import { baseUrlOf, displayBase } from "./portfree.js";
+import { detectStaleBuild, staleBuildHint } from "./stale-build.js";
 
 /** start 等待网关就绪的默认时长（毫秒）；hook 场景必须快进快出。 */
 export const DEFAULT_WAIT_MS = 8000;
@@ -257,6 +258,10 @@ export async function start(options: StartOptions = {}): Promise<number> {
 
   if ((await gatewayHealthy(addr)) && !force) {
     log(`网关已在运行: ${baseUrlOf(addr)}`);
+    // 「已在运行」是**旧代码**最容易被漏掉的时刻：改完 build 再来 start 会被这里拦下，
+    // 用户以为「已经启动好了」，实际跑的还是旧进程。主动报出来。
+    const stale = detectStaleBuild(scope.pidPath());
+    if (stale.stale) log(staleBuildHint(stale));
     return 0;
   }
 
@@ -397,6 +402,9 @@ export async function status(
   });
   const credentialsPresent = perChannel.some((c) => c.present);
 
+  // 守护进程是否在跑旧代码（改完 build 没 restart）—— 见 stale-build.ts 的事故说明
+  const stale = gatewayUp ? detectStaleBuild(scope.pidPath()) : { stale: false, buildMs: null, pidMs: null };
+
   // 签到（**只看本地台账，不发网络请求**）：status 也能一眼看到"今天签了几个"。
   // 为什么不查上游：status 是高频诊断命令，让它去打 11 个上游端点不合适。
   const withLedger = list
@@ -428,6 +436,7 @@ export async function status(
         : { present: credentialsPresent, channels: perChannel },
     auto_start: autoStartEnabled(options.cid),
     log: scope.logPath(),
+    stale_build: stale.stale,
   };
 
   if (options.json) {
@@ -453,6 +462,7 @@ export async function status(
         `（${info.signin.channels.map((c) => `${c.cid}${c.claimed_today ? "✓" : ""}`).join(", ")}）`,
     );
   }
+  if (stale.stale) console.log(staleBuildHint(stale));
   const message = consoleState?.["message"];
   if (typeof message === "string" && message) console.log(`提示: ${message}`);
   return 0;

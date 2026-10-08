@@ -79,3 +79,23 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 - `npm test` 全绿（含 `verify:storage` / `verify:docs`）。
 - 文档与代码**同一个 commit** 更新。
 - 不要提交运行时数据（`~/.model-bridge/`、`dist/`、`node_modules/`）。
+
+## 6. 改完代码要重启网关（**别让用户测旧进程**）
+
+`npm run build` 只更新 `dist/`，**不会**重启已在跑的守护进程。旧进程继续用内存里的
+旧代码服务请求 —— 表现为「修复看起来没生效」：
+
+- 用户以为登录/凭证坏了，实际是进程没重启；
+- 日志里留着早已修掉的错误（如 `上游返回 HTTP 500`），把排查带偏；
+- agent 以为改动无效，开始重复排查同一个 bug。
+
+**曾发生过的真实事故**：网关启动于 21:29:59，修复 21:33 才编译完 —— 用户随后几次请求
+全打在旧代码上，看到的是修之前的行为（详见 `docs/CONTRACT-TS.md` 的「陈旧构建」一节）。
+
+规则：
+
+1. 改完共享层或渠道代码并 `npm run build` 后，**主动 `restart`**，别只 build。
+2. 涉及登录链路/上游协议的改动，必须走一次真机验证（`<cid> login` → `status` → 一次真实对话）。
+3. 判断当前进程是不是旧代码：`node packages/cli/dist/cli.js status`
+   —— 它会主动报 `⚠ 网关在跑旧代码：构建产物 … 比进程启动 … 新`；
+   `status --json` 里是 `stale_build: true`。实现见 `packages/gateway/src/stale-build.ts`。
