@@ -33,11 +33,11 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 │       └── index.ts              ← 对外的统一出口
 ├── plugins/model-bridge/         ← **唯一的 ZCode 插件**（命令/技能/hook）
 ├── marketplace.json              ← ZCode 市场清单（单条目 → ./plugins/model-bridge）
-├── channels/                     ← 12 个渠道（每个 = 一个模型池 + 账号池）
+├── channels/                     ← 11 个渠道（每个 = 一个模型池 + 账号池）
 │   └── <cid>/                    ← 结构见下
 ├── packages/cli/                 ← **仓库级入口**（bin `model-bridge`）
 │   └── src/
-│       ├── channels.ts           ← import 全部 12 个渠道包（副作用 = setChannel）
+│       ├── channels.ts           ← import 全部渠道包（副作用 = setChannel）
 │       └── cli.ts                ← bin 入口：注册全部渠道后调共享 `main()`
 ├── docs/                         ← 契约、渠道协议（protocols/）、渠道说明（bridges/）、进度（journals/）
 └── tools/                        ← 仓库级工具（verify-storage.mjs 等）
@@ -115,7 +115,7 @@ hasChannel(): boolean;        // 供测试/工具探测，不抛错
 
 ```ts
 interface BridgeConfig {
-  cid: string;                 // 渠道 id，如 "zcode"（日志前缀、服务名、CLI 名、**存储分层名**）
+  cid: string;                 // 渠道 id，如 "catpaw"（日志前缀、服务名、CLI 名、**存储分层名**）
   display: string;             // 展示名，如 "ZCode"
   version: string;             // CLI 版本号
   defaultAddr: string;         // **单渠道独立运行**的网关默认地址，如 "127.0.0.1:8803"
@@ -316,7 +316,7 @@ interface CreditsResult {
 
 | 类型 | 用法 | 渠道 |
 |---|---|---|
-| **A. 创建 flow + 轮询** | `POST .../auth/state` 或 `.../oauth/cli/init` → 取 `authorize_url`/`authUrl` → 轮询拿 token | workbuddy、zcode |
+| **A. 创建 flow + 轮询** | `POST .../auth/state` 或 `.../oauth/cli/init` → 取 `authorize_url`/`authUrl` → 轮询拿 token | workbuddy |
 | **B. 本地回调服务器** | 起 `http://127.0.0.1:<port>` 回调服务 → 拼授权 URL（含 PKCE/DPoP 等）→ 等浏览器重定向回填 | trae、codearts、lobsterai |
 | **C. 设备码 / 扫码轮询** | 申请 device code 或二维码 URL → 轮询 token | cline、loomy、raccoon |
 

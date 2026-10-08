@@ -19,4 +19,3 @@ import "qoder-bridge";
 import "raccoon-bridge";
 import "trae-bridge";
 import "workbuddy-bridge";
-import "zcode-bridge";

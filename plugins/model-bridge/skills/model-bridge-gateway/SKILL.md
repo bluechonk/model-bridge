@@ -10,8 +10,8 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 
 ## 背景事实
 
-- **一个网关 + N 个池子**：本仓库注册 12 个渠道（`catpaw` `cline` `codearts` `gemini` `lobsterai`
-  `loomy` `minimax` `qoder` `raccoon` `trae` `workbuddy` `zcode`）。每个渠道是一个**模型池**：
+- **一个网关 + N 个池子**：本仓库注册 11 个渠道（`catpaw` `cline` `codearts` `gemini` `lobsterai`
+  `loomy` `minimax` `qoder` `raccoon` `trae` `workbuddy`）。每个渠道是一个**模型池**：
   自己的一套模型目录 + 凭证 + 上游协议。
 - **对外模型 id**：`<cid>/<模型>`，**恒为小写**（`workbuddy/deepseek-flash`、`trae/deepseek-v4-flash`）。
   解析大小写不敏感；上游 slug 仍用目录里的原始写法。

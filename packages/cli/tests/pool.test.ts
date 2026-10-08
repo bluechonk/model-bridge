@@ -30,9 +30,10 @@ describe("仓库级模型池", () => {
     rmSync(HOME, { recursive: true, force: true });
   });
 
-  it("注册了全部 12 个渠道", () => {
+  it("注册了全部 11 个渠道", () => {
     const cids = gw.channels().map((c) => c.config.cid).sort();
-    assert.equal(cids.length, 12, `实际: ${cids.join(", ")}`);
+    assert.equal(cids.length, 11, `实际: ${cids.join(", ")}`);
+    assert.ok(!cids.includes("zcode"), "zcode 渠道已移除");
     for (const cid of ["workbuddy", "catpaw", "trae", "codearts", "loomy", "qoder"]) {
       assert.ok(cids.includes(cid), `缺少渠道 ${cid}`);
     }
@@ -43,7 +44,7 @@ describe("仓库级模型池", () => {
     assert.equal(health["ok"], true);
     assert.equal(health["service"], "model-bridge");
     const per = health["channels"] as Array<{ cid: string }>;
-    assert.equal(per.length, 12, "逐渠道报告");
+    assert.equal(per.length, 11, "逐渠道报告");
   });
 
   it("/v1/models 暴露 <cid>/<模型> 形式的池子并集", async () => {
@@ -98,7 +99,7 @@ describe("仓库级模型池", () => {
       }
       return { cid: c.config.cid, models };
     });
-    assert.equal(rows.length, 12);
+    assert.equal(rows.length, 11);
     assert.ok(
       rows.find((r) => r.cid === "workbuddy")!.models.includes("deepseek-flash"),
       "workbuddy 池子里应有 deepseek-flash",

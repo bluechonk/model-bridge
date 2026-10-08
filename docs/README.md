@@ -46,7 +46,6 @@
 | `raccoon` | Raccoon（商汤） | [PROTOCOL.md](./protocols/raccoon/PROTOCOL.md) |
 | `trae` | TRAE（字节） | [PROTOCOL.md](./protocols/trae/PROTOCOL.md) |
 | `workbuddy` | WorkBuddyAI | [findings.md](./journals/workbuddy/findings.md) —— 该渠道的协议事实记在调研笔记里（无独立 PROTOCOL.md） |
-| `zcode` | ZCode（智谱） | [PROTOCOL.md](./protocols/zcode/PROTOCOL.md) |
 
 `catpaw` 的规格不是单文件，而是一条完整的凭据逆向链路（`PROTOCOL.md` 是它的索引）：
 
@@ -65,7 +64,7 @@
 | --- | --- | --- | --- |
 | [catpaw](./bridges/catpaw.md) | [cline](./bridges/cline.md) | [codearts](./bridges/codearts.md) | [gemini](./bridges/gemini.md) |
 | [lobsterai](./bridges/lobsterai.md) | [loomy](./bridges/loomy.md) | [minimax](./bridges/minimax.md) | [qoder](./bridges/qoder.md) |
-| [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddy](./bridges/workbuddy.md) | [zcode](./bridges/zcode.md) |
+| [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddy](./bridges/workbuddy.md) | （空） |
 
 ## 4. 进度与调研 `docs/journals/<cid>/`
 
@@ -82,6 +81,8 @@
 
 - `legacy-scaffolders/` —— 字符串替换时代的脚手架（`scaffold.py` / `scaffold_ts.py` /
   `sync_gateway.py`）。共享层抽出来之后就废弃了，仅作历史参考。
+- `zcode/` —— **已移除的 zcode 渠道**（智谱 ZCode）：`bridge.md`（渠道说明）+ `protocol/`
+  （协议规格）。不做该渠道，资料留档备查。
 
 ## 6. 其它文档（不在本目录）
 
