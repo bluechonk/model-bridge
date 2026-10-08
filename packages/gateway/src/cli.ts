@@ -34,11 +34,11 @@ export function usage(): string {
   start                     守护式启动网关（幂等：已在跑直接返回）
   stop                      停止守护式网关（读 PID 文件杀进程树，不碰第三方进程）
   restart                   重启守护式网关（stop + start）
-  status                    聚合状态：网关健康、登录状态、守护 PID、凭证
-  models                    列出网关暴露的模型短名
+  status                    聚合状态：网关健康、逐渠道登录状态、守护 PID、凭证
+  models                    列出网关暴露的模型 id（查运行中的网关；没起会失败，用 channels 看本地目录）
   credits                   查询账号剩余额度（只读，不经本地网关）
   logs                      查看网关日志尾部
-  paths                     列出本渠道的存储落点与文件（只读；--all 统计全部渠道）
+  paths                     列出存储落点与文件（只读；--all 或仓库级 = 全部渠道）
   channels                  列出已注册的渠道（模型池）与各自可用模型（只读）
   accounts [verb]           账号池：list（默认）/ use <key> / add / remove <key>
 
