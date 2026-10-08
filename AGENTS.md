@@ -60,6 +60,8 @@ npm test                          # 两个校验器 + 全部包的测试
 npm run test:all                  # build + test
 npm run build --workspace=channels/<cid>    # 只编一个渠道（也走引用链）
 node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，**唯一网关端口 8787**（REPO_DEFAULT_ADDR）
+node packages/cli/dist/cli.js model list    # 全部渠道（池子）与各自模型
+node packages/cli/dist/cli.js <cid> login   # 对某个渠道操作：login / status / models / billing / checkin / accounts / paths / logs
 node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用；只有它才用该渠道的 defaultAddr）
 ```
 

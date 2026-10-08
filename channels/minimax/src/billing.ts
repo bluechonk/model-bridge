@@ -386,3 +386,32 @@ export async function claimSignin(options: { refreshOn401?: boolean } = {}): Pro
     data,
   };
 }
+
+// ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
+
+import type { SigninModule } from "@model-bridge/gateway";
+/**
+ * 签到 / 领取能力（`<cid> checkin`）。
+ *
+ * 上游 `signin/status` + `signin/claim`。状态取自 `fetchCredits()` 里已经解析好的
+ * 可领清单（避免再发一次 status 请求）。
+ */
+export const signin: SigninModule = {
+  async status() {
+    const credits = await fetchCredits();
+    const items = credits.claimable ?? [];
+    return {
+      claimable: items.length > 0,
+      summary: items.length > 0 ? `有 ${items.length} 天可领` : "今天已领过（或不可领）",
+      items,
+    };
+  },
+  async claim() {
+    const r = await claimSignin();
+    return {
+      ok: !r.alreadyClaimed,
+      summary: r.alreadyClaimed ? "今日已领过（上游幂等）" : "签到成功",
+      detail: r,
+    };
+  },
+};

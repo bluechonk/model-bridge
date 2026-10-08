@@ -41,6 +41,9 @@ export {
   type CreditPackage,
   type LoginUi,
   type StreamTranslator,
+  type SigninModule,
+  type SigninStatus,
+  type SigninOutcome,
 } from "./channel.js";
 export type { FileMigration } from "./migrate.js";
 
