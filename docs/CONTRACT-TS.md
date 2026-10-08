@@ -303,10 +303,23 @@ interface CreditsResult {
 // 签到 / 领取能力（**必需**：每个渠道都要提供；CLI 的 `<cid> checkin` 用）
 export const signin: SigninModule;
 interface SigninModule {
-  status(): Promise<{ claimable: boolean | null; summary: string; items?: … }>;  // 只读
+  // 只读。claimedToday：**今天是否已签**（渠道能判断就给；判断不了用 null）；
+  // daily：是否"每日"语义（false = 一次性奖励，如 raccoon）
+  status(): Promise<{
+    claimable: boolean | null;
+    summary: string;
+    items?: …;
+    claimedToday?: boolean | null;
+    daily?: boolean;
+  }>;
   claim(): Promise<{ ok: boolean; summary: string; detail?: unknown }>;          // 写：会真的领掉
 }
 ```
+
+⚠ **「今日是否签到过」的判定顺序**（CLI 侧）：① 上游 `claimedToday` → ② 本地台账
+`state/signin.json`（记"我们发起过的领取"）→ ③ 都没有就明确报未知，不猜。上游说已签而台账
+没有时会**回填**台账（自愈：覆盖"在客户端签的"这种情况）。`claimedToday` 缺失 + 台账也没有时，
+CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查不到"）。
 
 ⚠ `signin` 是**必需**的（契约统一，共享层**不做能力探测、不特判任何渠道**）：
 上游确实没有签到端点的渠道，也照样实现它 —— `status()` 返回 `claimable: false` + 一句**自己的说明**，

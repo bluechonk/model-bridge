@@ -22,6 +22,7 @@ import {
 } from "./channel.js";
 import { defaultAddr, defaultUiPort } from "./cli-consts.js";
 import { syncPool } from "./account-pool.js";
+import { claimedTodayPerLedger, ledgerExists } from "./signin-ledger.js";
 import { runInChannel } from "./channel-context.js";
 import * as gateway from "./gateway.js";
 import * as paths from "./paths.js";
@@ -396,7 +397,22 @@ export async function status(
   });
   const credentialsPresent = perChannel.some((c) => c.present);
 
+  // 签到（**只看本地台账，不发网络请求**）：status 也能一眼看到"今天签了几个"。
+  // 为什么不查上游：status 是高频诊断命令，让它去打 11 个上游端点不合适。
+  const withLedger = list
+    .map((channel) => ({
+      cid: channel.config.cid,
+      claimed_today: claimedTodayPerLedger(channel.config.cid),
+    }))
+    .filter((row) => ledgerExists(row.cid));
+
   const info = {
+    signin: {
+      note: "仅本地台账（我们发起过的领取）；上游的权威答案用 `<cid> checkin --status`",
+      claimed_today: withLedger.filter((r) => r.claimed_today).length,
+      tracked: withLedger.length,
+      channels: withLedger,
+    },
     gateway: {
       addr: baseUrlOf(addr),
       reachable: gatewayUp,
@@ -431,6 +447,12 @@ export async function status(
       `凭证: ${credentialsPresent ? "有" : "无"}  ` +
       `auto_start: ${info.auto_start ? "开" : "关"}`,
   );
+  if (info.signin.tracked > 0) {
+    console.log(
+      `签到（本地记录）: 今天已签 ${info.signin.claimed_today}/${info.signin.tracked} 个渠道` +
+        `（${info.signin.channels.map((c) => `${c.cid}${c.claimed_today ? "✓" : ""}`).join(", ")}）`,
+    );
+  }
   const message = consoleState?.["message"];
   if (typeof message === "string" && message) console.log(`提示: ${message}`);
   return 0;

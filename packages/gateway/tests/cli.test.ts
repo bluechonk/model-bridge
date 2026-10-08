@@ -13,7 +13,7 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -40,7 +40,18 @@ async function run(argv: string[]): Promise<{ code: number; out: string; err: st
 
 const signinCalls = { status: 0, claim: 0, claimed: false };
 
-function makeChannel(cid: string, opts: { signin: boolean }): Channel {
+interface FakeSigninSpec {
+  /** 有真实端点（false = 返回文本说明的那种）。 */
+  signin: boolean;
+  /** 上游给的"今天签没签"；不给 = 上游答不了这个问题。 */
+  claimedToday?: boolean | null;
+  /** 是否每日语义（false = 一次性奖励）。 */
+  daily?: boolean;
+  /** 让 status() 抛错（模拟未登录 / 上游拒绝）。 */
+  statusThrows?: boolean;
+}
+
+function makeChannel(cid: string, opts: FakeSigninSpec): Channel {
   const config: BridgeConfig = {
     cid,
     display: cid === "alpha" ? "Alpha 池" : "Beta 池",
@@ -62,9 +73,12 @@ function makeChannel(cid: string, opts: { signin: boolean }): Channel {
       ? {
           status: async () => {
             signinCalls.status += 1;
+            if (opts.statusThrows) throw new Error("上游拒绝");
             return {
               claimable: !signinCalls.claimed,
               summary: signinCalls.claimed ? "今天已签到" : "今天未签到",
+              ...(opts.claimedToday !== undefined ? { claimedToday: opts.claimedToday } : {}),
+              ...(opts.daily !== undefined ? { daily: opts.daily } : {}),
             };
           },
           claim: async () => {
@@ -294,7 +308,7 @@ describe("4. checkin：走 CLI 的能力分发", () => {
     try {
       const r = await run(["gamma", "checkin", "--status"]);
       assert.equal(r.code, 1);
-      assert.ok(r.out.includes("查签到状态失败"), r.out);
+      assert.ok(r.out.includes("上游查询失败"), r.out);
     } finally {
       resetChannels();
     }
@@ -320,5 +334,108 @@ describe("5. 账号池与落点（也走 CLI）", () => {
     const r = await run(["paths", "--all", "--workspace", process.cwd()]);
     // 工作区里可能找不到（测试目录不是工作区）→ 报用法即可，不抛错
     assert.ok(r.code === 0 || r.code === 2, `退出码 ${r.code}`);
+  });
+});
+
+describe("6. 今日是否签到过（三层判定：上游 → 本地台账 → 不知道）", () => {
+  const ledgerFile = (cid: string): string => join(root, cid, "state", "signin.json");
+
+  it("上游说已签 → 依据上游，并**回填**台账；之后上游查不到也能答", async () => {
+    clearChannels();
+    setChannel(makeChannel("delta", { signin: true, claimedToday: true }));
+    try {
+      assert.equal(existsSync(ledgerFile("delta")), false, "跑之前没有台账");
+      const r = await run(["delta", "checkin", "--status", "--json"]);
+      assert.equal(r.code, 0);
+      const parsed = JSON.parse(r.out) as { channels: Array<{ today: boolean | null; basis: string }> };
+      assert.equal(parsed.channels[0]!.today, true);
+      assert.equal(parsed.channels[0]!.basis, "upstream", "以上游为准");
+      assert.ok(existsSync(ledgerFile("delta")), "上游说已签 → 回填台账（自愈）");
+
+      clearChannels();
+      setChannel(makeChannel("delta", { signin: true, statusThrows: true }));
+      const again = await run(["delta", "checkin", "--status", "--json"]);
+      assert.equal(again.code, 0, "有台账兜底 → 不算失败");
+      const parsed2 = JSON.parse(again.out) as { channels: Array<{ today: boolean | null; basis: string }> };
+      assert.equal(parsed2.channels[0]!.today, true);
+      assert.equal(parsed2.channels[0]!.basis, "local", "依据：本地记录");
+    } finally {
+      resetChannels();
+    }
+  });
+
+  it("上游说未签 → today=false；--fail-if-unclaimed 退出码 1", async () => {
+    clearChannels();
+    setChannel(makeChannel("epsilon", { signin: true, claimedToday: false }));
+    try {
+      const r = await run(["epsilon", "checkin", "--status", "--json"]);
+      assert.equal(r.code, 0, "只是没签，不是失败");
+      const parsed = JSON.parse(r.out) as { channels: Array<{ today: boolean | null; basis: string }> };
+      assert.equal(parsed.channels[0]!.today, false);
+      assert.equal(parsed.channels[0]!.basis, "upstream");
+      assert.equal((await run(["epsilon", "checkin", "--status", "--fail-if-unclaimed"])).code, 1);
+    } finally {
+      resetChannels();
+    }
+  });
+
+  it("上游查不到 + 无台账 → 未知且失败", async () => {
+    clearChannels();
+    setChannel(makeChannel("zeta", { signin: true, statusThrows: true }));
+    try {
+      const r = await run(["zeta", "checkin", "--status", "--json"]);
+      assert.equal(r.code, 1, "既问不到又没有本地记录 → 失败");
+      const parsed = JSON.parse(r.out) as { channels: Array<{ today: boolean | null; failed?: boolean }> };
+      assert.equal(parsed.channels[0]!.today, null);
+      assert.equal(parsed.channels[0]!.failed, true);
+    } finally {
+      resetChannels();
+    }
+  });
+
+  it("一次性奖励（daily:false）不套「今天」，--daily-only 跳过它", async () => {
+    clearChannels();
+    setChannel(makeChannel("theta", { signin: true, daily: false }));
+    try {
+      const r = await run(["theta", "checkin", "--status", "--json"]);
+      assert.equal(r.code, 0);
+      const parsed = JSON.parse(r.out) as { channels: Array<{ today: boolean | null; daily: boolean }> };
+      assert.equal(parsed.channels[0]!.today, null);
+      assert.equal(parsed.channels[0]!.daily, false);
+
+      const skipped = await run(["checkin", "--status", "--daily-only", "--json"]);
+      const parsed2 = JSON.parse(skipped.out) as { channels: Array<{ cid: string }> };
+      assert.equal(parsed2.channels.some((c) => c.cid === "theta"), false, "被 --daily-only 跳过");
+    } finally {
+      resetChannels();
+    }
+  });
+
+  it("摘要行：今日已签 N/M", async () => {
+    clearChannels();
+    setChannel(makeChannel("delta", { signin: true, claimedToday: true }));
+    setChannel(makeChannel("epsilon", { signin: true, claimedToday: false }));
+    try {
+      const r = await run(["checkin", "--status"]);
+      assert.equal(r.code, 0);
+      assert.match(r.out, /今日已签 1\/2/, r.out);
+    } finally {
+      resetChannels();
+    }
+  });
+
+  it("status 带本地台账摘要（不发网络请求）", async () => {
+    clearChannels();
+    setChannel(makeChannel("delta", { signin: true, claimedToday: true }));
+    try {
+      await run(["delta", "checkin", "--status"]); // 回填台账
+      const r = await run(["delta", "status", "--addr", "127.0.0.1:1", "--ui-port", "1", "--json"]);
+      assert.equal(r.code, 0);
+      const parsed = JSON.parse(r.out) as { signin: { claimed_today: number; tracked: number } };
+      assert.equal(parsed.signin.tracked >= 1, true);
+      assert.equal(parsed.signin.claimed_today, 1);
+    } finally {
+      resetChannels();
+    }
   });
 });

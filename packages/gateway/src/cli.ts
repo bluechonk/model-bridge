@@ -53,7 +53,7 @@ ${verbLines.join("\n")}
   paths [--all]             存储落点与文件（仓库级 = 全部渠道；只读）
   accounts [...]            账号池（不加 <cid> 时跨渠道）
   credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
-  checkin [--status]        签到 / 领活动奖励（不加 <cid> = 所有支持的渠道；--status 只查不领）
+  checkin [--status]        签到 / 领奖励（不加 <cid> = 全部渠道；--status 只查不领、--daily-only 跳过一次性）
   login                     登录（可加 --channel <cid>，等价 <cid> login）
   help                      显示本帮助（等价 -h / --help）
   version                   显示版本（等价 -v / --version）
@@ -66,6 +66,8 @@ ${verbLines.join("\n")}
   --realm <auto|intl|cn>    login 的登录域（默认 auto）
   --channel <cid>           只操作该渠道（等价把 <cid> 写成第一个参数）
   --status                  checkin：只查状态，不领（只读）
+  --daily-only              checkin：只处理"每日"语义的渠道（跳过一次性奖励）
+  --fail-if-unclaimed       checkin：今天明确未签 → 退出码非零（"不知道"不算失败）
   --all                     paths：统计工作区内全部渠道
   --workspace <dir>         paths：工作区根（默认从当前目录向上查找）
   --json                    输出 JSON（事件行 / 结构化结果）
@@ -85,7 +87,8 @@ ${verbLines.join("\n")}
   ${cid} model list                     # 看全部渠道（池子）与各自模型
   ${cid} trae login                     # 登录 trae（浏览器授权）
   ${cid} trae billing                   # 看 trae 的剩余额度 / 账单
-  ${cid} checkin --status               # 看各渠道签到状态（只读，不领）
+  ${cid} checkin --status               # 今天签没签（只读；上方是上游、退化到本地台账）
+  ${cid} checkin --fail-if-unclaimed    # 挂定时任务用：今天明确没签就非零退出
   ${cid} checkin                        # 给所有能领的渠道签到
   ${cid} workbuddyai status --json       # 结构化状态（脚本用）
 `;
@@ -153,6 +156,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         workspace: { type: "string" },
         channel: { type: "string" },
         status: { type: "boolean" },
+        "daily-only": { type: "boolean" },
+        "fail-if-unclaimed": { type: "boolean" },
         json: { type: "boolean" },
         quiet: { type: "boolean" },
         auto: { type: "boolean" },
@@ -197,6 +202,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     realm: strOpt(o, "realm") ?? "auto",
     force: boolOpt(o, "force"),
     statusOnly: boolOpt(o, "status"),
+    dailyOnly: boolOpt(o, "daily-only"),
+    failIfUnclaimed: boolOpt(o, "fail-if-unclaimed"),
     lines: numOpt(o, "lines") ?? 40,
     ...(strOpt(o, "workspace") !== undefined ? { workspace: strOpt(o, "workspace")! } : {}),
   };
@@ -314,6 +321,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return signinCli.runCheckin({
         json: ctx.json,
         statusOnly: ctx.statusOnly,
+        dailyOnly: ctx.dailyOnly,
+        failIfUnclaimed: ctx.failIfUnclaimed,
         ...(cid !== undefined ? { cid } : {}),
       });
 

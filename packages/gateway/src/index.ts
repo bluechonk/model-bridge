@@ -47,6 +47,13 @@ export {
 } from "./channel.js";
 export type { FileMigration } from "./migrate.js";
 
+// 含密文件的原子写（账号池 / 签到台账共用）
+export { writeSecretFile, writeJsonSecret } from "./secret-file.js";
+
+// 签到台账（本地记"我们最后一次领到是什么时候"）
+export * as signinLedger from "./signin-ledger.js";
+export type { SigninLedger, ClaimRecord } from "./signin-ledger.js";
+
 // 账号池（一个渠道下多个账号）
 export * as accounts from "./account-pool.js";
 export type { PoolAccount, PoolIndex, AccountHealth } from "./account-pool.js";

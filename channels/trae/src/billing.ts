@@ -342,6 +342,9 @@ export const signin: SigninModule = {
     return {
       claimable: s.enable ? !s.checked_in : false,
       summary: `${bits.join("，")}${s.message ? `（${s.message}）` : ""}`,
+      // 上游直接给了"今天签没签"→ 交给共享层做「今日是否签到过」的权威判定
+      claimedToday: s.checked_in,
+      daily: true,
     };
   },
   async claim() {

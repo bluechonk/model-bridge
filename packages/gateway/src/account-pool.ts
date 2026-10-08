@@ -28,21 +28,12 @@
  */
 
 import { createHash } from "node:crypto";
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { getChannel, type Channel } from "./channel.js";
 import { channelDir, credentialsPath, ensureDir } from "./paths.js";
+import { writeJsonSecret } from "./secret-file.js";
 
 /** 账号健康状态。`unauthorized` 由网关在刷新失败时写入。 */
 export type AccountHealth = "ok" | "unauthorized" | "unknown";
@@ -86,18 +77,6 @@ function indexFile(cid?: string): string {
 function accountFile(key: string, cid?: string): string {
   if (!/^[a-z0-9][a-z0-9.-]*$/.test(key)) throw new Error(`非法 account key: ${key}`);
   return join(accountDir(cid), `${key}.json`);
-}
-
-/** 原子的 0600 写入（与各渠道 cred.save() 同一套做法）。 */
-function writeSecret(path: string, body: string): void {
-  const tmp = `${path}.tmp`;
-  writeFileSync(tmp, body, "utf8");
-  renameSync(tmp, path);
-  try {
-    chmodSync(path, 0o600);
-  } catch {
-    /* Windows 上 chmod 意义有限 */
-  }
 }
 
 function nowIso(): string {
@@ -193,7 +172,7 @@ function emptyIndex(): PoolIndex {
 function writeIndex(index: PoolIndex, cid?: string): void {
   ensureDir(cid);
   mkdirSync(accountDir(cid), { recursive: true });
-  writeSecret(indexFile(cid), `${JSON.stringify(index, null, 2)}\n`);
+  writeJsonSecret(indexFile(cid), index);
 }
 
 /** 池子摘要（供 CLI / 网关）：先与"现实"同步，再读索引。 */

@@ -5,6 +5,17 @@ skills: model-bridge-gateway
 
 签到这个动作各渠道叫法不同（签到 / signin / 活动领取 / 上游自动发），CLI 统一成 `checkin`。
 
+**回答「今天签没签」**（只读）：
+
+```bash
+model-bridge <cid> checkin --status    # 单个渠道
+model-bridge checkin --status          # 全部渠道，末尾给「今日已签 N/M」摘要
+```
+
+判定顺序是 **① 上游说的 → ② 本地台账 → ③ 明确说不知道**（不猜）。上游说已签而本地没记录时会
+**自动回填**本地台账（`<root>/<cid>/state/signin.json`），所以"你在客户端签的"这种情况也能覆盖到；
+反过来离线/未登录时，本地台账仍能回答"我们这边今天领过没有"。
+
 **先查状态（只读，不领）：**
 
 ```bash
@@ -16,7 +27,9 @@ model-bridge checkin --status            # 所有支持签到的渠道
 
 ```bash
 model-bridge <cid> checkin               # 某个渠道
-model-bridge checkin                     # 所有支持签到的渠道
+model-bridge checkin                     # 全部渠道（没端点的会输出它自己的说明）
+model-bridge checkin --daily-only        # 只处理"每日"语义的渠道（跳过 raccoon 那种一次性奖励）
+model-bridge checkin --fail-if-unclaimed # 今天**明确**没签就非零退出（挂定时任务用）
 ```
 
 要点（向用户解释时照此说）：

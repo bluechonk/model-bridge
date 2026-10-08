@@ -301,6 +301,8 @@ export const signin: SigninModule = {
     // 故 claimable 用 null（"不知道"），不能报 true（那是虚假承诺）。
     return {
       claimable: claimed ? false : null,
+      // 一次性奖励：没有"今天"这个概念 → 共享层不会套"今日是否签到过"的话术
+      daily: false,
       summary: claimed
         ? "登录奖励已领过（一次性，非每日）"
         : "没查到登录奖励记录（可能可领、也可能查询失败；checkin 会尝试领，上游幂等）",

@@ -128,6 +128,19 @@ export interface SigninStatus {
   summary: string;
   /** 可领取项明细（有就给）。 */
   items?: Array<Record<string, unknown>>;
+  /**
+   * **今天是否已签**（渠道能判断就给；判断不了就用 `null`）。
+   *
+   * CLI 的「今日是否签到过」判定顺序是：这个字段优先，其次是本地签到台账，
+   * 都拿不到就明确报"不知道"（不猜）。上面 `claimable: false` 单独用**分不清**
+   * 「今天已签」与「没有可领的东西」，所以这个字段是必要的。
+   */
+  claimedToday?: boolean | null;
+  /**
+   * 是否**每日**语义。默认 `true`；`false` 表示它不是每日签到（如 raccoon 那种
+   * 一次性登录奖励）—— CLI 不会对它套"今天"的话术。
+   */
+  daily?: boolean;
 }
 
 /** 执行签到 / 领取的结果。 */
