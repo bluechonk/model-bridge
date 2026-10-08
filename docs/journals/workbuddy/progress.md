@@ -99,3 +99,5 @@
   作用只有一件：把插件自带的 `skills/workbuddyai-gateway` 注册给 Hermes 原生技能加载器
   （`ctx.register_skill(name, Path)`），装法 `hermes plugins install bluechonk/workbuddy-bridge`，
   加载名 `skill_view("workbuddy-bridge:workbuddyai-gateway")`。无 hook、无 tool、无副作用。
+
+- **后续（2026-10-08）**：`channels/workbuddy/.hermes-plugin/` 已移除。Hermes 不必再有一层插件 —— ZCode 侧启动的仓库级网关（`http://127.0.0.1:8787/v1`）本身就是一个普通 HTTP 端点，Hermes 直接把它当 OpenAI 兼容服务请求即可（凭据/账号池由网关统一管理）。
