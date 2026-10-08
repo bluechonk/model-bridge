@@ -120,10 +120,230 @@ describe("cred", () => {
     assert.equal(cred.extractSid(url), "abc123");
   });
 
-  it("refresh() 抛错（无刷新端点）", async () => {
+  it("refresh() 只在 401/403 时报失效；5xx/网络错误不算（临时故障不逼重登）", async () => {
     await saveFakeCredential();
     const c = cred.load();
-    await assert.rejects(() => cred.refresh(c), /刷新端点/);
+
+    // 起一个本地假 ping 端点（离线；照 MINIMAX_ACCOUNT_BASE_URL 的覆盖惯例）
+    let status = 401;
+    const ping = createServer((_req, res) => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ code: 0, message: "ok", data: null }));
+    });
+    const port = await new Promise<number>((r) =>
+      ping.listen(0, "127.0.0.1", () => r((ping.address() as { port: number }).port)),
+    );
+    const saved = process.env["CATPAW_AUTH_PING_URL"];
+    process.env["CATPAW_AUTH_PING_URL"] = `http://127.0.0.1:${port}/api/gateway/auth/ping`;
+    try {
+      status = 401;
+      await assert.rejects(() => cred.refresh(c), /401\/403/, "401 → 确定失效，抛错引导重登");
+
+      status = 200;
+      const same = await cred.refresh(c);
+      assert.equal(same.accessToken, c.accessToken, "200 → 仍有效，原样返回");
+
+      status = 503;
+      const stillOk = await cred.refresh(c);
+      assert.equal(stillOk.accessToken, c.accessToken, "503 → 临时故障，不当成失效");
+    } finally {
+      if (saved === undefined) delete process.env["CATPAW_AUTH_PING_URL"];
+      else process.env["CATPAW_AUTH_PING_URL"] = saved;
+      await new Promise<void>((r) => ping.close(() => r()));
+    }
+  });
+
+  it("uid 是数字时也要取到（上游实测 userId 为 number，不是 string）", async () => {
+    // 回归：早期用共享 str() 读 userId，而 str() 只认字符串 → uid 静默变空串，
+    // 账号池随即退化成按 token 建键（同一账号登录两次记成两条）。
+    const userSrv = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        code: 0,
+        message: "success",
+        data: { userId: 4522314126, userName: "塞西莉亚4412" }, // ← 数字
+      }));
+    });
+    const port = await new Promise<number>((r) =>
+      userSrv.listen(0, "127.0.0.1", () => r((userSrv.address() as { port: number }).port)),
+    );
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : String((input as { url?: string }).url ?? input);
+      return realFetch(url.replace("https://catx.nocode.cn", `http://127.0.0.1:${port}`), init);
+    }) as typeof fetch;
+    try {
+      const uid = await cred.fetchCurrentUserId("fake-token");
+      assert.equal(uid, "4522314126", "数字 userId 应转成字符串，而不是被丢掉");
+    } finally {
+      globalThis.fetch = realFetch;
+      await new Promise<void>((r) => userSrv.close(() => r()));
+    }
+  });
+
+  it("ensureUid() 回填老凭据的 uid，且 uid 已有值时不发请求", async () => {
+    // 老凭据（uid 空）→ 回填后落盘
+    await saveFakeCredential("tok-legacy-0123456789abcdef");
+    const legacy = cred.load();
+    assert.equal(legacy.uid, "", "前置：老凭据 uid 为空");
+
+    let calls = 0;
+    const userSrv = createServer((_req, res) => {
+      calls += 1;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ code: 0, data: { userId: 999888777 } }));
+    });
+    const port = await new Promise<number>((r) =>
+      userSrv.listen(0, "127.0.0.1", () => r((userSrv.address() as { port: number }).port)),
+    );
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : String((input as { url?: string }).url ?? input);
+      return realFetch(url.replace("https://catx.nocode.cn", `http://127.0.0.1:${port}`), init);
+    }) as typeof fetch;
+    try {
+      const fixed = await cred.ensureUid(legacy);
+      assert.equal(fixed.uid, "999888777", "应回填 uid");
+      assert.equal(cred.load().uid, "999888777", "应落盘（下次读盘就有 uid）");
+      assert.equal(calls, 1, "只请求一次");
+
+      await cred.ensureUid(fixed);
+      assert.equal(calls, 1, "uid 已有值 → 不再发请求（幂等）");
+    } finally {
+      globalThis.fetch = realFetch;
+      await new Promise<void>((r) => userSrv.close(() => r()));
+    }
+  });
+
+  it("浏览器命令：URL 完整传给 cmd（Windows 下 `&` 不会被截断）", async () => {
+    // 回归：早期用 spawn("cmd", ["/c","start","",url]) 且未用 verbatim，
+    // Node 的转义规则对 cmd.exe 无效 → cmd 在第一个 `&` 处截断命令行，
+    // 浏览器只拿到 `...?sid=xxx`，用户看到「未获取到登录票据」。
+    const { login } = await import("@model-bridge/gateway");
+    const url =
+      "https://catpaw.meituan.com/api/gateway/passport/login-entry?sid=AAA&state=BBB&redirect=http%3A%2F%2F127.0.0.1%3A62007%2Fcallback";
+
+    const win = login.browserCommand(url, "win32");
+    assert.equal(win.cmd, "cmd");
+    assert.equal(win.windowsVerbatimArguments, true, "必须 verbatim，否则 cmd 会截断 `&`");
+    const joined = win.args.join(" ");
+    assert.ok(joined.includes(`"${url}"`), "URL 应整体带引号传入（引号内 `&` 不是分隔符）");
+    assert.ok(joined.includes("state=BBB"), "`&` 之后的参数不能丢");
+    assert.ok(joined.includes("redirect="), "`redirect` 不能丢");
+
+    const mac = login.browserCommand(url, "darwin");
+    assert.deepEqual(mac.args, [url], "非 Windows 平台原样传 URL");
+  });
+
+  it("回调服务器收 GET（query）与 POST（JSON/表单）；陌生 state 被拒绝但不中断登录", async () => {
+    // 通过 login() 间接验证。每种形态：本地假网关 + 假回调。
+    // ⚠ 最后一个用例是回归重点：坏 state 回调先到、真回调后到 ——
+    //   早期实现在坏 state 上 `throw`，整个 Promise.race 失败，真回调白等。
+    const cases: Array<{
+      name: string;
+      send: (url: string, state: string) => Promise<void>;
+      expectToken: string;
+    }> = [
+      {
+        name: "POST JSON",
+        expectToken: "tok-post-json-0123456789abcdef",
+        send: (url, state) =>
+          fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: "tok-post-json-0123456789abcdef", state }),
+          }).then(() => undefined),
+      },
+      {
+        name: "POST 表单",
+        expectToken: "tok-post-form-0123456789abcdef",
+        send: (url, state) =>
+          fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `token=tok-post-form-0123456789abcdef&state=${state}`,
+          }).then(() => undefined),
+      },
+      {
+        name: "GET query",
+        expectToken: "tok-get-query-0123456789abcdef",
+        send: (url, state) =>
+          fetch(`${url}?token=tok-get-query-0123456789abcdef&state=${state}`).then(() => undefined),
+      },
+      {
+        name: "坏 state 先到、真回调后到 → 仍登录成功（用真 token）",
+        expectToken: "tok-good-0123456789abcdef",
+        send: async (url, state) => {
+          const bad = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: "tok-stale-0123456789abcdef", state: "deadbeef" }),
+          });
+          assert.equal(bad.status, 400, "陌生 state 应被就地拒绝");
+          await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: "tok-good-0123456789abcdef", state }),
+          });
+        },
+      },
+    ];
+
+    for (const c of cases) {
+      // 假网关：login-config + login-entry(302) + poll-token(永远 null) + current-user
+      let gwPort = 0;
+      const gw = createServer((req, res) => {
+        const u = new URL(req.url ?? "/", "http://gw");
+        const json = (o: unknown): void => {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(o));
+        };
+        if (u.pathname.endsWith("/login-config")) {
+          return json({ code: 0, data: { loginEntryUrl: `http://127.0.0.1:${gwPort}/api/gateway/passport/login-entry` } });
+        }
+        if (u.pathname.endsWith("/login-entry")) {
+          res.writeHead(302, { Location: String(u.searchParams.get("redirect") ?? "/") });
+          return res.end();
+        }
+        if (u.pathname.endsWith("/poll-token")) return json({ code: 0, data: null });
+        if (u.pathname.endsWith("/current-user")) {
+          return json({ code: 0, data: { userId: "uid-7654321", userName: "tester" } });
+        }
+        res.writeHead(404);
+        res.end();
+      });
+      gwPort = await new Promise<number>((r) =>
+        gw.listen(0, "127.0.0.1", () => r((gw.address() as { port: number }).port)),
+      );
+
+      // 把线上端点重定向到假网关（不改源码常量）
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : String((input as { url?: string }).url ?? input);
+        return realFetch(url.replace("https://catx.nocode.cn", `http://127.0.0.1:${gwPort}`), init);
+      }) as typeof fetch;
+
+      try {
+        const loginP = cred.login("https://catx.nocode.cn", {
+          onUrl: (authUrl) => {
+            const u = new URL(authUrl);
+            const redirect = new URL(String(u.searchParams.get("redirect")));
+            const state = String(u.searchParams.get("state"));
+            setTimeout(() => {
+              void c.send(redirect.href, state);
+            }, 50);
+          },
+          onStatus: () => {},
+        });
+        const got = await loginP;
+        assert.equal(got.accessToken, c.expectToken, `${c.name}: 应拿到预期的 token`);
+        assert.equal(got.uid, "uid-7654321", `${c.name}: 应补上 current-user 的 uid`);
+        assert.ok(got.source.startsWith("catpaw-login-"), `${c.name}: 来源应记录通道`);
+      } finally {
+        globalThis.fetch = realFetch;
+        await new Promise<void>((r) => gw.close(() => r()));
+      }
+    }
   });
 });
 

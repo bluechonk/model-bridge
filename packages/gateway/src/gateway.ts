@@ -465,6 +465,19 @@ async function handleChat(
     return;
   }
 
+  // 可选的异步前置（渠道声明了才有）：必须在发上游**之前完成**。
+  // 例如 catpaw 要求 round → event（置 running）→ turn 的顺序，错一步上游就拒。
+  // ⚠ 传入**同一个 body**：渠道不能再调一次 buildChatBody（会生成新会话 id）。
+  if (upstream.prepareChat) {
+    try {
+      await inChannel(channel, () => upstream.prepareChat!(body));
+    } catch (err) {
+      opts.logger(`上游前置失败: ${String(err)}`);
+      writeJsonError(res, 502, "upstream_error", "上游前置请求失败，请查看网关日志");
+      return;
+    }
+  }
+
   const sendBody = Buffer.from(JSON.stringify(body), "utf8");
 
   const outcome = await callUpstream(channel, sendBody, opts.logger);

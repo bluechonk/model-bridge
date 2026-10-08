@@ -139,8 +139,34 @@ function traceId(): string {
   return randomUUID().replace(/-/g, "");
 }
 
-/** 从凭据构建上游请求头。 */
-export function buildHeaders(credential: CredentialShape, _cfg?: Config): Record<string, string> {
+/** `buildHeaders` 的端点形态选项。 */
+export interface HeaderOptions {
+  /**
+   * 是否用于**流式对话**端点（`turn`）。
+   *
+   * 默认 `true`（契约里 `buildHeaders` 的主要用途就是对话）。
+   * `round` / `event` / 模型目录等普通 JSON 端点必须传 `false`：
+   * 实测给它们 `Accept: text/event-stream` 会被 **406/500** 拒绝。
+   */
+  stream?: boolean;
+}
+
+/**
+ * 从凭据构建上游请求头。
+ *
+ * ⚠ **`Accept` 按端点区分，不能一刀切**（实测 2026-10-08 + 文档 `RUN-LOG.md:82`）：
+ * - `turn`（流式对话）：**必须** `text/event-stream` —— 缺了被 406 拒绝
+ * - `round` / `event` / 模型目录：**必须不能**是 `text/event-stream` —— 会被 500 拒绝
+ *
+ * 早期实现把 `text/event-stream` 当默认值发给所有端点，`round` 直接 500，
+ * 网关日志只留一句没头没尾的「上游返回 HTTP 500」。参数化后由调用方声明形态
+ * （照 raccoon 的 `HeaderOptions` 惯例）。
+ */
+export function buildHeaders(
+  credential: CredentialShape,
+  opts: HeaderOptions = {},
+): Record<string, string> {
+  const stream = opts.stream ?? true;
   const token = credential.accessToken;
   const headers: Record<string, string> = {
     "M-TRACEID": traceId(),
@@ -151,7 +177,7 @@ export function buildHeaders(credential: CredentialShape, _cfg?: Config): Record
     "Cookie": `${PASSPORT_COOKIE}=${token}`,
     "enableHeartBeat": "true",
     "Content-Type": "application/json",
-    "Accept": "text/event-stream",
+    "Accept": stream ? "text/event-stream" : "application/json",
   };
   if (credential.uid) headers["user-uid"] = credential.uid;
   return headers;
@@ -315,32 +341,62 @@ export function buildChatBody(
     turnBody["availableTools"] = tools.map((t) => t["name"]);
   }
 
-  // Fire-and-forget：先建 round，再报告 running，然后 turn 由 gateway 层发。
-  // round/event 失败只影响后续 turn（上游会回 500），不在此处抛错。
-  void preflightRound(roundBody, conversationId);
-
-  // 把 conversationId 塞到返回体里（内部用，`openStream` 不会用）
+  // 前置 round + event 由网关通过 `prepareChat` 钩子 await（见下方该函数）。
+  // 这里只把 roundBody 挂上，不发起请求 —— `buildChatBody` 是同步契约，
+  // 且 fire-and-forget 会与 turn 竞争（实测导致「会话未在执行中」）。
   turnBody["__conversationId"] = conversationId;
+  turnBody["__roundBody"] = JSON.stringify(roundBody);
   return turnBody;
 }
 
-/** 异步前置 round + event，不阻塞调用方。 */
-async function preflightRound(
-  roundBody: Record<string, unknown>,
-  conversationId: string,
-): Promise<void> {
-  const headers = buildHeaders(loadCredential());
-  try {
-    await postJson(roundUrl(), headers, roundBody, FETCH_TIMEOUT_MS);
-    await postJson(
-      eventUrl(),
-      headers,
-      { conversationId, eventType: "conversation", data: { status: "running" } },
-      FETCH_TIMEOUT_MS,
-    );
-  } catch {
-    /* round/event 失败时 turn 会报错，由上层处理 */
-  }
+/**
+ * 前置 round + event：**顺序执行且必须都成功**，`turn` 才被上游接受。
+ *
+ * 实测矩阵（2026-10-08，真实账号）：
+ *
+ * | 序列 | round | event | turn |
+ * |---|---|---|---|
+ * | round(SSE) → event(SSE) → turn | 406 | 406 | 200 ✅（会话不存在时 turn 自建） |
+ * | **round(JSON) → event(JSON) → turn** | 200 | 200 | **200 ✅ 出正文** |
+ * | 只 round(JSON) → turn | 200 | — | 200 ❌「会话未在执行中」 |
+ * | 只 turn | — | — | 500 |
+ *
+ * 结论：**两个都要发、都要 JSON Accept、且都要在 turn 之前完成**。
+ * 缺 event（只 round）→「会话未在执行中」；缺 round → 直接 500。
+ *
+ * 由网关经 `UpstreamModule.prepareChat` 钩子 `await` —— `buildChatBody` 是同步契约，
+ * 放不下这段异步顺序；fire-and-forget 又会与 turn 竞争。
+ *
+ * ⚠ 参数是**网关已建好的 body**（同一个会话 id）。绝不能在这里再调一次
+ * `buildChatBody` —— 那会生成新的 conversationId，前置指向会话 A、对话指向会话 B，
+ * 上游照样回「会话未在执行中」（实测踩过）。
+ */
+export async function prepareChat(body: Record<string, unknown>): Promise<void> {
+  const conversationId = sharedLogin.str(body["__conversationId"]);
+  const rawRound = sharedLogin.str(body["__roundBody"]);
+  if (!conversationId || !rawRound) return;
+
+  // 内部字段不能发给上游：在这里就地摘掉（网关随后发的就是同一个对象）。
+  // 用 `__` 前缀 + 显式删除，而不是另开一张旁路表 —— 让「body 就是最终请求体」
+  // 这条不变量在 prepareChat 返回后立即成立，不依赖调用顺序。
+  delete body["__conversationId"];
+  delete body["__roundBody"];
+
+  const headers = buildHeaders(loadCredential(), { stream: false });
+  // 顺序执行：round 建会话 → event 置 running。任一失败都会让 turn 无法工作，
+  // 所以**不吞错**（由网关归为上游错误，日志能看到是哪一步失败）。
+  await postJson(
+    roundUrl(),
+    headers,
+    JSON.parse(rawRound) as Record<string, unknown>,
+    FETCH_TIMEOUT_MS,
+  );
+  await postJson(
+    eventUrl(),
+    headers,
+    { conversationId, eventType: "conversation", data: { status: "running" } },
+    FETCH_TIMEOUT_MS,
+  );
 }
 
 /** 静默加载凭据（失败时返回空凭据，让 preflight 走 401 路径）。 */
@@ -706,7 +762,8 @@ async function reportStatus(
 
 /** 拉模型目录，回填 catalog。 */
 export async function fetchModels(credential: CredentialShape): Promise<Record<string, unknown>> {
-  const headers = buildHeaders(credential);
+  // 模型目录是普通 JSON 端点（实测 Accept: application/json）
+  const headers = buildHeaders(credential, { stream: false });
   const resp = await fetchWithTimeout(modelsUrl(), {
     method: "POST",
     headers: { ...headers, Accept: "application/json" },

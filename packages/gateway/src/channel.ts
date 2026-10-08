@@ -108,6 +108,20 @@ export interface UpstreamModule {
     req: Record<string, unknown>,
     upstreamModel: string,
   ): Record<string, unknown>;
+  /**
+   * 可选：发上游请求**之前**要完成的异步前置动作（网关会 `await` 它）。
+   *
+   * 为什么需要这个钩子：`buildChatBody` 是**同步**契约（网关拿到 body 就发），
+   * 但有些上游要求「先建会话 → 再标记 running → 最后才发对话」这种多步顺序，
+   * 错一步就被拒。若从 `buildChatBody` 里 fire-and-forget 发起，会与对话请求
+   * 竞争（实测 catpaw：round/event 未完成时 turn 已发出，上游回「会话未在执行中」）。
+   *
+   * ⚠ 参数是**网关已经建好的 body**（不是 `req`）：渠道必须基于同一个 body 做前置，
+   * 否则再调一次 `buildChatBody` 会生成新的会话 id，前置与对话就指向两个会话。
+   *
+   * 未实现时网关直接跳过（绝大多数渠道不需要）。
+   */
+  prepareChat?(body: Record<string, unknown>): Promise<void>;
   fetchModels(credential: any): Promise<Record<string, unknown>>;
   resolveConfig(data: Record<string, unknown>, fallback?: any): any;
   /** 仅 `WIRE === "custom"` 时需要。 */
