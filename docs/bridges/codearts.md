@@ -14,13 +14,31 @@ CodeArts（华为云）的本地 OpenAI Chat Completion 透明代理网关（**T
 ## 快速开始
 
 ```bash
-uv sync
-uv run codearts serve --json    # 前台无窗口运行
-uv run codearts login --json    # 无窗口登录：输出授权链接
-uv tool install .            # 全局安装后用 codearts 直接调用
-codearts start                  # 守护式启动（幂等）
-codearts status / models / credits / stop
+node packages/cli/dist/cli.js codearts login     # 登录（浏览器授权；--json 拿 auth_url）
+node packages/cli/dist/cli.js codearts models    # 池内模型（读本地缓存，--refresh 强制重拉）
+node packages/cli/dist/cli.js codearts billing   # 额度 / 活动
+node packages/cli/dist/cli.js codearts status    # 网关与登录状态
+node packages/cli/dist/cli.js start              # 起仓库级网关（一个端口服务全部渠道）
 ```
+
+单渠道独立运行（调试用）：`node channels/codearts/dist/cli.js start|serve`。
+
+## 账号身份（**不要按 AK 认人**）
+
+CodeArts 的 STS 信封**只给 `credentials` + `refresh_token`**，从不给 `user_id`；
+而华为每次签发都换一套新 AK。所以「用 AK 派生 uid」会让**同一个人每次登录
+都变成池内一个新账号** —— 实测一个用户躺了 3 条，且它们共享同一个 refresh token
+家族，一个被消费就全体作废（`STS5.1806`），池子的故障转移反而把一次失败
+放大成多次无效重试。
+
+稳定身份在 `refresh_token` 的 JWT 里（`user_profile.account_id`）。取值优先级与
+实测证据见 [PROTOCOL.md §2.3.1](../protocols/codearts/PROTOCOL.md)。
+
+渠道侧的兜底：
+
+- `load()` 会把历史遗留的伪 uid（`uid == sha256(自己的 AK)[:16]`）在内存里纠正为稳定身份；
+- `pruneLegacyAccounts()` 在登录后清理池内同一人的历史伪账号（按 JWT 身份分组，
+  保留当前生效那份；解不出身份的一律各自独立，绝不误删）。
 
 ## 状态 API 与 ZCode 插件
 
