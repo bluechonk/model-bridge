@@ -28,16 +28,10 @@
       "path": "../../channels/codearts"
     },
     {
-      "path": "../../channels/gemini"
-    },
-    {
       "path": "../../channels/lobsterai"
     },
     {
       "path": "../../channels/loomy"
-    },
-    {
-      "path": "../../channels/minimax"
     },
     {
       "path": "../../channels/qoder"
@@ -49,7 +43,10 @@
       "path": "../../channels/trae"
     },
     {
-      "path": "../../channels/workbuddyai"
+      "path": "../../channels/workbuddy"
     },
+    {
+      "path": "../../channels/workbuddyai"
+    }
   ]
 }
