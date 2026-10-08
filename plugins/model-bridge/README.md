@@ -1,6 +1,8 @@
 # model-bridge（ZCode 插件）
 
-把本仓库的**多渠道路由网关**接到 ZCode：一个本地 OpenAI 兼容端点 + 12 个渠道（**模型池**）。
+把本仓库的**多渠道路由网关**接到 ZCode：一个本地 OpenAI 兼容端点 + 10 个渠道（**模型池**），
+对外只暴露三个模型（`deepseek-v4.1-flash` / `deepseek-v4-flash` / `glm-5.3-flash`）——
+请求落到哪家渠道由网关按各渠道账单用量自动决定（见 [docs/POOL-ARCHITECTURE.md](../../docs/POOL-ARCHITECTURE.md) §2）。
 
 ## 装
 
