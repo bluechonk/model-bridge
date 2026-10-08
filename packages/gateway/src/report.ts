@@ -15,6 +15,7 @@ import { pathToFileURL } from "node:url";
 
 import { channelCount, channelFor, getChannel, type BridgeConfig } from "./channel.js";
 import { FILES, SUBDIRS, channelDirFor, legacySearchParents, rootDirFor } from "./paths.js";
+import { findWorkspaceRoot } from "./stale-build.js";
 
 export interface EntryReport {
   name: string;
@@ -87,35 +88,6 @@ export function inspect(config: BridgeConfig): ChannelReport {
     legacyPending,
     staleFiles,
   };
-}
-
-/** 从 `start` 向上找工作区根（含 `-bridge` 的 `workspaces` 清单）。 */
-export function findWorkspaceRoot(start: string): string | null {
-  let dir = resolve(start);
-  for (;;) {
-    const pkg = join(dir, "package.json");
-    if (existsSync(pkg)) {
-      try {
-        const parsed = JSON.parse(readFileSync(pkg, "utf8")) as {
-          workspaces?: unknown;
-        };
-        const raw = parsed.workspaces;
-        const list: unknown = Array.isArray(raw)
-          ? raw
-          : raw && typeof raw === "object"
-            ? (raw as { packages?: unknown }).packages
-            : null;
-        if (Array.isArray(list) && list.some((p) => typeof p === "string" && p.endsWith("-bridge"))) {
-          return dir;
-        }
-      } catch {
-        /* 继续往上找 */
-      }
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
 }
 
 /** 展开 workspaces（支持字面目录与一层 `dir/*` 通配）。 */
@@ -212,8 +184,7 @@ export async function runPaths(options: PathsOptions = {}): Promise<number> {
   const root = findWorkspaceRoot(workspace ?? process.cwd());
   if (!root) {
     console.error(
-      "未找到工作区根（需要含 `-bridge` 的 workspaces 清单的 package.json）；" +
-        "用 --workspace <目录> 指定",
+      "未找到工作区根（需要一个带 workspaces 清单的 package.json）；用 --workspace <目录> 指定",
     );
     return 2;
   }
