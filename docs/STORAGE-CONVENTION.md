@@ -197,6 +197,8 @@ if (existsSync(target)) return target;   // 新目录在 → 直接返回，lega
 
 5. **渠道特有文件必须落在自己的 cid 层内**：
    - `cache/` 可安全删除、可重建（含模型目录缓存）
+   - `state/` 跨重启保持的**状态**：目前唯一使用者是 `state/signin.json`（签到台账：
+     `{version, timezone, last_claim, history}`，由共享层在**领取成功**或**上游回填**时写入）
    - `state/` 跨重启保持的状态
    - `debug/` 抓包落盘默认位置（`<CID>_DEBUG_DUMP` 仅作覆盖，值须为绝对路径）
    - **禁止**写 `~/` 下任何其它目录（含 `~/.cache/`、`~/.config/`）

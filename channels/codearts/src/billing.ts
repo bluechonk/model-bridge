@@ -484,6 +484,23 @@ export async function fetchCredits(
 
 import type { SigninModule } from "@model-bridge/gateway";
 /**
+ * 每日签到的「今天」状态：从活动列表里挑出 `USER_LOGIN` 类活动判断。
+ *
+ * - 没有该类活动 → `claimedToday: null`（这个账号没有每日签到这回事，不猜）
+ * - 有可领的 → 未签；全部已领 → 已签
+ */
+export async function signinStatus(
+  c: upstream.AuthLike,
+): Promise<{ claimedToday: boolean | null; claimable: boolean; total: number }> {
+  const activities = await fetchActivities(c);
+  const daily = activities.filter((a) => a.type === DAILY_LOGIN_TYPE);
+  if (daily.length === 0) return { claimedToday: null, claimable: false, total: 0 };
+  const claimable = daily.some((a) => a.claimable);
+  const claimedToday = !claimable && daily.every((a) => CLAIMED_STATUSES.includes(a.status));
+  return { claimedToday, claimable, total: daily.length };
+}
+
+/**
  * 签到 / 领取能力（`<cid> checkin`）。
  *
  * 上游叫「活动领取」：`ops/claim`（必要时 `ops/confirm`）。`fetchCredits()` 会带上
@@ -491,12 +508,26 @@ import type { SigninModule } from "@model-bridge/gateway";
  */
 export const signin: SigninModule = {
   async status() {
-    const credits = await fetchCredits();
-    const items = credits.claimable ?? [];
+    const daily = await signinStatus(cred.load());
+    // 除了每日签到，还可能有别的活动可领 → 顺带把可领总数带上
+    let items: Array<Record<string, unknown>> = [];
+    try {
+      items = (await fetchCredits()).claimable ?? [];
+    } catch {
+      items = [];
+    }
     return {
-      claimable: items.length > 0,
-      summary: items.length > 0 ? `有 ${items.length} 个活动可领` : "没有可领的活动",
+      claimable: daily.claimable || items.length > 0,
+      summary: daily.total === 0
+        ? "该账号没有「每日签到」类活动"
+        : daily.claimedToday
+          ? "今天已签到"
+          : daily.claimable
+            ? "今天未签到，可领"
+            : "今天未签到（活动暂不可领）",
       items,
+      claimedToday: daily.claimedToday,
+      daily: true,
     };
   },
   async claim() {

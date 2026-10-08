@@ -433,6 +433,9 @@ export const signin: SigninModule = {
         : canCheckin
           ? "今天未签到"
           : `当前活动没有 check_in 动作（actions=${context.actions.join(",")}）`,
+      // 上游的 context 直接给"今天是否已签"→ 共享层据此判定（权威）
+      claimedToday: context.claimedToday,
+      daily: true,
     };
   },
   async claim() {

@@ -29,6 +29,10 @@ export interface CommandContext {
   force: boolean;
   /** `checkin --status`：只查不领。 */
   statusOnly: boolean;
+  /** `checkin --daily-only`：只处理"每日"语义的渠道（跳过一次性奖励）。 */
+  dailyOnly: boolean;
+  /** `checkin --fail-if-unclaimed`：今天明确未签 → 退出码非零。 */
+  failIfUnclaimed: boolean;
   lines: number;
   workspace?: string;
 }
@@ -39,7 +43,7 @@ export const CHANNEL_VERBS: ReadonlyArray<readonly [string, string]> = [
   ["login", "浏览器授权登录该渠道（`--realm intl|cn`）"],
   ["models", "该渠道池内的模型 id（读本地目录，不需要网关）"],
   ["billing", "剩余额度 / 账单（别名 credits；只读，不经网关）"],
-  ["checkin", "签到 / 领活动奖励（`--status` 只查不领；别名 signin）"],
+  ["checkin", "签到 / 领奖励（`--status` 只查不领、`--daily-only` 跳过一次性；别名 signin）"],
   ["accounts", "账号池：`list` / `use <key>` / `add` / `remove <key>`"],
   ["paths", "该渠道的存储落点与文件（只读）"],
   ["logs", "该渠道的网关日志尾部"],
@@ -153,7 +157,13 @@ export async function runChannelCommand(
     case "checkin":
     case "check-in":
     case "signin":
-      return signinCli.runCheckin({ cid, json: ctx.json, statusOnly: ctx.statusOnly });
+      return signinCli.runCheckin({
+        cid,
+        json: ctx.json,
+        statusOnly: ctx.statusOnly,
+        dailyOnly: ctx.dailyOnly,
+        failIfUnclaimed: ctx.failIfUnclaimed,
+      });
     case "accounts":
       return accountCli.runAccounts({
         cid,

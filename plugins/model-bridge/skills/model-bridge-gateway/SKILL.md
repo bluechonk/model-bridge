@@ -49,7 +49,8 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `model-bridge model list` | 等价 `channels`（全部池子与模型） |
 | `model-bridge <cid> login` | 登录该渠道（等价 `login --channel <cid>`） |
 | `model-bridge <cid> billing` | 该渠道额度 / 账单（别名 `credits`） |
-| `model-bridge <cid> checkin` | 该渠道签到 / 领奖励（`--status` 只查不领） |
+| `model-bridge <cid> checkin` | 该渠道签到 / 领奖励（`--status` 只查不领、`--daily-only` 跳过一次性） |
+| `model-bridge checkin --status` | **今天签没签**（上游 → 本地台账 → 未知；末尾给 N/M 摘要） |
 
 **命令形态**：网关生命周期（`start/stop/restart/status/logs`）是**仓库级**的，不带渠道；
 「对某个渠道做点什么」写成 `<cid> <动词>`（如 `model-bridge trae login`、`model-bridge trae billing`、

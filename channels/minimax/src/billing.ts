@@ -391,6 +391,19 @@ export async function claimSignin(options: { refreshOn401?: boolean } = {}): Pro
 
 import type { SigninModule } from "@model-bridge/gateway";
 /**
+ * 只查签到面板（`signin/status`）—— 比 `fetchCredits()` 便宜，专供"今天签没签"的判定。
+ */
+export async function signinStatus(): Promise<{ claimedToday: boolean; claimable: boolean }> {
+  const c = cred.load();
+  const base = baseUrlFor(c);
+  const tz = encodeURIComponent(timezoneId());
+  const body = await getJson(`${base}${SIGNIN_STATUS_PATH}?timezone_id=${tz}`, upstream.businessHeaders(c));
+  checkBusinessCode(body, "signin/status");
+  const panel = parseSigninPanel(unwrapEnvelopeData(body));
+  return { claimedToday: panel.claimedToday, claimable: panel.claimable !== null };
+}
+
+/**
  * 签到 / 领取能力（`<cid> checkin`）。
  *
  * 上游 `signin/status` + `signin/claim`。状态取自 `fetchCredits()` 里已经解析好的
@@ -398,12 +411,12 @@ import type { SigninModule } from "@model-bridge/gateway";
  */
 export const signin: SigninModule = {
   async status() {
-    const credits = await fetchCredits();
-    const items = credits.claimable ?? [];
+    const panel = await signinStatus();
     return {
-      claimable: items.length > 0,
-      summary: items.length > 0 ? `有 ${items.length} 天可领` : "今天已领过（或不可领）",
-      items,
+      claimable: panel.claimable,
+      summary: panel.claimedToday ? "今天已领过" : panel.claimable ? "今天未领，可领" : "今天未领，暂无可领",
+      claimedToday: panel.claimedToday,
+      daily: true,
     };
   },
   async claim() {
