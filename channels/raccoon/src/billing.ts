@@ -281,3 +281,42 @@ export async function claimLoginReward(c?: cred.Credentials): Promise<RewardResu
   // 幂等判据是 granted → false 映射成 already-claimed（不是 claimed）
   return { status: "already-claimed", points: 0 };
 }
+
+// ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
+
+import type { SigninModule } from "@model-bridge/gateway";
+/**
+ * 签到 / 领取能力（`<cid> checkin`）。
+ *
+ * ⚠ 上游**不是每日签到**：`daily_grant` 由服务端自动发；这里是一笔**一次性**的
+ * 「登录奖励」，幂等判据是 `granted`（见 docs/protocols/raccoon/PROTOCOL.md）。
+ * 所以 summary 里点明「一次性」，别让用户以为是每天能领。
+ */
+export const signin: SigninModule = {
+  async status() {
+    cred.load(); // 未登录时抛 NotLoggedInError：别把"没登录"显示成"可领"
+    const claimed = await loginRewardClaimed();
+    // ⚠ `loginRewardClaimed()` 查询失败**也**返回 false（它自己文档里写明"保守返回"），
+    // 所以 false 只能表示"没查到领取记录"——既可能真没领过、也可能查询失败。
+    // 故 claimable 用 null（"不知道"），不能报 true（那是虚假承诺）。
+    return {
+      claimable: claimed ? false : null,
+      summary: claimed
+        ? "登录奖励已领过（一次性，非每日）"
+        : "没查到登录奖励记录（可能可领、也可能查询失败；checkin 会尝试领，上游幂等）",
+    };
+  },
+  async claim() {
+    const r = await claimLoginReward();
+    return {
+      ok: r.status === "claimed",
+      summary:
+        r.status === "claimed"
+          ? `领取成功${r.points > 0 ? `，+${r.points}` : ""}`
+          : r.status === "already-claimed"
+            ? "已领过（一次性奖励）"
+            : `领取失败: ${r.error ?? r.status}`,
+      detail: r,
+    };
+  },
+};

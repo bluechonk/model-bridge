@@ -120,10 +120,46 @@ export interface CatalogModule {
   resolveModel(name: string): string;
 }
 
+/** 签到 / 领取的**只读**状态。 */
+export interface SigninStatus {
+  /** 是否有可领的；`null` = 查不到（不代表"没有"）。 */
+  claimable: boolean | null;
+  /** 人读摘要（各渠道自己的说法，如「今日未签到」「已领 300 积分」）。 */
+  summary: string;
+  /** 可领取项明细（有就给）。 */
+  items?: Array<Record<string, unknown>>;
+}
+
+/** 执行签到 / 领取的结果。 */
+export interface SigninOutcome {
+  ok: boolean;
+  /** 人读摘要（如「签到成功，+300 积分」）。 */
+  summary: string;
+  /** 渠道原始返回（`--json` 时给）。 */
+  detail?: unknown;
+}
+
+/**
+ * 渠道的**签到 / 领取**能力（可选实现）。
+ *
+ * 有的渠道叫「签到」（check-in / signin），有的叫「活动领取」（claim / 奖励），
+ * 还有的靠上游自动发（无端点）—— 统一收敛成这两个动作，CLI 的
+ * `<cid> checkin` 与 `<cid> checkin --status` 就靠它。
+ *
+ * ⚠ `claim()` 是**写**操作（会真的领掉），实现方要保证幂等或至少安全重复调用。
+ * 未实现该能力的渠道**不要**提供这个字段，CLI 会明确报告「该渠道没有签到端点」。
+ */
+export interface SigninModule {
+  status(): Promise<SigninStatus>;
+  claim(): Promise<SigninOutcome>;
+}
+
 /** 渠道 `billing.ts` 需要提供的接口。 */
 export interface BillingModule {
   CreditsError: new (message?: string) => Error;
   fetchCredits(options?: { refreshOn401?: boolean }): Promise<any>;
+  /** 可选：签到 / 领取能力（见 `SigninModule`）。 */
+  signin?: SigninModule;
 }
 
 /**

@@ -10,7 +10,10 @@
 
 import { parseArgs } from "node:util";
 
-import { channelCount, channels, getChannel, type Channel } from "./channel.js";
+import { channelCount, channels, getChannel, hasChannel, type Channel } from "./channel.js";
+import { CHANNEL_VERBS } from "./command-groups.js";
+import * as groups from "./command-groups.js";
+import * as signinCli from "./signin-cli.js";
 import { runInChannel } from "./channel-context.js";
 import { poolIds, qualifiedId } from "./model-pool.js";
 import { defaultAddr, defaultUiPort, version } from "./cli-consts.js";
@@ -24,23 +27,36 @@ export function usage(): string {
   const single = channelCount() === 1;
   const cid = single ? getChannel().config.cid : "model-bridge";
   const display = single ? getChannel().config.display : "多渠道路由（模型池）";
+  const verbLines = CHANNEL_VERBS.map(([v, d]) => `  ${("<cid> " + v).padEnd(24)} ${d}`);
   return `${cid} — ${display} OpenAI Chat Completion 网关（无窗口运行，供 ZCode 插件驱动）
 
 用法: ${cid} <命令> [选项]
+      ${cid} <cid2> <动词> [参数]     # 对某个渠道操作，如 ${single ? cid : "trae"} login
 
-命令:
-  serve                     前台无窗口运行：登录探测 + 网关 + 控制台 API（守护进程内部也用它）
-  login                     无窗口完成浏览器授权登录并保存凭证
+网关（仓库级，服务全部渠道）:
   start                     守护式启动网关（幂等：已在跑直接返回）
   stop                      停止守护式网关（读 PID 文件杀进程树，不碰第三方进程）
   restart                   重启守护式网关（stop + start）
   status                    聚合状态：网关健康、逐渠道登录状态、守护 PID、凭证
-  models                    列出网关暴露的模型 id（查运行中的网关；没起会失败，用 channels 看本地目录）
-  credits                   查询账号剩余额度（只读，不经本地网关）
   logs                      查看网关日志尾部
-  paths                     列出存储落点与文件（只读；--all 或仓库级 = 全部渠道）
-  channels                  列出已注册的渠道（模型池）与各自可用模型（只读）
-  accounts [verb]           账号池：list（默认）/ use <key> / add / remove <key>
+  serve                     前台无窗口运行（不守护；守护进程内部也用它）
+
+模型池:
+  model list                列出全部渠道（池子）与各自模型（= channels）
+  model show <cid>          只看某个渠道的模型
+
+按渠道操作（<cid> 是已注册的渠道，如 workbuddyai）:
+${verbLines.join("\n")}
+
+其它:
+  channels                  等价 model list（兼容保留）
+  paths [--all]             存储落点与文件（仓库级 = 全部渠道；只读）
+  accounts [...]            账号池（不加 <cid> 时跨渠道）
+  credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
+  checkin [--status]        签到 / 领活动奖励（不加 <cid> = 所有支持的渠道；--status 只查不领）
+  login                     登录（可加 --channel <cid>，等价 <cid> login）
+  -h, --help                显示本帮助
+  -v, --version             显示版本
 
 选项:
   --addr <host:port>        网关监听地址（默认 ${defaultAddr()}）
@@ -48,7 +64,8 @@ export function usage(): string {
   --wait <seconds>          启动健康等待秒数（默认 8）
   --lines <n>               logs 显示行数（默认 40）
   --realm <auto|intl|cn>    login 的登录域（默认 auto）
-  --channel <cid>           只操作该渠道（多渠道路由下省略 = 全部渠道）
+  --channel <cid>           只操作该渠道（等价把 <cid> 写成第一个参数）
+  --status                  checkin：只查状态，不领（只读）
   --all                     paths：统计工作区内全部渠道
   --workspace <dir>         paths：工作区根（默认从当前目录向上查找）
   --json                    输出 JSON（事件行 / 结构化结果）
@@ -60,8 +77,6 @@ export function usage(): string {
   --force-login             serve：忽略已有凭证重新登录
   --verbose                 serve：打印每个上游请求
   --no-console              serve：不启动控制台 API 服务
-  -h, --help                显示本帮助
-  -v, --version             显示版本
 `;
 }
 
@@ -120,6 +135,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         realm: { type: "string" },
         workspace: { type: "string" },
         channel: { type: "string" },
+        status: { type: "boolean" },
         json: { type: "boolean" },
         quiet: { type: "boolean" },
         auto: { type: "boolean" },
@@ -152,9 +168,31 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
 
-  const command = parsed.positionals[0] ?? "serve";
+  const positionals = parsed.positionals;
+  const command = positionals[0] ?? "serve";
   const addr = strOpt(o, "addr") ?? defaultAddr(cid);
   const uiPort = numOpt(o, "ui-port") ?? defaultUiPort(cid);
+
+  const ctx: groups.CommandContext = {
+    json: boolOpt(o, "json"),
+    quiet: boolOpt(o, "quiet"),
+    addr,
+    uiPort,
+    realm: strOpt(o, "realm") ?? "auto",
+    force: boolOpt(o, "force"),
+    statusOnly: boolOpt(o, "status"),
+    lines: numOpt(o, "lines") ?? 40,
+    ...(strOpt(o, "workspace") !== undefined ? { workspace: strOpt(o, "workspace")! } : {}),
+  };
+
+  // ① 以渠道为第一参数：`model-bridge <cid> <动词>`
+  if (hasChannel(command)) {
+    return groups.runChannelCommand(command, positionals.slice(1), ctx);
+  }
+  // ② 分组：`model list` / `model show <cid>`
+  if (command === "model") {
+    return groups.runModelGroup(positionals.slice(1), ctx);
+  }
 
   switch (command) {
     case "serve":
@@ -245,38 +283,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         force: boolOpt(o, "force"),
       });
 
-    case "channels": {
-      const list = channels();
-      if (list.length === 0) {
-        console.error("没有渠道被注册（入口忘了 import 渠道包？）");
-        return 2;
-      }
-      if (boolOpt(o, "json")) {
-        console.log(
-          JSON.stringify(
-            list.map((c) => ({
-              cid: c.config.cid,
-              display: c.upstream.DISPLAY_NAME,
-              version: c.config.version,
-              models: exposedIdsOf(c),
-            })),
-            null,
-            2,
-          ),
-        );
-        return 0;
-      }
-      const multi = list.length > 1;
-      console.log(`${list.length} 个渠道（模型池）${multi ? "；对外模型 id 形如 <cid>/<模型>" : ""}：`);
-      for (const c of list) {
-        const models = exposedIdsOf(c);
-        const shown = models.map((m) => qualifiedId(c.config.cid, m, multi)).join(", ");
-        console.log(
-          `  ${c.config.cid.padEnd(12)} ${c.upstream.DISPLAY_NAME.padEnd(18)} ${shown || "（无可用模型）"}`,
-        );
-      }
-      return 0;
-    }
+    case "checkin":
+    case "signin":
+      return signinCli.runCheckin({
+        json: ctx.json,
+        statusOnly: ctx.statusOnly,
+        ...(cid !== undefined ? { cid } : {}),
+      });
+
+    case "channels":
+      return groups.listAllModels(ctx.json);
 
     default:
       console.error(`未知命令: ${command}`);

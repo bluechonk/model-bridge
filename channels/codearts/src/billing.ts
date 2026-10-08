@@ -479,3 +479,38 @@ export async function fetchCredits(
   }
   return result;
 }
+
+// ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
+
+import type { SigninModule } from "@model-bridge/gateway";
+/**
+ * 签到 / 领取能力（`<cid> checkin`）。
+ *
+ * 上游叫「活动领取」：`ops/claim`（必要时 `ops/confirm`）。`fetchCredits()` 会带上
+ * 可领活动清单，故 status 直接用它，claim 走 `claimDailyLogin()`（预检 + 逐个领）。
+ */
+export const signin: SigninModule = {
+  async status() {
+    const credits = await fetchCredits();
+    const items = credits.claimable ?? [];
+    return {
+      claimable: items.length > 0,
+      summary: items.length > 0 ? `有 ${items.length} 个活动可领` : "没有可领的活动",
+      items,
+    };
+  },
+  async claim() {
+    const outcomes = await claimDailyLogin(cred.load());
+    const claimed = outcomes.filter((o) => o.code === "claimed");
+    const gained = claimed.reduce((sum, o) => sum + (o.amount || 0), 0);
+    return {
+      ok: outcomes.every((o) => o.ok || o.already),
+      summary: claimed.length
+        ? `领取 ${claimed.length} 项${gained > 0 ? `，+${gained}` : ""}`
+        : outcomes.length
+          ? `无需领取（${outcomes.map((o) => o.code).join(", ")}）`
+          : "没有「每日签到」类活动",
+      detail: outcomes,
+    };
+  },
+};

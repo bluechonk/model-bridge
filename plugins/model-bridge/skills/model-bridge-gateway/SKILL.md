@@ -46,8 +46,17 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `model-bridge credits` | 账号剩余额度（只读，不经网关，不消耗额度） |
 | `model-bridge paths`（`--all`） | 存储落点与文件（只读） |
 | `model-bridge accounts`（`--channel`） | **账号池**：列出账号 / `use <key>` / `add` / `remove <key>` |
+| `model-bridge model list` | 等价 `channels`（全部池子与模型） |
+| `model-bridge <cid> login` | 登录该渠道（等价 `login --channel <cid>`） |
+| `model-bridge <cid> billing` | 该渠道额度 / 账单（别名 `credits`） |
+| `model-bridge <cid> checkin` | 该渠道签到 / 领奖励（`--status` 只查不领） |
 
-几乎所有子命令都支持 `--channel <cid>`（只操作某个渠道）与 `--json`。
+**命令形态**：网关生命周期（`start/stop/restart/status/logs`）是**仓库级**的，不带渠道；
+「对某个渠道做点什么」写成 `<cid> <动词>`（如 `model-bridge trae login`、`model-bridge trae billing`、
+`model-bridge trae checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
+
+`checkin` 只处理**声明了签到能力**的渠道（codearts / lobsterai / loomy / minimax / raccoon / trae）；
+workbuddyai / catpaw / cline / gemini / qoder 没有签到端点（奖励由上游自动发），单查会明确报出来。
 
 ## 标准流程
 

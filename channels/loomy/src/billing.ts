@@ -292,3 +292,34 @@ export async function triggerDailyQuota(): Promise<DailyQuotaResult> {
 export function taskLabel(key: string): string {
   return TASK_LABEL.get(key) ?? key;
 }
+
+// ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
+
+import type { SigninModule } from "@model-bridge/gateway";
+/**
+ * 签到 / 领取能力（`<cid> checkin`）。
+ *
+ * 上游是「新手任务一键领取」（`claimAll()`：跳过已完成的，任一任务登录失效即中止）。
+ * 没有独立的签到状态端点 —— 状态返回 `claimable: null`（"不知道"，不是"没有"）。
+ */
+export const signin: SigninModule = {
+  async status() {
+    return {
+      claimable: null,
+      summary: "（该渠道没有独立的签到状态端点；claim 会跳过已完成的任务）",
+    };
+  },
+  async claim() {
+    const r = await claimAll();
+    const claimed = r.results.filter((x) => x.status === "completed");
+    return {
+      ok: claimed.length > 0 || r.results.every((x) => x.status !== "failed"),
+      summary: r.earned > 0
+        ? `领取 ${claimed.length} 项，+${r.earned}`
+        : r.results.length
+          ? `没有可领的任务（${r.results.map((x) => x.status).join(", ")}）`
+          : "没有任务可领",
+      detail: r,
+    };
+  },
+};

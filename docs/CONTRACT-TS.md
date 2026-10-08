@@ -299,7 +299,18 @@ interface CreditsResult {
   packages: CreditPackage[];
   claimable?: Array<Record<string, unknown>>;
 }
+
+// 可选：签到 / 领取能力（有端点就实现；CLI 的 `<cid> checkin` 用）
+export const signin: SigninModule;
+interface SigninModule {
+  status(): Promise<{ claimable: boolean | null; summary: string; items?: … }>;  // 只读
+  claim(): Promise<{ ok: boolean; summary: string; detail?: unknown }>;          // 写：会真的领掉
+}
 ```
+
+⚠ `signin` **可选**：上游没有签到/领取端点的渠道**不要**提供它（CLI 会明确报「该渠道没有签到端点」，
+而不是静默返回空）。各渠道叫法不同（`check-in` / `signin` / 活动 `claim` / 上游自动发），统一收敛成
+`status()` + `claim()` 两个动作；`claim()` 必须是幂等的或至少可安全重复调用。
 
 ⚠ **「查不到」不能显示成 0**：失败时抛 `CreditsError`，而不是返回 `remain: 0`。
 ⚠ 未登录时抛 `cred.NotLoggedInError`。

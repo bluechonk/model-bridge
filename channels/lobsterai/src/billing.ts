@@ -409,3 +409,42 @@ export async function claimCheckin(): Promise<ClaimResult> {
     num(result["creditsGranted"]) || num(result["rewardCredits"]) || num(result["credits"]);
   return { ok: true, already: false, credits, code: "claimed", message: "签到成功" };
 }
+
+// ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
+
+import type { SigninModule } from "@model-bridge/gateway";
+/**
+ * 签到 / 领取能力（`<cid> checkin`）。
+ *
+ * 上游是三步：活动槽位 → 活动上下文（今天是否已签 / 有哪些动作）→ `check_in`。
+ * claim 走 `claimCheckin()`（幂等：已签直接返回，不发请求）。
+ */
+export const signin: SigninModule = {
+  async status() {
+    const c = cred.load();
+    const version = await upstream.resolveClientVersion();
+    const slot = await activitySlot(c, version);
+    const context = await activityContext(c, slot.activityCode, slot.configRevision);
+    const canCheckin = context.actions.includes("check_in");
+    return {
+      claimable: !context.claimedToday && canCheckin,
+      summary: context.claimedToday
+        ? "今天已签到"
+        : canCheckin
+          ? "今天未签到"
+          : `当前活动没有 check_in 动作（actions=${context.actions.join(",")}）`,
+    };
+  },
+  async claim() {
+    const r = await claimCheckin();
+    return {
+      ok: r.ok,
+      summary: r.already
+        ? "今天已签到"
+        : r.ok
+          ? `签到成功${r.credits > 0 ? `，+${r.credits}` : ""}`
+          : `${r.message || "签到失败"}（${r.code}）`,
+      detail: r,
+    };
+  },
+};

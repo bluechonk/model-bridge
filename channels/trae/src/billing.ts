@@ -321,3 +321,37 @@ export async function fetchCredits(
   }
   return result;
 }
+
+// ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
+
+import type { SigninModule } from "@model-bridge/gateway";
+/**
+ * 签到 / 领取能力（`<cid> checkin`）。
+ *
+ * 上游是「签到领积分」：`checkin_credits/status` 查状态、`.../claim` 领。
+ * claim 的响应不含积分数，故实现里会补查一次 status。
+ */
+export const signin: SigninModule = {
+  async status() {
+    const s = await checkinStatus();
+    const bits = [
+      s.checked_in ? "今日已签到" : "今日未签到",
+      s.streak_days > 0 ? `连续 ${s.streak_days} 天` : "",
+      s.total_credits > 0 ? `累计 ${s.total_credits}` : "",
+    ].filter(Boolean);
+    return {
+      claimable: s.enable ? !s.checked_in : false,
+      summary: `${bits.join("，")}${s.message ? `（${s.message}）` : ""}`,
+    };
+  },
+  async claim() {
+    const r = await claimDaily();
+    return {
+      ok: true,
+      summary: r.already
+        ? `今日已签到（连续 ${r.streak_days} 天）`
+        : `签到成功，+${r.credits} 积分（连续 ${r.streak_days} 天）`,
+      detail: r,
+    };
+  },
+};
