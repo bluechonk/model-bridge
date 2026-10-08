@@ -4,7 +4,7 @@
 历史名迁移。**凭证/配置的字段内容不在此列** —— 各 `channels/<cid>/` 自己决定
 （见 `CONTRACT-TS.md` §5）。
 
-适用范围：工作区内的 12 个渠道包 + 共享包 `packages/gateway`。（2026-10-08 快照：当时为 12 个，zcode 渠道已移除。）
+适用范围：工作区内的 10 个渠道包 + 共享包 `packages/gateway`。（2026-10-08 快照：当时为 12 个，zcode 渠道已移除。）
 
 ---
 
@@ -16,7 +16,7 @@
 |---|---|
 | 共享层 | `paths.ts`（单根 + `<cid>` 分层、固定文件名/子目录集中、纯函数 `*For` 供只读巡检）＋ 新增 `migrate.ts`（收拢、并存补齐、文件级收敛、权限基线） |
 | 类型 | `BridgeConfig` 去掉 `dirName` / `envVar`；新增 `fileMigrations` / `legacyDebugDumpEnv` |
-| 渠道 | 12 个 `channel.ts` 对齐；`.workbuddy-bridge` 误入项已从 10 个渠道移除；workbuddy 调试变量改 `WORKBUDDY_DEBUG_DUMP`；catpaw 加 `daemon.pid → gateway.pid`；codearts 缓存迁入 `cache/` |
+| 渠道 | 10 个 `channel.ts` 对齐；`.workbuddy-bridge` 误入项已从 10 个渠道移除；workbuddy 调试变量改 `WORKBUDDY_DEBUG_DUMP`；catpaw 加 `daemon.pid → gateway.pid`；codearts 缓存迁入 `cache/` |
 | 校验 | `tools/verify-storage.mjs` 断言全部规则并接入工作区 `npm test`（已反向验证：注入跨渠道条目会被拦下） |
 | 统计 | `workbuddy paths [--json]` 与 `paths --all`（只读，不触发迁移） |
 
@@ -54,8 +54,6 @@
 ├── cline/
 ├── loomy/
 ├── raccoon/
-├── minimax/
-├── gemini/
 └── qoder/
 ```
 
@@ -93,7 +91,7 @@
 | gemini | `.gemini-bridge` | `<root>/gemini` | `GEMINI_HOME` | `GEMINI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-gemini`, `.gemini2api`, `.gemini-gateway` | — |
 | qoder | `.qoder-bridge` | `<root>/qoder` | `QODER_HOME` | `QODER_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-qoder`, `.qoder2api`, `.qoder-gateway` | — |
 
-⚠ = 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据；此后 zcode 渠道已移除，故下表 12 行对应的是当时的 12 个渠道。）`<root>` = `~/.model-bridge`。
+⚠ = 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据。）此后渠道有过增删：`zcode` 移除、`workbuddy` 拆成 `workbuddy` + `workbuddyai`、`gemini` / `minimax` 移除 —— 下表是**迁移当时**的快照，不代表当前渠道集合。`<root>` = `~/.model-bridge`。
 
 > 上表是**迁移前快照**，其中 `workbuddy` 一行指的是**当时**那个兼做国际/国内的渠道
 > （后来改名为 `workbuddyai`）。该渠道现已**拆成两条**，见 §2.4。
@@ -134,11 +132,11 @@
 
 ## 3. 偏差清单
 
-### 3.0【高】结构性：12 个顶层 dotdir 未收拢
+### 3.0【高】结构性：渠道各自的顶层 dotdir 未收拢
 
 现状每渠道在 `~/` 下各占一个 `.<cid>-bridge`。目标改为单根 `~/.model-bridge/<cid>/`。
 
-**为什么值得改**：一份覆盖变量（`MODEL_BRIDGE_HOME`）而不是 12 个；目录权限可以在根上一处设定；
+**为什么值得改**：一份覆盖变量（`MODEL_BRIDGE_HOME`）而不是每渠道一个；目录权限可以在根上一处设定；
 备份/迁移/巡检/清理都是一个路径；`ls ~/.model-bridge/` 就是完整统计，不必再数 `ls ~` 里的星号。
 
 **代价（要认）**：根目录成了单点——用户误删 `~/.model-bridge/` 会让所有渠道同时掉登录态，

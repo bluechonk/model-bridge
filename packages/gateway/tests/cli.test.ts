@@ -532,7 +532,7 @@ describe("5. 账号池与落点（也走 CLI）", () => {
   it("<cid> login 成功后账号**真的**进池（回归：syncPool 必须包 runInChannel）", async () => {
     // 曾经的 bug：`runLogin` 里裸调 `syncPool(cid)`，而 `syncPool` → `cred.load()`
     // → `paths.*` 在多渠道模式下靠 ALS 上下文解析；没有上下文时它被 catch 吞掉，
-    // 表现为「登录成功但池子是空的」（cline/codearts/minimax 实测中招）。
+    // 表现为「登录成功但池子是空的」（cline / codearts 实测中招）。
     // ⚠ 必须注册**两个以上**渠道才会暴露这个 bug：只有一个渠道时
     // `getChannel(undefined)` 仍能解析（单渠道特例），裸 `syncPool` 照样成功。
     // 真实的仓库级 CLI 注册 12 个渠道 —— 那才是 bug 的现场。

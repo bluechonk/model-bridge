@@ -33,7 +33,7 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 │       └── index.ts              ← 对外的统一出口
 ├── plugins/model-bridge/         ← **唯一的 ZCode 插件**（命令/技能/hook）
 ├── marketplace.json              ← ZCode 市场清单（单条目 → ./plugins/model-bridge）
-├── channels/                     ← 12 个渠道（每个 = 一个模型池 + 账号池）
+├── channels/                     ← 10 个渠道（每个 = 一个模型池 + 账号池）
 │   └── <cid>/                    ← 结构见下
 ├── packages/cli/                 ← **仓库级入口**（bin `model-bridge`）
 │   └── src/
@@ -182,7 +182,7 @@ export const FAMILY_ALLOWLIST: RegExp[] = [/flash/i];
 
 > 类型定义在 `packages/gateway/src/channel.ts`（`CredModule` / `UpstreamModule` /
 > `CatalogModule` / `BillingModule`）。凭据/配置的具体形态各渠道不同，故这些位置用
-> `any` —— 共享层只在**结构**上依赖它们，不做跨渠道的类型统一（那会在 12 个异构
+> `any` —— 共享层只在**结构**上依赖它们，不做跨渠道的类型统一（那会在 10 个异构
 > 渠道间制造大量摩擦）。
 
 ### 5.1 `cred.ts`
@@ -419,7 +419,7 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 
 **未实现的渠道**（`cred`/`upstream`/`catalog`/`billing` 是桩）必须让每个函数
 **立即抛错且消息含「尚未实现 + 实现依据指引」**，而不是返回空值。
-测试要锁定这个语义（见 `minimax-bridge/tests/selftest.test.ts`）。
+测试要锁定这个语义（见 `qoder-bridge/tests/selftest.test.ts`）。
 
 ---
 

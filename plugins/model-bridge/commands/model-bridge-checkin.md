@@ -39,7 +39,7 @@ model-bridge checkin --fail-if-unclaimed # 今天**明确**没签就非零退出
   没端点的渠道返回**它自己的一句说明**（如「Cline 没有签到端点 —— 每日免费额度由服务端自动发放」）。
 - **「没有端点」不是故障、退出码仍为 0**：有的是上游自动发（raccoon 的 `daily_grant`、cline 的每日
   免费额度），压根没有可点的"签到"。只有当查询/领取**抛错**（未登录、上游拒绝）时才非零退出。
-- 目前有真实端点的是 **codearts / lobsterai / loomy / minimax / raccoon / trae**；
-  workbuddyai / catpaw / cline / gemini 没有端点（返回文本说明），qoder 是**桩**（会报"尚未实现"）。
+- 目前有真实端点的是 **codearts / lobsterai / loomy / raccoon / trae**；
+  workbuddy / workbuddyai / catpaw / cline 没有端点（返回文本说明），qoder 是**桩**（会报"尚未实现"）。
 - `raccoon` 的那笔是**一次性登录奖励**，不是每日签到，输出里会点明。
 - 领取失败大多是**未登录**（`NotLoggedInError`）—— 先 `<cid> login` 再试。

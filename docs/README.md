@@ -14,7 +14,7 @@
 > 包根指针 README、目录级 AGENTS.md 三类例外）。由 `tools/verify-docs.mjs` 在 `npm test` 里强制检查。
 
 > 各 `channels/<cid>/` 目录里只留一份**指针 README**（指向本目录），
-> 免得同一份说明散在 12 个子文件夹里各改一遍。
+> 免得同一份说明散在 10 个子文件夹里各改一遍。
 > 唯一例外：`channels/catpaw/AGENTS.md`（那是给工具读的目录级指令，必须留在原处）。
 
 ---
@@ -38,15 +38,17 @@
 | `catpaw` | CatPaw（美团妙手） | [PROTOCOL.md](./protocols/catpaw/PROTOCOL.md) —— **一整套逆向记录**（见下） |
 | `cline` | Cline | [PROTOCOL.md](./protocols/cline/PROTOCOL.md) |
 | `codearts` | CodeArts（华为云） | [PROTOCOL.md](./protocols/codearts/PROTOCOL.md) |
-| `gemini` | Gemini Code Assist | [PROTOCOL.md](./protocols/gemini/PROTOCOL.md) |
 | `lobsterai` | LobsterAI（有道） | [PROTOCOL.md](./protocols/lobsterai/PROTOCOL.md) |
 | `loomy` | Loomy（讯飞） | [PROTOCOL.md](./protocols/loomy/PROTOCOL.md) |
-| `minimax` | MiniMax Code | [PROTOCOL.md](./protocols/minimax/PROTOCOL.md) |
 | `qoder` | Qoder | [PROTOCOL.md](./protocols/qoder/PROTOCOL.md)（**桩**：模块尚未实现） |
 | `raccoon` | Raccoon（商汤） | [PROTOCOL.md](./protocols/raccoon/PROTOCOL.md) |
 | `trae` | TRAE（字节） | [PROTOCOL.md](./protocols/trae/PROTOCOL.md) |
 | `workbuddy` | WorkBuddy（国内版 CodeBuddy） | 与 `workbuddyai` **同一套插件端点协议**（无独立 PROTOCOL.md）；差异与用法见 [bridges/workbuddy.md](./bridges/workbuddy.md) |
 | `workbuddyai` | WorkBuddyAI（国际版） | [findings.md](./journals/workbuddyai/findings.md) —— 该渠道的协议事实记在调研笔记里（无独立 PROTOCOL.md） |
+
+> **已移除的渠道**：`zcode`（不做该渠道）、`gemini` / `minimax`（在「`(deepseek|glm)` 家族的 flash」
+> 这条策略下池子恒为空、永远贡献不了模型）。它们的代码已删除，协议与说明文档归档在
+> [`docs/archive/`](./archive/)，不再列在活跃索引里。
 
 `catpaw` 的规格不是单文件，而是一条完整的凭据逆向链路（`PROTOCOL.md` 是它的索引）：
 
@@ -61,11 +63,10 @@
 各渠道包的使用说明（原 `channels/<cid>/README.md` 的内容）：特性、快速开始、存储与配置、
 模型映射、测试、上游约束。
 
-| 渠道 | 渠道 | 渠道 | 渠道 |
-| --- | --- | --- | --- |
-| [catpaw](./bridges/catpaw.md) | [cline](./bridges/cline.md) | [codearts](./bridges/codearts.md) | [gemini](./bridges/gemini.md) |
-| [lobsterai](./bridges/lobsterai.md) | [loomy](./bridges/loomy.md) | [minimax](./bridges/minimax.md) | [qoder](./bridges/qoder.md) |
-| [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddy](./bridges/workbuddy.md) | [workbuddyai](./bridges/workbuddyai.md) |
+| 渠道 | 渠道 | 渠道 | 渠道 | 渠道 |
+| --- | --- | --- | --- | --- |
+| [catpaw](./bridges/catpaw.md) | [cline](./bridges/cline.md) | [codearts](./bridges/codearts.md) | [lobsterai](./bridges/lobsterai.md) | [loomy](./bridges/loomy.md) |
+| [qoder](./bridges/qoder.md) | [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddy](./bridges/workbuddy.md) | [workbuddyai](./bridges/workbuddyai.md) |
 
 ## 4. 进度与调研 `docs/journals/<cid>/`
 

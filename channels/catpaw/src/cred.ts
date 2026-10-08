@@ -57,7 +57,7 @@ export const AUTH_PING_URL = "https://catx.nocode.cn/api/gateway/auth/ping";
 /**
  * `refresh()` 实际请求的 ping 地址。
  *
- * 测试/便携场景可用 `CATPAW_AUTH_PING_URL` 覆盖（照 `MINIMAX_ACCOUNT_BASE_URL`
+ * 测试/便携场景可用 `CATPAW_AUTH_PING_URL` 覆盖（照 `CLINE_API_BASE_URL`
  * 的惯例）—— 否则「离线自检」会因为一次有效性探测而变成出网测试。
  */
 function authPingUrl(): string {
