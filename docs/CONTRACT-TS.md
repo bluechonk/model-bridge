@@ -118,8 +118,8 @@ interface BridgeConfig {
   cid: string;                 // 渠道 id，如 "zcode"（日志前缀、服务名、CLI 名、**存储分层名**）
   display: string;             // 展示名，如 "ZCode"
   version: string;             // CLI 版本号
-  defaultAddr: string;         // 网关默认监听地址，如 "127.0.0.1:8803"
-  uiPort: number;              // 控制台 API 默认端口
+  defaultAddr: string;         // **单渠道独立运行**的网关默认地址，如 "127.0.0.1:8803"
+  uiPort: number;              // **单渠道独立运行**的控制台端口（仓库级路由用 REPO_DEFAULT_*）
   legacyDirs?: string[];       // 历史顶层目录名（新→旧），收拢进 <root>/<cid>/（首项通常是 ".<cid>-bridge"）
   legacyEnvVars?: string[];    // 存储根覆盖变量的历史名（新→旧）；现行名是共享的 MODEL_BRIDGE_HOME
   debugDumpEnv: string;        // 抓包落盘目录的环境变量名（值 "1" 表示用渠道内 debug/）

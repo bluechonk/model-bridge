@@ -137,9 +137,15 @@ export interface BridgeConfig {
   readonly display: string;
   /** CLI 版本号。 */
   readonly version: string;
-  /** 网关默认监听地址，如 `127.0.0.1:8803`。 */
+  /**
+   * **单渠道独立运行**时的网关默认监听地址，如 `127.0.0.1:8803`。
+   *
+   * ⚠ 仓库级（多渠道路由）网关注册多个渠道，**不看这个字段** —— 它固定用
+   * `REPO_DEFAULT_ADDR`（`127.0.0.1:8787`），所有渠道从同一个端口按 `<cid>/<模型>` 路由。
+   * 本字段只在 `channels/<cid>/dist/cli.js start|serve` 这类单渠道入口里生效。
+   */
   readonly defaultAddr: string;
-  /** 控制台 API 默认端口。 */
+  /** 单渠道独立运行时的控制台 API 默认端口（仓库级固定用 `REPO_DEFAULT_UI_PORT`）。 */
   readonly uiPort: number;
   /**
    * 历史顶层目录名（新→旧），首次访问时收拢进 `<root>/<cid>/`。
