@@ -1,0 +1,22 @@
+{
+  "name": "model-bridge",
+  "description": "Multi-channel local OpenAI-compatible model pool driven by the model-bridge CLI: session-start auto-mount, login, start/stop, channel & model-pool listing, status.",
+  "description_i18n": {
+    "en": "Multi-channel local OpenAI-compatible model pool driven by the model-bridge CLI: session-start auto-mount, login, start/stop, channel & model-pool listing, status.",
+    "zh-CN": "通过 model-bridge 命令行管理本地多渠道路由网关（模型池）：会话启动自动挂载、浏览器登录、启动/停止、渠道与模型池一览、状态查看。"
+  },
+  "version": "0.1.0",
+  "author": {
+    "name": "bluechonk"
+  },
+  "keywords": [
+    "model-pool",
+    "gateway",
+    "openai",
+    "proxy",
+    "cli",
+    "workbuddy",
+    "trae",
+    "catpaw"
+  ]
+}

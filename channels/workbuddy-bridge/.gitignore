@@ -1,0 +1,15 @@
+# 构建产物与依赖
+node_modules/
+dist/
+
+# Python 遗留（本项目已重构为 TypeScript；保留这些条目以免旧工作区残留被误提交）
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/
+
+# 运行时与工具
+.tmp/
+.planning/
+.commandcode/
+*.log

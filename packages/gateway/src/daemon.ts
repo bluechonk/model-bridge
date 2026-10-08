@@ -1,0 +1,558 @@
+/**
+ * 守护式网关管理：`start / stop / restart / logs / status / models / credits` 的实现。
+ *
+ * 进程模型：网关是**共享本地服务**，守护式常驻、不随宿主会话生灭。
+ * `start` 负责拉起（幂等：先探测 `/health`，已在跑直接返回）并落 PID 文件；
+ * `stop` 读 PID 文件杀进程树；会话期不做自动回收。
+ *
+ * 渠道差异由注册的 `Channel` 提供；本文件里的 CLI 名/日志前缀取自其 config。
+ */
+
+import { spawn, execFile } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import {
+  channelCount,
+  channels,
+  getChannel,
+  type Channel,
+  type CreditPackage,
+  type CreditsResult,
+} from "./channel.js";
+import { defaultAddr, defaultUiPort } from "./cli-consts.js";
+import { syncPool } from "./account-pool.js";
+import { runInChannel } from "./channel-context.js";
+import * as gateway from "./gateway.js";
+import * as paths from "./paths.js";
+import { baseUrlOf, displayBase } from "./portfree.js";
+
+/** start 等待网关就绪的默认时长（毫秒）；hook 场景必须快进快出。 */
+export const DEFAULT_WAIT_MS = 8000;
+const HEALTH_TIMEOUT_MS = 1500;
+
+/**
+ * 运行范围。
+ *
+ * - **渠道级**（显式 `cid`，或只注册了一个渠道）：PID/日志/偏好都在渠道层内 `<root>/<cid>/`。
+ * - **仓库级**（多渠道路由且未指定 cid）：一个网关进程服务多个渠道，它不属于任何单个
+ *   渠道，故 PID/日志/偏好落在根上 `<root>/`。
+ */
+interface Scope {
+  /** 渠道 id；仓库级为 undefined。 */
+  cid?: string;
+  /** CLI 名与日志前缀。 */
+  name: string;
+  pidPath: () => string;
+  logPath: () => string;
+  prefsPath: () => string;
+}
+
+function scopeOf(cid?: string): Scope {
+  if (cid !== undefined) {
+    const name = getChannel(cid).config.cid;
+    return {
+      cid,
+      name,
+      pidPath: () => paths.pidPath(cid),
+      logPath: () => paths.logPath(cid),
+      prefsPath: () => paths.prefsPath(cid),
+    };
+  }
+  if (channelCount() === 1) {
+    return {
+      name: channels()[0]!.config.cid,
+      pidPath: () => paths.pidPath(),
+      logPath: () => paths.logPath(),
+      prefsPath: () => paths.prefsPath(),
+    };
+  }
+  return {
+    name: "model-bridge",
+    pidPath: () => paths.rootPidPath(),
+    logPath: () => paths.rootLogPath(),
+    prefsPath: () => paths.rootPrefsPath(),
+  };
+}
+
+/** 范围内的渠道清单（仓库级 = 全部已注册渠道）。 */
+function scopeChannels(scope: Scope): Channel[] {
+  return scope.cid !== undefined ? [getChannel(scope.cid)] : channels();
+}
+
+/** 确保范围内的目录存在（渠道级 = 渠道层；仓库级 = 根）。 */
+function ensureScopeDir(scope: Scope): string {
+  if (scope.cid !== undefined) return paths.ensureDir(scope.cid);
+  if (channelCount() === 1) return paths.ensureDir();
+  const root = paths.rootDir();
+  mkdirSync(root, { recursive: true });
+  return root;
+}
+
+function readPrefs(scope: Scope): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(scope.prefsPath(), "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/** hook 自动挂载开关；缺省开启，显式写入 false 才关闭。 */
+export function autoStartEnabled(cid?: string): boolean {
+  return readPrefs(scopeOf(cid))["auto_start"] !== false;
+}
+
+/**
+ * 探测端口上的健康载荷；不是本服务时返回 null。
+ *
+ * ⚠ 必须核对 `service` 字段：同一端口上可能跑着**别的**网关（它们同样返回
+ * `{"ok":true}`）。只按 `ok` 判定会把别人的进程报成自己的「OK」，
+ * 而请求实际发去了另一个程序（实测踩过：旧 Python 实现与本实现同占 8787）。
+ * 缺失 `service` 字段的历史实现也按「他人占用」处理。
+ */
+async function probe(addr: string): Promise<Record<string, unknown> | null> {
+  try {
+    const resp = await fetch(`${baseUrlOf(addr)}/health`, {
+      signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+    });
+    if (resp.status !== 200) return null;
+    const payload = (await resp.json()) as Record<string, unknown>;
+    if (payload["ok"] !== true) return null;
+    // 接受本进程认得的**所有**身份：单渠道 `<cid>-bridge` 与仓库级 `model-bridge`。
+    // 仓库级网关同时服务各渠道，故单渠道的 status 也应把它认作「自己的网关」。
+    const service = payload["service"];
+    if (typeof service !== "string" || !gateway.knownServiceNames().includes(service)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/** 网关是否为本服务且健康（不抛异常）。 */
+export async function gatewayHealthy(addr: string = defaultAddr()): Promise<boolean> {
+  return (await probe(addr)) !== null;
+}
+
+/**
+ * 端口上若有一个**不是本服务**的 HTTP 服务，返回它的服务名（缺失时返回「未知服务」）；
+ * 否则空串。供 status 明确报告「端口被 X 占用」而不是含糊说「不可达」。
+ */
+export async function foreignServiceOnPort(addr: string = defaultAddr()): Promise<string> {
+  try {
+    const resp = await fetch(`${baseUrlOf(addr)}/health`, {
+      signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+    });
+    if (resp.status !== 200) return "";
+    const payload = (await resp.json()) as Record<string, unknown>;
+    if (payload["ok"] !== true) return "";
+    if (
+      typeof payload["service"] === "string" &&
+      gateway.knownServiceNames().includes(payload["service"])
+    ) {
+      return "";
+    }
+    const name = payload["service"];
+    return typeof name === "string" && name ? name : "未知服务";
+  } catch {
+    return "";
+  }
+}
+
+function pidAlive(pid: number): boolean {
+  if (pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readPid(scope: Scope): number {
+  try {
+    const value = Number.parseInt(readFileSync(scope.pidPath(), "utf8").trim(), 10);
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 结束进程及其子进程（node 的孙进程一并处理）。 */
+export function killTree(pid: number): void {
+  if (process.platform === "win32") {
+    execFile("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, () => {});
+    return;
+  }
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return;
+  }
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    if (!pidAlive(pid)) return;
+    const shared = new SharedArrayBuffer(4);
+    Atomics.wait(new Int32Array(shared), 0, 0, 100);
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    /* 已退出 */
+  }
+}
+
+/**
+ * 守护进程要重新执行的入口脚本。
+ *
+ * ⚠ 必须是**当前进程的入口**（`process.argv[1]`），不能是本包内的 `cli.js`：
+ * 各 bridge 的 bin 与仓库级入口都是「先注册渠道，再调 `main()`」，而共享包的
+ * `cli.js` 只是一组导出、没有自带入口调用 —— 重跑它会立刻退出（守护进程永远起不来）。
+ * 重跑自己才能带上与父进程一致的渠道集合。
+ *
+ * 回退（argv[1] 不是可执行的 JS，如 `node -e`）：本包 cli.js，由调用方接受失败。
+ */
+function cliEntry(): string {
+  const entry = process.argv[1];
+  if (entry && /\.(m?js|cjs)$/i.test(entry) && existsSync(entry)) return entry;
+  return fileURLToPath(new URL("./cli.js", import.meta.url));
+}
+
+export interface StartOptions {
+  addr?: string;
+  uiPort?: number;
+  waitMs?: number;
+  quiet?: boolean;
+  auto?: boolean;
+  force?: boolean;
+  strict?: boolean;
+  /** 渠道级操作指定渠道；省略 = 单渠道模式或仓库级（多渠道路由）。 */
+  cid?: string;
+}
+
+/**
+ * 守护式启动网关：幂等；返回 0 表示「在跑或已交由后台处理」。
+ *
+ * `auto`（hook 场景）时受 prefs 的 auto_start 开关约束；
+ * `strict` 时失败以非零码退出（默认只报告，不阻塞调用方 —— hook 不能卡会话）。
+ */
+export async function start(options: StartOptions = {}): Promise<number> {
+  const scope = scopeOf(options.cid);
+  const addr = options.addr ?? defaultAddr(options.cid);
+  const uiPort = options.uiPort ?? defaultUiPort(options.cid);
+  const waitMs = options.waitMs ?? DEFAULT_WAIT_MS;
+  const { quiet = false, auto = false, force = false, strict = false } = options;
+  const name = scope.name;
+  const log = (m: string): void => {
+    if (!quiet) console.log(`[${name}] ${m}`);
+  };
+
+  if (auto && !autoStartEnabled(options.cid)) {
+    log("auto_start 已关闭，跳过自动挂载");
+    return 0;
+  }
+
+  if ((await gatewayHealthy(addr)) && !force) {
+    log(`网关已在运行: ${baseUrlOf(addr)}`);
+    return 0;
+  }
+
+  // PID 文件指向活进程但不健康（僵尸实例）：先清掉再拉起，否则端口自愈会撞上它
+  const pid = readPid(scope);
+  if (pid && pidAlive(pid)) {
+    log(`结束不健康的守护实例 (PID ${pid})...`);
+    killTree(pid);
+    const shared = new SharedArrayBuffer(4);
+    Atomics.wait(new Int32Array(shared), 0, 0, 500);
+  }
+  try {
+    unlinkSync(scope.pidPath());
+  } catch {
+    /* 本来就没有 */
+  }
+
+  ensureScopeDir(scope);
+  // 渠道刷新过的 token 回灌池子；池子还没 active 就先把现有凭证收进来
+  for (const channel of scopeChannels(scope)) {
+    runInChannel(channel.config.cid, () => syncPool(channel.config.cid));
+  }
+  const args = [
+    cliEntry(),
+    "serve",
+    "--addr",
+    addr,
+    "--ui-port",
+    String(uiPort),
+    "--json",
+  ];
+  // ⚠ stdio 全部重定向到日志文件：守护进程没有控制台可继承，
+  //   继承父进程的 stdout 会在父进程退出后写入失败（EPIPE 刷屏）
+  const logFd = openSync(scope.logPath(), "a");
+  const child = spawn(process.execPath, args, {
+    detached: true,
+    stdio: ["ignore", logFd, logFd],
+    windowsHide: true,
+    cwd: ensureScopeDir(scope),
+  });
+  closeSync(logFd);
+  child.unref();
+  if (child.pid) writeFileSync(scope.pidPath(), `${child.pid}\n`, "utf8");
+
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) break; // 守护进程启动即退（如端口被占）
+    if (await gatewayHealthy(addr)) {
+      log(`网关已启动: ${baseUrlOf(addr)} (PID ${child.pid})`);
+      return 0;
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  log(
+    `启动后 ${waitMs / 1000}s 内未就绪（PID ${child.pid}，日志 ${scope.logPath()}）；` +
+      `用 ${name} status 查看详情`,
+  );
+  return strict ? 1 : 0;
+}
+
+/** 停止守护式网关（只管理有 PID 文件的实例，不碰第三方进程）。 */
+export async function stop(options: { quiet?: boolean; addr?: string; cid?: string } = {}): Promise<number> {
+  const { quiet = false } = options;
+  const scope = scopeOf(options.cid);
+  const pid = readPid(scope);
+  const name = scope.name;
+  const log = (m: string): void => {
+    if (!quiet) console.log(`[${name}] ${m}`);
+  };
+
+  if (!pid) {
+    if (await gatewayHealthy(options.addr ?? defaultAddr(options.cid))) {
+      log("网关在运行但没有 PID 文件（非本机守护拉起），未做处理");
+      return 1;
+    }
+    log("网关未在运行");
+    return 0;
+  }
+  killTree(pid);
+  try {
+    unlinkSync(scope.pidPath());
+  } catch {
+    /* 已被清掉 */
+  }
+  log(`已停止网关 (PID ${pid})`);
+  return 0;
+}
+
+/** 重启守护式网关（stop + start；换配置/升级后用）。 */
+export async function restart(options: StartOptions = {}): Promise<number> {
+  await stop({ quiet: true, ...(options.cid !== undefined ? { cid: options.cid } : {}) });
+  // 等端口完全释放再拉起
+  await new Promise((r) => setTimeout(r, 800));
+  return start(options);
+}
+
+function readPidValue(scope: Scope): number | null {
+  const pid = readPid(scope);
+  return pid || null;
+}
+
+/** 聚合状态：网关健康、控制台快照、守护 PID、凭证、auto_start。 */
+export async function status(
+  options: { json?: boolean; addr?: string; uiPort?: number; cid?: string } = {},
+): Promise<number> {
+  const scope = scopeOf(options.cid);
+  const addr = options.addr ?? defaultAddr(options.cid);
+  const uiPort = options.uiPort ?? defaultUiPort(options.cid);
+  const health = await probe(addr);
+  const gatewayUp = health !== null;
+  // 端口上若有别的服务（同名的旧实现 / 别的项目的网关），明确报出来
+  const foreign = gatewayUp ? "" : await foreignServiceOnPort(addr);
+
+  let consoleState: Record<string, unknown> | null = null;
+  if (gatewayUp) {
+    try {
+      const resp = await fetch(`http://127.0.0.1:${uiPort}/api/state`, {
+        signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+      });
+      if (resp.status === 200) consoleState = (await resp.json()) as Record<string, unknown>;
+    } catch {
+      consoleState = null;
+    }
+  }
+
+  // 凭证：渠道级只报该渠道；仓库级逐渠道（顶层 present = 任一有凭证）
+  const list = scopeChannels(scope);
+  const perChannel = list.map((channel) => {
+    let present = false;
+    try {
+      runInChannel(channel.config.cid, () => channel.cred.load());
+      present = true;
+    } catch {
+      present = false;
+    }
+    return { cid: channel.config.cid, display: channel.upstream.DISPLAY_NAME, present };
+  });
+  const credentialsPresent = perChannel.some((c) => c.present);
+
+  const info = {
+    gateway: {
+      addr: baseUrlOf(addr),
+      reachable: gatewayUp,
+      occupied_by: foreign,
+      implementation: health?.["implementation"] ?? null,
+      channels: list.map((c) => c.config.cid),
+    },
+    console: consoleState,
+    daemon_pid: readPidValue(scope),
+    credentials:
+      list.length === 1
+        ? { present: credentialsPresent }
+        : { present: credentialsPresent, channels: perChannel },
+    auto_start: autoStartEnabled(options.cid),
+    log: scope.logPath(),
+  };
+
+  if (options.json) {
+    console.log(JSON.stringify(info, null, 2));
+    return 0;
+  }
+  const state =
+    (consoleState?.["ui_state"] as string | undefined) ?? (gatewayUp ? "running" : "down");
+  const head = gatewayUp
+    ? `网关: ${baseUrlOf(addr)} [OK]`
+    : foreign
+      ? `网关: ${baseUrlOf(addr)} [端口被 ${foreign} 占用]`
+      : `网关: ${baseUrlOf(addr)} [不可达]`;
+  console.log(
+    `${head}  ` +
+      `状态: ${state}  守护PID: ${info.daemon_pid ?? "无"}  ` +
+      `凭证: ${credentialsPresent ? "有" : "无"}  ` +
+      `auto_start: ${info.auto_start ? "开" : "关"}`,
+  );
+  const message = consoleState?.["message"];
+  if (typeof message === "string" && message) console.log(`提示: ${message}`);
+  return 0;
+}
+
+/** 列出网关暴露的模型短名。 */
+export async function models(
+  options: { json?: boolean; addr?: string; cid?: string } = {},
+): Promise<number> {
+  const scope = scopeOf(options.cid);
+  const addr = options.addr ?? defaultAddr(options.cid);
+  let ids: string[];
+  try {
+    const resp = await fetch(`${baseUrlOf(addr)}/v1/models`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const payload = (await resp.json()) as { data?: Array<{ id?: string }> };
+    ids = (payload.data ?? []).map((m) => m.id ?? "").filter(Boolean);
+  } catch (err) {
+    if (options.json) {
+      console.log(JSON.stringify({ ok: false, error: String(err) }));
+    } else {
+      console.log(`[${scope.name}] 获取模型失败: ${String(err)}`);
+    }
+    return 1;
+  }
+  if (options.json) console.log(JSON.stringify({ ok: true, models: ids }));
+  else console.log(ids.length > 0 ? ids.join("\n") : "（无模型）");
+  return 0;
+}
+
+/**
+ * 查询账号剩余额度（直接走上游 billing，不经本地网关）。
+ *
+ * 仓库级（多渠道）时逐渠道查询：某个渠道没有额度端点或未登录只影响它自己。
+ */
+export async function credits(options: { json?: boolean; cid?: string } = {}): Promise<number> {
+  const scope = scopeOf(options.cid);
+  const list = scopeChannels(scope);
+  const name = scope.name;
+
+  const results: Array<Record<string, unknown>> = [];
+  let failures = 0;
+
+  for (const channel of list) {
+    const label = list.length === 1 ? name : channel.config.cid;
+    const { billing, cred } = channel;
+    try {
+      const info: CreditsResult = await runInChannel(channel.config.cid, () => billing.fetchCredits());
+      results.push({ cid: channel.config.cid, ...info });
+      if (list.length > 1 && !options.json) {
+        const t = info.total;
+        console.log(
+          `[${label}] 剩余 ${t.remain} / ${t.size} ${t.unit}（${t.remain_percent}%）`,
+        );
+      }
+    } catch (err) {
+      failures += 1;
+      const hint = err instanceof cred.NotLoggedInError ? `，运行 ${label} login` : "";
+      const error = `${String(err)}${hint}`;
+      results.push({ cid: channel.config.cid, ok: false, error });
+      if (list.length === 1) {
+        const payload = { ok: false, error };
+        if (options.json) console.log(JSON.stringify(payload));
+        else console.log(`[${label}] ${error}`);
+        return 1;
+      }
+      if (!options.json) console.log(`[${label}] ${error}`);
+    }
+  }
+
+  // 单一渠道：保持既有输出形状（直接打印额度明细）
+  if (list.length === 1) {
+    const only = results[0]!;
+    if (only["ok"] !== true) return 1;
+    if (options.json) {
+      console.log(JSON.stringify(only, null, 2));
+      return 0;
+    }
+    const t = only["total"] as CreditsResult["total"];
+    console.log(
+      `额度: 剩余 ${t.remain} / ${t.size} ${t.unit}` +
+        `（已用 ${t.used}，剩余 ${t.remain_percent}%）`,
+    );
+    for (const pkg of only["packages"] as CreditPackage[]) {
+      if (pkg.remain <= 0) continue;
+      const tail =
+        typeof pkg.days_left === "number" && pkg.days_left >= 0
+          ? `，${pkg.days_left} 天后到期`
+          : "";
+      console.log(`  · ${pkg.name}: ${pkg.remain}/${pkg.size}${tail}`);
+    }
+    return 0;
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify({ ok: failures === 0, channels: results }, null, 2));
+    return failures === 0 ? 0 : 1;
+  }
+  return failures === 0 ? 0 : 1;
+}
+
+/** 查看网关日志尾部（守护进程的 stdout/stderr 都落在这里）。 */
+export function logs(lines = 40, json = false, cid?: string): number {
+  const scope = scopeOf(cid);
+  const name = scope.name;
+  let text: string;
+  try {
+    text = readFileSync(scope.logPath(), "utf8");
+  } catch {
+    const payload = { ok: false, error: `日志不存在: ${scope.logPath()}` };
+    if (json) console.log(JSON.stringify(payload));
+    else console.log(`[${name}] ${payload.error}`);
+    return 1;
+  }
+  const tail = text.split("\n").slice(-lines);
+  if (json) {
+    console.log(JSON.stringify({ ok: true, log: scope.logPath(), lines: tail }));
+  } else {
+    console.log(`--- ${scope.logPath()} 最后 ${tail.length} 行 ---`);
+    console.log(tail.join("\n"));
+  }
+  return 0;
+}

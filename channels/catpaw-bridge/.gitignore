@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# 本地临时产物与备份
+.tmp
+.bak
+
+# 第三方参考实现（clone 下来的学习材料，不入库）
+reference/
+
+*.log
+.DS_Store

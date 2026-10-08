@@ -1,0 +1,42 @@
+{
+  "name": "@model-bridge/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "各渠道 bridge 共享的 gateway 层（网关/守护/无窗口运行/控制台/SSE/路径），渠道差异通过 Channel 注册表注入",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./channel": {
+      "types": "./dist/channel.d.ts",
+      "default": "./dist/channel.js"
+    },
+    "./paths": {
+      "types": "./dist/paths.d.ts",
+      "default": "./dist/paths.js"
+    },
+    "./cli-consts": {
+      "types": "./dist/cli-consts.d.ts",
+      "default": "./dist/cli-consts.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test tests/*.test.ts"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.2"
+  }
+}

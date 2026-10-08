@@ -1,0 +1,21 @@
+{
+  "description": "Session start: idempotently ensure the local model-pool gateway is running (respects the auto_start preference in ~/.model-bridge/prefs.json).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "bash",
+            "args": [
+              "${ZCODE_PLUGIN_ROOT}/hooks/session-start.sh"
+            ],
+            "timeoutMs": 10000,
+            "statusMessage": "确保模型池网关在运行"
+          }
+        ]
+      }
+    ]
+  }
+}

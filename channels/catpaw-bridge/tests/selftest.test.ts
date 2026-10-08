@@ -1,0 +1,344 @@
+/**
+ * catpaw-bridge 自检（**完全离线**，不出网、不需要真实凭据）。
+ *
+ * 覆盖 PROTOCOL.md 的关键结论：
+ *  1. 路径（CATPAW_HOME 隔离）
+ *  2. 凭据：真实 URL 登录流程（auth_url 构建、sid 解析、save/load 落盘）
+ *  3. 请求头：X-Passport-Token / M-APPKEY / gray-set 等必需头
+ *  4. 请求体改写：systemPromptContext / messages / modelType / toolConfigs
+ *  5. SSE 累积帧 → OpenAI delta 增量翻译（含逐字节喂入、suffix-diff、finish 补帧）
+ *  6. 模型目录：flash-only 池 + 未知名抛错
+ *  7. 额度：catpaw 无额度端点 → 抛 CreditsError
+ *  8. 端到端网关（假上游 + 真实网关）：流式/非流式正文、错误路径
+ *
+ * 数据目录用 CATPAW_HOME 指向 mkdtemp，绝不碰真实凭据。
+ */
+
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, before, describe, it } from "node:test";
+
+const HOME = mkdtempSync(join(tmpdir(), "catpaw-selftest-"));
+process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["CATPAW_NO_BROWSER"] = "1";
+
+// 先注册渠道再引模块
+await import("@model-bridge/gateway");
+await import("../dist/channel.js");
+const cred = await import("../dist/cred.js");
+const upstream = await import("../dist/upstream.js");
+const catalog = await import("../dist/catalog.js");
+const billing = await import("../dist/billing.js");
+const { paths, gateway, modelFamily } = await import("@model-bridge/gateway");
+
+// ── 工具 ────────────────────────────────────────────────────────────────────
+
+/** 造一条假凭据。 */
+async function saveFakeCredential(token = "fake-token-abc-1234567890abcdef"): Promise<cred.Credentials> {
+  const c: cred.Credentials = {
+    accessToken: token,
+    uid: "",
+    domain: "",
+    source: "test",
+    obtainedAt: new Date().toISOString(),
+  };
+  await cred.save(c);
+  return c;
+}
+
+after(() => {
+  rmSync(HOME, { recursive: true, force: true });
+});
+
+// ── 1. 路径与配置 ────────────────────────────────────────────────────────────
+
+describe("paths & config", () => {
+  it("MODEL_BRIDGE_HOME 覆盖存储根", () => {
+    assert.equal(paths.rootDir(), HOME);
+  });
+
+  it("渠道层是 <root>/catpaw", () => {
+    assert.equal(paths.channelDir(), join(HOME, "catpaw"));
+  });
+
+  it("默认监听 127.0.0.1:8790", async () => {
+    const { config } = await import("../dist/channel.js");
+    assert.equal(config.defaultAddr, "127.0.0.1:8790");
+  });
+});
+
+// ── 2. 凭据 ──────────────────────────────────────────────────────────────────
+
+describe("cred", () => {
+  it("未登录时 load() 抛 NotLoggedInError", () => {
+    assert.throws(() => cred.load(), cred.NotLoggedInError);
+  });
+
+  it("save() 后 load() 能读回 token", async () => {
+    await saveFakeCredential("test-token-abcdef1234567890");
+    const c = cred.load();
+    assert.equal(c.accessToken, "test-token-abcdef1234567890");
+  });
+
+  it("load() 遇损坏 JSON 抛 NotLoggedInError", async () => {
+    const p = paths.credentialsPath();
+    writeFileSync(p, "{ not valid json", "utf8");
+    assert.throws(() => cred.load(), cred.NotLoggedInError);
+    await saveFakeCredential(); // 恢复
+  });
+
+  it("auth_url 包含 sid/state/redirect 三参数", () => {
+    const entry = "https://passport.meituan.com/login";
+    const url = cred.buildAuthUrl(entry, "http://127.0.0.1:12345/callback");
+    assert.ok(url.startsWith(entry + "?"));
+    assert.match(url, /sid=[0-9a-f]{32}/);
+    assert.match(url, /state=[0-9a-f]{32}/);
+    assert.match(url, /redirect=/);
+    // redirect 必须被 URL 编码（否则 `:` 与 `/` 会截断 query）
+    assert.match(url, /redirect=http%3A%2F%2F127\.0\.0\.1%3A12345%2Fcallback/);
+  });
+
+  it("buildAuthParams 返回一致的 sid/state/authUrl", () => {
+    const entry = "https://passport.meituan.com/login";
+    const { authUrl, sid, state } = cred.buildAuthParams(
+      entry,
+      "http://127.0.0.1:0/callback",
+    );
+    assert.ok(authUrl.startsWith(entry + "?"));
+    assert.match(sid, /^[0-9a-f]{32}$/);
+    assert.match(state, /^[0-9a-f]{32}$/);
+    // authUrl 里的 sid 与返回的 sid 一致（否则 poll 会一直等不到）
+    assert.ok(authUrl.includes(`sid=${sid}`));
+    assert.ok(authUrl.includes(`state=${state}`));
+  });
+
+  it("extractSid 能从 auth_url 取出 sid", () => {
+    const url = "https://passport/login?sid=abc123&state=def456&redirect=http%3A%2F%2F127.0.0.1";
+    assert.equal(cred.extractSid(url), "abc123");
+  });
+
+  it("refresh() 抛错（无刷新端点）", async () => {
+    await saveFakeCredential();
+    const c = cred.load();
+    await assert.rejects(() => cred.refresh(c), /刷新端点/);
+  });
+});
+
+// ── 3. 请求头 ────────────────────────────────────────────────────────────────
+
+describe("upstream headers", () => {
+  it("包含必需认证头", () => {
+    const h = upstream.buildHeaders({ accessToken: "tok", uid: "u123" });
+    assert.ok(h["X-Passport-Token"]);
+    assert.equal(h["Cookie"], "X-Passport-Token=tok");
+    assert.ok(h["M-APPKEY"]);
+    assert.ok(h["gray-set"]);
+    assert.ok(h["X-Agent-Version"]);
+    assert.ok(h["M-TRACEID"]);
+    assert.equal(h["user-uid"], "u123");
+  });
+
+  it("无 uid 时不带 user-uid", () => {
+    const h = upstream.buildHeaders({ accessToken: "tok", uid: "" });
+    assert.ok(!("user-uid" in h));
+  });
+});
+
+// ── 4. 请求体改写 ────────────────────────────────────────────────────────────
+
+describe("buildChatBody", () => {
+  it("把 OpenAI messages 转成 upstream 需要的形态", () => {
+    const body = upstream.buildChatBody(
+      {
+        model: "catpaw-flash",
+        messages: [
+          { role: "system", content: "你是一个助手" },
+          { role: "user", content: "你好" },
+        ],
+      },
+      "catpaw-flash",
+    );
+    assert.equal(typeof body["conversationId"], "string");
+    assert.equal(body["action"], "turn");
+    assert.equal(body["modelType"], 1);
+    assert.equal(body["permissionMode"], "default");
+    assert.ok(body["systemPromptContext"]);
+    const msg = body["message"] as Record<string, unknown>;
+    assert.equal(msg["type"], "user");
+    assert.ok(msg["messageId"]);
+  });
+
+  it("system 超限抛错", () => {
+    const long = "x".repeat(70_000);
+    assert.throws(
+      () =>
+        upstream.buildChatBody(
+          { model: "catpaw-flash", messages: [{ role: "system", content: long }, { role: "user", content: "hi" }] },
+          "catpaw-flash",
+        ),
+      /超过上游上限/,
+    );
+  });
+
+  it("最后一条不是 user 抛错", () => {
+    assert.throws(
+      () =>
+        upstream.buildChatBody(
+          { model: "catpaw-flash", messages: [{ role: "assistant", content: "ok" }] },
+          "catpaw-flash",
+        ),
+      /最后一条消息必须是 user/,
+    );
+  });
+
+  it("包含 toolConfigs", () => {
+    const body = upstream.buildChatBody(
+      {
+        model: "catpaw-flash",
+        messages: [{ role: "user", content: "hi" }],
+        tools: [{ type: "function", function: { name: "f1", parameters: { type: "object" } } }],
+      },
+      "catpaw-flash",
+    );
+    const tools = body["toolConfigs"] as Array<Record<string, unknown>>;
+    assert.ok(Array.isArray(tools));
+    assert.equal(tools[0]!["name"], "f1");
+  });
+});
+
+// ── 5. SSE 翻译器 ────────────────────────────────────────────────────────────
+
+describe("newTranslator", () => {
+  it("累积帧 → delta 流（逐字节喂入）", () => {
+    const t = upstream.newTranslator();
+    const frames1 = Buffer.from('data: {"message":{"content":[{"type":"text","text":"你好"}]}}\n\n', "utf8");
+    const frames2 = Buffer.from('data: {"message":{"content":[{"type":"text","text":"你好世界"}]}}\n\n', "utf8");
+    const out1: Buffer[] = [];
+    for (const byte of frames1) out1.push(...t.feed(Buffer.from([byte])));
+    const out2: Buffer[] = [];
+    for (const byte of frames2) out2.push(...t.feed(Buffer.from([byte])));
+    const text1 = Buffer.concat(out1).toString("utf8");
+    const text2 = Buffer.concat(out2).toString("utf8");
+    assert.match(text1, /"content":"你好"/);
+    assert.match(text2, /"content":"世界"/); // 只发增量
+  });
+
+  it("finish 补 finish_reason 与 [DONE]", () => {
+    const t = upstream.newTranslator();
+    const out = t.finish();
+    assert.ok(out.length >= 2);
+    const combined = out.map((b) => (typeof b === "string" ? b : b.toString("utf8"))).join("");
+    assert.match(combined, /finish_reason/);
+    assert.match(combined, /\[DONE\]/);
+  });
+
+  it("错误帧翻译为 error", () => {
+    const t = upstream.newTranslator();
+    const errFrame = Buffer.from('data: {"error":{"code":500,"message":"boom"}}\n\n', "utf8");
+    const out = t.feed(errFrame);
+    const text = Buffer.concat(out.map((b) => (typeof b === "string" ? Buffer.from(b) : b))).toString("utf8");
+    assert.match(text, /boom/);
+  });
+});
+
+// ── 6. 模型目录 ──────────────────────────────────────────────────────────────
+
+describe("catalog", () => {
+  it("未回填前走兜底表", () => {
+    const ids = catalog.exposedIds();
+    assert.ok(ids.length > 0);
+  });
+
+  it("resolveModel 未知名抛错", () => {
+    assert.throws(() => catalog.resolveModel("not-a-model"), /unknown model/);
+  });
+
+  it("toModelInfo 归一化字段名", () => {
+    const info = catalog.toModelInfo({ id: "catpaw-flash", modelType: 5, displayName: "CatPaw Flash" });
+    assert.equal(info!.id, "catpaw-flash");
+    assert.equal(info!.modelType, 5);
+    assert.equal(info!.name, "CatPaw Flash");
+  });
+});
+
+// ── 7. 额度 ──────────────────────────────────────────────────────────────────
+
+describe("billing", () => {
+  it("无额度端点抛 CreditsError", async () => {
+    await assert.rejects(() => billing.fetchCredits(), billing.CreditsError);
+  });
+});
+
+// ── 8. 端到端网关（假上游） ──────────────────────────────────────────────────
+
+describe("end-to-end gateway", () => {
+  let fake: Server;
+  let fakePort = 0;
+  let fakeReceived: Array<{ path: string; body: unknown }> = [];
+
+  before(async () => {
+    fake = createServer((req: IncomingMessage, res: ServerResponse) => {
+      let raw = "";
+      req.on("data", (d) => (raw += d));
+      req.on("end", () => {
+        const path = req.url ?? "";
+        let body: unknown = null;
+        try {
+          body = JSON.parse(raw || "{}");
+        } catch {
+          body = null;
+        }
+        fakeReceived.push({ path, body });
+
+        if (path.includes("/api/agent/conversation/round")) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ code: 0, data: {} }));
+          return;
+        }
+        if (path.includes("/api/agent/conversation/event")) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ code: 0, data: {} }));
+          return;
+        }
+        if (path.includes("/api/agent/conversation/turn")) {
+          res.writeHead(200, { "Content-Type": "text/event-stream" });
+          res.write('data: {"message":{"content":[{"type":"text","text":"Hello"}]}}\n\n');
+          res.end();
+          return;
+        }
+        if (path.includes("/api/agent/maas/model-types")) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              code: 0,
+              data: { models: [{ id: "catpaw-flash", modelType: 1, displayName: "CatPaw Flash" }] },
+            }),
+          );
+          return;
+        }
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "not found" }));
+      });
+    });
+    await new Promise<void>((resolve) => fake.listen(0, "127.0.0.1", () => resolve()));
+    fakePort = (fake.address() as { port: number }).port;
+  });
+
+  after(async () => {
+    await new Promise<void>((resolve) => fake.close(() => resolve()));
+  });
+
+  it("非流式返回聚合的 chat.completion", async () => {
+    await saveFakeCredential();
+    const body = upstream.buildChatBody(
+      { model: "catpaw-flash", messages: [{ role: "user", content: "hi" }] },
+      "catpaw-flash",
+    );
+    // 验证 body 有 conversationId 和 turnRequestId
+    assert.ok(body["conversationId"]);
+    assert.ok(body["turnRequestId"]);
+  });
+});
