@@ -59,9 +59,13 @@ npm run build                     # 全仓一次编译（tsc -b，按依赖图�
 npm test                          # 两个校验器 + 全部包的测试
 npm run test:all                  # build + test
 npm run build --workspace=channels/<cid>    # 只编一个渠道（也走引用链）
-node packages/cli/dist/cli.js --help        # 仓库级 CLI（多渠道路由）
-node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试用）
+node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，**唯一网关端口 8787**（REPO_DEFAULT_ADDR）
+node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用；只有它才用该渠道的 defaultAddr）
 ```
+
+**端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，
+控制台 8788），12 个渠道按 `<cid>/<模型>` 从它路由；`BridgeConfig.defaultAddr`/`uiPort`
+只在**单渠道独立运行**（`channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
 
 **构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出 14 个包），
 公共编译选项在根 `tsconfig.base.json` 里（各包 `extends` 它）；`tsc -b` 一次调度整个依赖图，
