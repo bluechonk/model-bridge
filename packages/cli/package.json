@@ -30,8 +30,7 @@
     "qoder-bridge": "*",
     "raccoon-bridge": "*",
     "trae-bridge": "*",
-    "workbuddy-bridge": "*",
-    "zcode-bridge": "*"
+    "workbuddy-bridge": "*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

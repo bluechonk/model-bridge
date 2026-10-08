@@ -4,13 +4,13 @@
 历史名迁移。**凭证/配置的字段内容不在此列** —— 各 `channels/<cid>/` 自己决定
 （见 `CONTRACT-TS.md` §5）。
 
-适用范围：工作区内全部 12 个渠道包 + 共享包 `packages/gateway`。
+适用范围：工作区内的 11 个渠道包 + 共享包 `packages/gateway`。（2026-10-08 快照：当时为 12 个，zcode 渠道已移除。）
 
 ---
 
 ## 0. 实施状态（2026-10-08 已落地）
 
-本规范已在工作区落地，12 个渠道全部对齐，`npm test` 全绿（含存储专项测试与规范校验器）。
+本规范已在工作区落地，全部渠道对齐，`npm test` 全绿（含存储专项测试与规范校验器）。
 
 | 项 | 落地结果 |
 |---|---|
@@ -48,7 +48,6 @@
 │   ├── state/                   ← 跨重启保持
 │   └── debug/                   ← 抓包落盘（opt-in）
 ├── catpaw/
-├── zcode/
 ├── trae/
 ├── codearts/
 ├── lobsterai/
@@ -94,7 +93,7 @@
 | gemini | `.gemini-bridge` | `<root>/gemini` | `GEMINI_HOME` | `GEMINI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-gemini`, `.gemini2api`, `.gemini-gateway` | — |
 | qoder | `.qoder-bridge` | `<root>/qoder` | `QODER_HOME` | `QODER_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-qoder`, `.qoder2api`, `.qoder-gateway` | — |
 
-⚠ = 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据。）`<root>` = `~/.model-bridge`。
+⚠ = 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据；此后 zcode 渠道已移除，故下表 12 行对应的是当时的 12 个渠道。）`<root>` = `~/.model-bridge`。
 
 ### 2.3 目录外的落盘点（唯一一处）
 
@@ -120,7 +119,7 @@
 **为什么值得改**：一份覆盖变量（`MODEL_BRIDGE_HOME`）而不是 12 个；目录权限可以在根上一处设定；
 备份/迁移/巡检/清理都是一个路径；`ls ~/.model-bridge/` 就是完整统计，不必再数 `ls ~` 里的星号。
 
-**代价（要认）**：根目录成了单点——用户误删 `~/.model-bridge/` 会让 12 个渠道同时掉登录态，
+**代价（要认）**：根目录成了单点——用户误删 `~/.model-bridge/` 会让所有渠道同时掉登录态，
 而现状下各渠道是隔离的。隔离性可以用「每渠道一个 `0700` 子目录 + 只写自己那一层」来补偿
 （见 §4.6）。
 
@@ -307,16 +306,16 @@ fileMigrations?: Array<{ from: string; to?: string; action?: "delete" }>;
 
 ## 7. 验收清单
 
-- [ ] 存储根唯一：12 个渠道都落在 `~/.model-bridge/<cid>/`，`BridgeConfig` 不再有 `dirName`
+- [ ] 存储根唯一：所有渠道都落在 `~/.model-bridge/<cid>/`，`BridgeConfig` 不再有 `dirName`
 - [ ] `MODEL_BRIDGE_HOME` 可整体搬移根；`<CID>_HOME` 仍被识别（deprecation 日志）
-- [ ] 12 个渠道 `legacyDirs` 中不再出现 `.zcode-workbuddy-bridge`（workbuddy 自身除外）
+- [ ] 各渠道 `legacyDirs` 中不再出现 `.zcode-workbuddy-bridge`（workbuddy 自身除外）
 - [ ] 迁移在「新旧并存」时补齐而非搁置（造一个并存场景做回归测试）
 - [ ] workbuddy 调试变量为 `WORKBUDDY_DEBUG_DUMP`；`WBAI_DEBUG_DUMP` 在 legacy 列表
 - [ ] codearts 缓存落在 `<root>/codearts/cache/`，不再写 `~/.cache/deveco/`
 - [ ] `~/.catpaw-bridge/daemon.pid` 收敛为 `<root>/catpaw/gateway.pid`
 - [ ] 权限：根 0700、层 0700、凭证 0600
 - [ ] `tools/verify-storage.mjs` 全绿并接入工作区 `npm test`
-- [ ] `bridge paths --all` 一张表列出 12 个渠道的落点与状态
+- [ ] `model-bridge paths --all` 一张表列出全部渠道的落点与状态
 - [ ] `npm run build --workspaces && npm run test --workspaces` 退出码 0
 
 ---

@@ -4,7 +4,7 @@
 
 ## 1. 这是什么
 
-一个本地 OpenAI 兼容网关 + 12 个渠道，**仓库本身就是一个 ZCode 插件**。
+一个本地 OpenAI 兼容网关 + 11 个渠道，**仓库本身就是一个 ZCode 插件**。
 每个渠道在下游是一个**池子**：模型池（`catalog` + flash 白名单）+ 账号池（同渠道多账号）。
 
 ```
@@ -64,7 +64,7 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 ```
 
 **端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，
-控制台 8788），12 个渠道按 `<cid>/<模型>` 从它路由；`BridgeConfig.defaultAddr`/`uiPort`
+控制台 8788），11 个渠道按 `<cid>/<模型>` 从它路由；`BridgeConfig.defaultAddr`/`uiPort`
 只在**单渠道独立运行**（`channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
 
 **构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出 14 个包），
