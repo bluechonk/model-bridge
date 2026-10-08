@@ -68,8 +68,22 @@ export {
 } from "./catalog-cache.js";
 export type { CachedModel } from "./catalog-cache.js";
 
-// 模型池（对外 id 恒小写 + 大小写不敏感解析）
-export { poolIds, qualifiedId, resolvePoolModel } from "./model-pool.js";
+// 渠道目录里的名字 → 上游 slug
+export { resolvePoolModel } from "./model-pool.js";
+
+// 公共模型池：三个跨渠道模型 + 归一化匹配
+export {
+  POOL_MODELS,
+  canonicalModelId,
+  asPoolModel,
+  poolCandidates,
+  type PoolModel,
+  type PoolCandidate,
+} from "./pool-targets.js";
+
+// 公共模型池的账本（账单已用量 + 失败冷却；落 <root>/pool-usage.json）
+export * as poolUsage from "./pool-usage.js";
+export type { PoolLedger, ChannelLedger, RefreshResult } from "./pool-usage.js";
 
 // 渠道上下文（调用渠道模块前包一层，让渠道内部的 paths.* 解析到自己的落点）
 export { runInChannel, withinChannel, activeCid } from "./channel-context.js";
@@ -83,8 +97,8 @@ export {
   REPO_DEFAULT_UI_PORT,
 } from "./cli-consts.js";
 
-// 模型池路由与服务身份
-export { serviceName, knownServiceNames, resolveTarget, IMPLEMENTATION } from "./gateway.js";
+// 服务身份（池路由入口在 pool-targets.ts）
+export { serviceName, knownServiceNames, IMPLEMENTATION } from "./gateway.js";
 
 // 落点与凭据路径（渠道模块常用）
 export {
@@ -101,6 +115,7 @@ export {
   rootFile,
   rootPidPath,
   rootLogPath,
+  poolUsagePath,
   cacheDir,
   stateDir,
   debugDir,

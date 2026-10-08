@@ -312,13 +312,26 @@ describe("6. 端到端网关", () => {
   });
 
   it("流式对话：正常出字", async () => {
-    // 顺带验证旧短名仍可用（老客户端配置写 deepseek-flash 也不断）
     const text = await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-flash",
+      model: "deepseek-v4.1-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
     assert.equal(text, "网关通了");
+  });
+
+  it("旧短名不再是可用的模型 id（网关只认池内三个规范名）", async () => {
+    // 渠道自己的 catalog 仍能解析旧短名，但**网关入口**只接受池内 id —— 刻意的破坏性更新。
+    const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "deepseek-flash",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
+    });
+    assert.equal(resp.status, 400);
   });
 
   it("上游约束：注入 system + 强制 stream + 模型名映射", async () => {

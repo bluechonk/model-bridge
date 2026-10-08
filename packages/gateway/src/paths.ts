@@ -253,3 +253,13 @@ export function rootPidPath(): string {
 export function rootLogPath(): string {
   return rootFile(FILES.log);
 }
+
+/**
+ * 公共模型池的渠道账本路径（`<root>/pool-usage.json`）。
+ *
+ * 它记录**所有渠道**的账单已用量与请求成败，不属于任何单个渠道，故落在根级 ——
+ * 与 `<cid>/` 分层并列（见 docs/STORAGE-CONVENTION.md §4）。
+ */
+export function poolUsagePath(): string {
+  return rootFile("pool-usage.json");
+}

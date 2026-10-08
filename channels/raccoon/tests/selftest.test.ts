@@ -909,7 +909,7 @@ describe("12. 端到端网关（假上游 + 真实网关）", () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "sn-glm-5-3",
+        model: "glm-5.3-flash",
         messages: [{ role: "user", content: "hi" }],
         stream: true,
         reasoning_effort: "off",
@@ -936,7 +936,7 @@ describe("12. 端到端网关（假上游 + 真实网关）", () => {
     assert.deepEqual(finishes, ["stop"]);
 
     assert.equal(st.chatBody?.["stream"], true);
-    assert.equal(st.chatBody?.["model"], "sn-glm-5-3");
+    assert.equal(st.chatBody?.["model"], "sn-glm-5-3-flash", "池 id 解析成该渠道目录里的名字");
     assert.deepEqual(st.chatBody?.["extra_body"], { thinking: { type: "disabled" } });
     assert.equal("reasoning_effort" in (st.chatBody ?? {}), false, "reasoning_effort 实测无效果 → 不原样透传");
 
@@ -950,7 +950,7 @@ describe("12. 端到端网关（假上游 + 真实网关）", () => {
   it("非流式：本层聚合成 chat.completion（带 usage）", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "sn-glm-5-3", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -995,7 +995,7 @@ describe("13. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "sn-glm-5-3",
+          model: "glm-5.3-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),

@@ -1107,19 +1107,17 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     await gw?.close().catch(() => {});
   });
 
-  it("/v1/models 返回目录 id；/health 报告 ok 与登录状态", async () => {
+  it("/v1/models 返回三个池模型；/health 报告 ok 与登录状态", async () => {
     const models = (await (await fetch(`http://${gw.addr}/v1/models`)).json()) as {
       data: Array<{ id: string }>;
     };
     const ids = models.data.map((m) => m.id);
-    // 池策略 (deepseek|glm)×flash：目录里只有 deepseek-v4.1-flash 两道闸门都过；
-    // 免费池的 mimo-v2.6-flash（带 flash 但不是这两族）与非 flash 的 glm-4.7 都被挡在池外
-    assert.deepEqual(
-      ids,
-      ["deepseek/deepseek-v4.1-flash"],
-      `池策略 (deepseek|glm)×flash，实际 ${ids.join(",")}`,
+    // 对外只有三个公共模型 id（不带渠道前缀），与「本渠道目录里有什么」无关
+    assert.deepEqual(ids, ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"]);
+    assert.ok(
+      ids.every((id) => !id.includes("/")),
+      "不再暴露 <cid>/<模型> 形态",
     );
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能是 flash 家族");
     assert.ok(
       catalog.details().some((r) => r["id"] === "z-ai/glm-4.7"),
       "被过滤的非 flash 模型仍在底层目录（过滤在呈现层，不是丢数据）",
@@ -1132,7 +1130,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
 
   it("流式：正文 + delta.reasoning 透传 + 空 tool_calls 被剔除", async () => {
     const out = await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "cline-free/mimo-v2.6-flash",
+      model: "deepseek-v4.1-flash",
       messages: [
         { role: "system", content: "身份" },
         { role: "user", content: "hi" },
@@ -1148,7 +1146,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
 
   it("上游真实收到的头与体（含 workos: 前缀与 4 条伪装头）", async () => {
     await readSse(`http://${gw.addr}/v1/chat/completions`, {
-      model: "cline-free/mimo-v2.6-flash",
+      model: "deepseek-v4.1-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
@@ -1157,7 +1155,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     assert.ok(String(st.chatHeaders["authorization"]).startsWith("Bearer workos:"), "必须带 workos: 前缀");
     assert.equal(st.chatHeaders["x-client-type"], "cline-sdk");
     assert.equal(st.chatHeaders["accept"], "text/event-stream");
-    assert.equal(st.chatBody?.["model"], "cline-free/mimo-v2.6-flash");
+    assert.equal(st.chatBody?.["model"], "deepseek/deepseek-v4.1-flash", "池 id 解析成目录里的上游 slug");
     assert.equal(st.chatBody?.["stream"], true);
     const messages = st.chatBody?.["messages"] as Array<{ role: string }>;
     // Cline 没有「首条必须 system」的硬约束 → 客户端没给 system 就不注入
@@ -1168,7 +1166,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "cline-free/mimo-v2.6-flash",
+        model: "deepseek-v4.1-flash",
         messages: [{ role: "user", content: "hi" }],
       }),
       headers: { "Content-Type": "application/json" },
@@ -1224,7 +1222,7 @@ describe("10. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "cline-free/mimo-v2.6-flash",
+          model: "deepseek-v4.1-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),

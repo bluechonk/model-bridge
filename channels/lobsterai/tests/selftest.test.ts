@@ -958,8 +958,11 @@ describe("9. 端到端网关（假上游）", () => {
       data: Array<{ id: string }>;
     };
     const ids = models.data.map((m) => m.id);
-    assert.deepEqual(ids, ["deepseek-v4-flash"], "白名单过滤后只剩 flash（kimi-k3 / glm-5.2 被挡在池外）");
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能有 flash 模型");
+    assert.deepEqual(
+      ids,
+      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
+      "对外只有三个池模型（不带渠道前缀）",
+    );
     assert.ok(
       catalog.details().some((r) => r["id"] === "kimi-k3"),
       "被过滤的远端条目仍在底层目录（过滤在呈现层，不是丢数据）",
@@ -973,7 +976,7 @@ describe("9. 端到端网关（假上游）", () => {
     const server = fake.current!;
     server.captured.length = 0;
     const text = await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "kimi-k3",
+      model: "deepseek-v4-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
@@ -983,14 +986,14 @@ describe("9. 端到端网关（假上游）", () => {
     assert.equal(record.headers["x-lobsterai-client-capabilities"], upstream.CLIENT_CAPABILITIES);
     assert.ok(record.headers["x-lobsterai-client-version"], "上游必须收到版本头");
     assert.equal(record.body!["stream"], true);
-    assert.equal(record.body!["model"], "kimi-k3");
+    assert.equal(record.body!["model"], "deepseek-v4-flash", "池 id 即该渠道目录里的名字");
     assert.equal(record.body!["tool_choice"], undefined);
   });
 
   it("非流式：本层聚合成 chat.completion", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "kimi-k3", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -1028,7 +1031,7 @@ describe("10. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "kimi-k3",
+          model: "deepseek-v4-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),

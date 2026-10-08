@@ -38,6 +38,8 @@
 ```
 ~/.model-bridge/                 ← 唯一存储根（MODEL_BRIDGE_HOME 可覆盖）
 ├── prefs.json                   ← （可选）跨渠道共享偏好
+├── gateway.pid / gateway.log    ← 仓库级网关的 PID 与日志（不属于任何渠道）
+├── pool-usage.json              ← 公共模型池的渠道账本（账单已用量 + 失败冷却）
 ├── workbuddyai/                 ← cid 层
 │   ├── credentials.json
 │   ├── upstream.json
@@ -239,6 +241,10 @@ if (existsSync(target)) return target;   // 新目录在 → 直接返回，lega
 9. **端口**：每渠道独占一组，登记在 `BridgeConfig.defaultAddr` / `uiPort`，不与他渠道重复。
 10. **（可选）根级共享偏好**：`<root>/prefs.json` 放跨渠道设置；渠道内 `prefs.json` 只放
     本渠道设置。本期可不实现，但预留位置，避免以后又想加一层。
+11. **根级共享运行时文件**：属于「全部渠道」而不属于任一渠道的文件放根上 ——
+    `gateway.pid` / `gateway.log`（仓库级网关）、`pool-usage.json`（公共模型池的渠道账本：
+    账单已用量 + 失败冷却，见 `docs/POOL-ARCHITECTURE.md` §2.3）。走 `paths.rootFile()`，
+    文件名同样受 §4.7 的校验。
 
 ---
 

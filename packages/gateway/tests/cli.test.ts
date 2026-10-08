@@ -146,7 +146,8 @@ function makeChannel(cid: string, opts: FakeSigninSpec): Channel {
       newTranslator: () => ({ feed: (c: Buffer) => [c], finish: () => [] }),
     },
     catalog: {
-      exposedIds: () => (cid === "alpha" ? ["model-one", "Mixed-Two"] : ["solo"]),
+      exposedIds: () =>
+        cid === "alpha" ? ["DeepSeek-V4-Flash", "glm-5.3-flash"] : ["deepseek-v4.1-flash"],
       resolveModel: (n: string) => n,
     },
     billing,
@@ -159,8 +160,8 @@ let savedRoot: string | undefined;
 /** 远端目录层的假渠道：`refresh()` 记次数，并模拟成功/失败/不可用。 */
 const refreshState = {
   calls: 0,
-  /** 下一次 `refresh()` 会从上游拿到的内容。 */
-  upstream: ["remote-flash-one"] as string[],
+  /** 下一次 `refresh()` 会从上游拿到的内容（写成**能进池**的形态）。 */
+  upstream: ["deepseek-v4-flash-0731"] as string[],
   /** 设了就让 `refresh()` 抛这个错（模拟未登录 / 上游拒绝）。 */
   failWith: null as string | null,
   /**
@@ -188,7 +189,7 @@ function makeRemoteChannel(cid: string): Channel {
       const cached = readCatalogCache<{ id: string }>(cid);
       refreshState.current = cached ? cached.map((m) => m.id) : [];
     }
-    return refreshState.current.length > 0 ? [...refreshState.current] : ["builtin-fallback"];
+    return refreshState.current.length > 0 ? [...refreshState.current] : ["deepseek-v4-flash"];
   };
   (ch.catalog as { refresh?: () => Promise<void> }).refresh = async () => {
     refreshState.calls += 1;
@@ -248,26 +249,41 @@ describe("1. 常见命令与帮助", () => {
   });
 });
 
-describe("2. 模型池（model 分组与兼容命令）", () => {
-  it("model list 输出全部渠道与带前缀的小写模型 id", async () => {
+describe("2. 模型池（model 分组）", () => {
+  it("model list 是池视图：三个模型，各自挂候选渠道", async () => {
     const r = await run(["model", "list", "--json"]);
     assert.equal(r.code, 0);
-    const parsed = JSON.parse(r.out) as Array<{ cid: string; models: string[] }>;
-    assert.deepEqual(parsed.map((x) => x.cid), ["alpha", "beta"]);
-    assert.deepEqual(parsed[0]!.models, ["alpha/model-one", "alpha/mixed-two"]);
+    const parsed = JSON.parse(r.out) as Array<{
+      model: string;
+      candidates: Array<{ cid: string; exposed_id: string }>;
+    }>;
+    assert.deepEqual(
+      parsed.map((x) => x.model),
+      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
+    );
+    assert.deepEqual(
+      parsed.find((x) => x.model === "deepseek-v4-flash")!.candidates.map((c) => c.cid),
+      ["alpha"],
+    );
+    assert.deepEqual(
+      parsed.find((x) => x.model === "deepseek-v4.1-flash")!.candidates.map((c) => c.cid),
+      ["beta"],
+    );
   });
 
-  it("channels 与 model list 等价（兼容保留）", async () => {
+  it("channels 是渠道视角：每个渠道贡献了哪些池模型", async () => {
     const a = await run(["channels", "--json"]);
-    const b = await run(["model", "list", "--json"]);
     assert.equal(a.code, 0);
-    assert.equal(a.out, b.out);
+    const parsed = JSON.parse(a.out) as Array<{ cid: string; models: string[] }>;
+    assert.deepEqual(parsed.map((x) => x.cid), ["alpha", "beta"]);
+    assert.deepEqual(parsed[0]!.models, ["deepseek-v4-flash", "glm-5.3-flash"]);
+    assert.deepEqual(parsed[1]!.models, ["deepseek-v4.1-flash"]);
   });
 
-  it("model show <cid> 只看一个；缺 cid → 2（讲用法）", async () => {
+  it("model show <cid> 看单个渠道的贡献；缺 cid → 2（讲用法）", async () => {
     const one = await run(["model", "show", "beta"]);
     assert.equal(one.code, 0);
-    assert.equal(one.out.trim(), "beta/solo");
+    assert.ok(one.out.includes("deepseek-v4.1-flash"), one.out);
 
     const missing = await run(["model", "show"]);
     assert.equal(missing.code, 2);
@@ -292,7 +308,7 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
   function useRemoteOnly(): void {
     clearChannels();
     refreshState.calls = 0;
-    refreshState.upstream = ["remote-flash-one"];
+    refreshState.upstream = ["deepseek-v4-flash-0731"];
     refreshState.failWith = null;
     refreshState.current = null; // 新进程：内存缓存为空，靠磁盘缓存种子
     setChannel(makeRemoteChannel("remote"));
@@ -305,14 +321,14 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
     const first = await run(["remote", "models"]);
     assert.equal(first.code, 0);
     assert.equal(refreshState.calls, 1, "首次没有缓存，应该拉一次");
-    assert.match(first.out, /remote\/remote-flash-one/);
+    assert.match(first.out, /deepseek-v4-flash-0731/);
     assert.ok(first.err.includes("刚从上游拉取"), "要告诉用户这次是现拉的");
 
     const second = await run(["remote", "models"]);
     assert.equal(second.code, 0);
     assert.equal(refreshState.calls, 1, "第二次应命中缓存，不再拉");
     assert.ok(!second.err.includes("刚从上游拉取"), "命中缓存不必打扰用户");
-    assert.match(second.out, /remote\/remote-flash-one/);
+    assert.match(second.out, /deepseek-v4-flash-0731/);
 
     resetChannels();
   });
@@ -321,18 +337,18 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
     withFreshRoot();
     useRemoteOnly();
 
-    await run(["remote", "models"]); // 写入缓存（remote-flash-one）
-    refreshState.upstream = ["remote-flash-two"]; // 上游变了
+    await run(["remote", "models"]); // 写入缓存（deepseek-v4-flash-0731）
+    refreshState.upstream = ["DeepSeek-V4-Flash-Official"]; // 上游变了
 
     const cached = await run(["remote", "models"]);
     assert.equal(refreshState.calls, 1, "仍不该打网络");
-    assert.match(cached.out, /remote-flash-one/, "用的是本地记录的那份");
-    assert.ok(!cached.out.includes("remote-flash-two"));
+    assert.match(cached.out, /deepseek-v4-flash-0731/, "用的是本地记录的那份");
+    assert.ok(!cached.out.includes("Official"));
 
     const forced = await run(["remote", "models", "--refresh"]);
     assert.equal(forced.code, 0);
     assert.equal(refreshState.calls, 2, "--refresh 必须真的重拉");
-    assert.match(forced.out, /remote-flash-two/, "重拉后是新内容");
+    assert.match(forced.out, /DeepSeek-V4-Flash-Official/, "重拉后是新内容");
     assert.ok(forced.err.includes("刚从上游拉取"));
 
     resetChannels();
@@ -418,10 +434,12 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
 });
 
 describe("3. <cid> <动词> 路由", () => {
-  it("<cid> models 只列该渠道（不需要网关）", async () => {
+  it("<cid> models 只列该渠道贡献的池模型（不需要网关）", async () => {
     const r = await run(["alpha", "models"]);
     assert.equal(r.code, 0);
-    assert.deepEqual(r.out.split("\n"), ["alpha/model-one", "alpha/mixed-two"]);
+    assert.ok(r.out.includes("deepseek-v4-flash"), r.out);
+    assert.ok(r.out.includes("glm-5.3-flash"), r.out);
+    assert.ok(r.out.includes("← DeepSeek-V4-Flash"), "要能看出目录里的原始写法");
   });
 
   it("<cid> billing 打印额度（等价 credits --channel）", async () => {

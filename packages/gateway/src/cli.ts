@@ -10,12 +10,10 @@
 
 import { parseArgs } from "node:util";
 
-import { channelCount, channels, getChannel, hasChannel, type Channel } from "./channel.js";
+import { channelCount, getChannel, hasChannel } from "./channel.js";
 import { CHANNEL_VERBS } from "./command-groups.js";
 import * as groups from "./command-groups.js";
 import * as signinCli from "./signin-cli.js";
-import { runInChannel } from "./channel-context.js";
-import { poolIds, qualifiedId } from "./model-pool.js";
 import { defaultAddr, defaultUiPort, version } from "./cli-consts.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
@@ -41,17 +39,17 @@ export function usage(): string {
   logs                      查看网关日志尾部
   serve                     前台无窗口运行（不守护；守护进程内部也用它）
 
-模型池:
-  model list                列出全部渠道（池子）与各自模型（= channels）
-                            读本地缓存；本地没有才拉一次上游并把结果记录下来
-  model show <cid>          只看某个渠道的模型
-  model refresh [cid]       强制重新拉取上游模型目录并记录到本地（可只刷一个渠道）
+模型池（对外只有 3 个模型，请求落到哪家渠道由网关按账单已用量决定）:
+  model list                池视图：3 个模型 → 候选渠道 + 已用量 + 冷却状态
+  model show <cid>          某个渠道贡献了池内哪些模型
+  model usage [--refresh]   池账本；--refresh 立刻重查各渠道账单额度
+  model refresh [cid]       强制重拉上游模型**目录**并记到本地（可只刷一个渠道）
 
 按渠道操作（<cid> 是已注册的渠道，如 workbuddyai）:
 ${verbLines.join("\n")}
 
 其它:
-  channels                  等价 model list（兼容保留）
+  channels                  渠道视角：每个渠道各自贡献了池内哪些模型（= model list 的补集）
   paths [--all]             存储落点与文件（仓库级 = 全部渠道；只读）
   accounts [...]            账号池（不加 <cid> 时跨渠道）
   credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
@@ -67,7 +65,8 @@ ${verbLines.join("\n")}
   --lines <n>               logs 显示行数（默认 40）
   --realm <名>              login 的登录域（渠道自定义；单域渠道忽略）
   --channel <cid>           只操作该渠道（等价把 <cid> 写成第一个参数）
-  --refresh                 model list / <cid> models：强制重拉上游目录（失败即报错退出）
+  --refresh                 model refresh / <cid> models：强制重拉上游目录；
+                            model usage：立刻重查各渠道账单额度（失败即报错退出）
   --status                  checkin：只查状态，不领（只读）
   --daily-only              checkin：只处理"每日"语义的渠道（跳过一次性奖励）
   --fail-if-unclaimed       checkin：今天明确未签 → 退出码非零（"不知道"不算失败）
@@ -87,8 +86,10 @@ ${verbLines.join("\n")}
 
 示例:
   ${cid} start                          # 起网关（守护式，幂等）
-  ${cid} model list                     # 看全部渠道（池子）与各自模型
-  ${cid} model refresh                  # 强制重拉全部渠道的模型目录（记到本地）
+  ${cid} model list                     # 池视图：3 个模型分别会先落到哪家
+  ${cid} model usage --refresh          # 立刻重查各渠道账单额度并写进账本
+  ${cid} model show catpaw              # catpaw 贡献了池内哪些模型
+  ${cid} model refresh                  # 强制重拉全部渠道的模型**目录**（记到本地）
   ${cid} trae models --refresh          # 只强制重拉 trae 的目录
   ${cid} trae login                     # 登录 trae（浏览器授权）
   ${cid} trae billing                   # 看 trae 的剩余额度 / 账单
@@ -134,15 +135,6 @@ function numOpt(values: RawValues, key: string): number | undefined {
   if (raw === undefined) return undefined;
   const parsed = Number.parseFloat(raw);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-/** 读某渠道的模型池（渠道模块内部可能碰磁盘，须在渠道上下文里调用）；对外 id 恒小写。 */
-function exposedIdsOf(channel: Channel): string[] {
-  try {
-    return runInChannel(channel.config.cid, () => poolIds(channel));
-  } catch {
-    return [];
-  }
 }
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
@@ -334,7 +326,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       });
 
     case "channels":
-      return groups.listAllModels(ctx.json, ctx.refresh);
+      return groups.listChannels(ctx.json, ctx.refresh);
 
     default:
       console.error(`未知命令: ${command}`);
