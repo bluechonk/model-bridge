@@ -96,6 +96,43 @@ signature    = hmac_sha256_hex(sk, stringToSign)
 可选：`domain_id`、`user_id`、`user_name`、`refresh_token`、`code_verifier`、
 `dpop_private_key_jwk`（`{kty:'EC',crv:'P-256',x,y,d}`）、`model_rate_limits`
 
+### 2.3.1 用户身份只能从 `refresh_token` 里解（**实测 2026-10-08**）
+
+⚠️ **STS 的信封（登录与续期都一样）只给 `credentials` + `refresh_token`**，
+**从不给 `user_id` / `domain_id`** —— 凭据里那两个字段实测恒为空串。
+
+而**华为 STS 每次签发都换一套新 AK**。所以「用 AK 派生 uid」会让**同一个人每次登录
+都变成新账号**：实测一个用户躺在账号池里 3 条（`HSTANDPR…` / `HSTA5H4…` / `HSTAQAB…`），
+它们共享同一个 refresh token 家族，一个被消费就全体作废
+（`STS5.1806 the refresh token has been used`），池子的故障转移于是把一次失败
+放大成 N 次无效重试。
+
+**稳定身份在 `refresh_token` 的 JWT 里**（本地 base64 解码即可，**不验签**——
+它只用于「是不是同一个人」的去重，不参与鉴权）：
+
+```jsonc
+// refresh_token 的 payload
+{
+  "type": "refreshToken",           // ← 只认这个类型
+  "user_profile": "<再编码一次的 base64url JSON>"
+}
+// 解开 user_profile 得到：
+{
+  "account_id":   "019fb1171afe7d21a114c649628b72e1",   // ← 账号级身份，用它
+  "account_name": "hid_2p1fajwaqpov_95",
+  "principal_id": "019fb1171afe782f9ecf38e4299658b7",   // account_id 缺失时退到它
+  "principal_urn": "iam::019fb1171afe7d21a114c649628b72e1:user:hid_2p1fajwaqpov_95",
+  "principal_is_root_user": true
+}
+```
+
+实测三条伪账号的 `account_id` **完全一致** —— 这就是「同一个人」的铁证。
+
+**uid 取值优先级**（`credentialFromTokenResponse`，顺序不可换）：
+1. 信封里的 `user_id`（上游若哪天开始给）
+2. `refresh_token` JWT 的 `account_id` → `principal_id`
+3. `sha256(access_key_id)[:16]` —— **最后兜底**，每次登录都会变，只保证不空
+
 ### 2.4 刷新流程（oauth.ts:96-176）
 
 ```

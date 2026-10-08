@@ -18,7 +18,7 @@
 
 import assert from "node:assert/strict";
 import { createHash, createPublicKey, verify } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,7 +31,7 @@ process.env["MODEL_BRIDGE_HOME"] = HOME;
 process.env["DSH_CODEARTS_CACHE_DIR"] = CACHE;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
-const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
+const { paths, sseStream: sse, gateway, accounts } = await import("@model-bridge/gateway");
 await import("../dist/channel.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");
@@ -59,6 +59,38 @@ const FAKE_CREDENTIAL = {
   obtainedAt: "2026-10-08T00:00:00.000Z",
   source: "selftest",
 } satisfies cred.Credentials;
+
+// ── refresh token 的 JWT 夹具 ────────────────────────────────────────────────
+
+/** base64url（无 padding），与 JWT 的编码一致。 */
+function b64url(value: unknown): string {
+  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+}
+
+/** 真实结构（2026-10-08 实测）的 `user_profile` 载荷。 */
+const USER_PROFILE = {
+  account_id: "019fb1171afe7d21a114c649628b72e1",
+  account_name: "hid_2p1fajwaqpov_95",
+  features_switches: { enable_pdp5: true },
+  principal_id: "019fb1171afe782f9ecf38e4299658b7",
+  principal_is_root_user: true,
+  principal_urn: "iam::019fb1171afe7d21a114c649628b72e1:user:hid_2p1fajwaqpov_95",
+};
+
+/** 造一个 refresh token JWT：`user_profile` 是**再编码一次**的 base64url JSON。 */
+function refreshTokenJwt(overrides: Record<string, unknown> = {}): string {
+  const payload = {
+    exp: 1794054685,
+    iat: 1791463234,
+    iss: "cn-north-4",
+    type: "refreshToken",
+    user_profile: b64url(USER_PROFILE),
+    client_id: "codearts-agent",
+    jti: "40a1d80d-3e51-4bfb-9ef7-24eff64d9762",
+    ...overrides,
+  };
+  return `${b64url({ typ: "JWT", alg: "RS256" })}.${b64url(payload)}.fakesig`;
+}
 
 // ── 假上游 ───────────────────────────────────────────────────────────────────
 
@@ -277,6 +309,212 @@ describe("3. 凭据", () => {
     const c = cred.load();
     assert.equal(c.uid.length, 16);
     assert.equal(c.userId, "");
+  });
+
+  it("身份取自 refresh token 的 JWT：account_id 稳定，同一个人跨登录一致", () => {
+    // 实测：STS 信封只给 credentials + refresh_token，从不给 user_id/domain_id。
+    // 而华为每次签发都换一套新 AK —— 若拿 AK 派生 uid，同一个人会被记成多个账号。
+    const tok = refreshTokenJwt();
+    assert.equal(
+      cred.identityFromRefreshToken(tok),
+      "019fb1171afe7d21a114c649628b72e1",
+      "取 account_id（账号级身份）",
+    );
+
+    // 两个「不同 AK、同一人」的 token 响应 → 必须得到同一个 uid
+    const mk = (ak: string): cred.Credentials =>
+      cred.credentialFromTokenResponse(
+        {
+          credentials: { access_key_id: ak, secret_access_key: SK, security_token: ST },
+          refresh_token: tok,
+        },
+        { codeVerifier: "cv", codeChallenge: "" },
+        cred.generateDpopKeyPair(),
+        "codearts-oauth",
+      );
+    const a = mk("HSTANDPR0TVVRVICXOQS");
+    const b = mk("HSTA5H4R3ML6WTZ8NRL5");
+    assert.equal(a.uid, b.uid, "同一人的不同 AK 必须算出同一个 uid");
+    assert.equal(a.uid, "019fb1171afe7d21a114c649628b72e1");
+    assert.notEqual(
+      createHash("sha256").update(a.accessKeyId).digest("hex").slice(0, 16),
+      createHash("sha256").update(b.accessKeyId).digest("hex").slice(0, 16),
+      "两个 AK 的哈希本来就不同 —— 这正是旧算法出错的原因",
+    );
+  });
+
+  it("信封给了 user_id 时优先用它；JWT 解不开时退回 AK 哈希", () => {
+    const withUserId = cred.credentialFromTokenResponse(
+      {
+        credentials: { access_key_id: AK, secret_access_key: SK, security_token: ST },
+        refresh_token: refreshTokenJwt(),
+        user_id: "from-envelope",
+      },
+      { codeVerifier: "cv", codeChallenge: "" },
+      cred.generateDpopKeyPair(),
+      "codearts-oauth",
+    );
+    assert.equal(withUserId.uid, "from-envelope", "上游真身份优先于 JWT 解析");
+
+    // 非 JWT / 结构不符 → 空串（由调用方兜底，不抛错）
+    assert.equal(cred.identityFromRefreshToken(""), "");
+    assert.equal(cred.identityFromRefreshToken("not-a-jwt"), "");
+    assert.equal(cred.identityFromRefreshToken("a.b.c"), "");
+    assert.equal(cred.identityFromRefreshToken(refreshTokenJwt({ user_profile: undefined })), "");
+    assert.equal(
+      cred.identityFromRefreshToken(refreshTokenJwt({ user_profile: "%%%not-base64%%%" })),
+      "",
+    );
+    // type 不是 refreshToken → 不认（access/id token 的身份口径未必相同）
+    assert.equal(cred.identityFromRefreshToken(refreshTokenJwt({ type: "accessToken" })), "");
+    // account_id 缺失 → 退到 principal_id
+    assert.equal(
+      cred.identityFromRefreshToken(
+        refreshTokenJwt({ user_profile: b64url({ principal_id: "pid-only" }) }),
+      ),
+      "pid-only",
+    );
+  });
+
+  it("旧凭据的伪 uid 在读取时自动纠正（不需要用户重登）", () => {
+    const legacy = createHash("sha256").update(AK).digest("hex").slice(0, 16);
+    writeFileSync(
+      paths.credentialsPath(),
+      JSON.stringify({
+        access_key_id: AK,
+        secret_access_key: SK,
+        security_token: ST,
+        refresh_token: refreshTokenJwt(),
+        uid: legacy, // ← 老版本按 AK 派生出来的伪身份
+      }),
+      "utf8",
+    );
+    const c = cred.load();
+    assert.equal(c.uid, "019fb1171afe7d21a114c649628b72e1", "伪 uid 被纠正为 account_id");
+
+    // 已经是稳定身份的，不被二次改写
+    writeFileSync(
+      paths.credentialsPath(),
+      JSON.stringify({
+        access_key_id: AK,
+        secret_access_key: SK,
+        security_token: ST,
+        refresh_token: refreshTokenJwt(),
+        uid: "some-real-upstream-id",
+      }),
+      "utf8",
+    );
+    assert.equal(cred.load().uid, "some-real-upstream-id", "非伪 uid 原样保留");
+
+    // 没有 refresh token 可解时，保持旧行为（不把 uid 弄空）
+    writeFileSync(
+      paths.credentialsPath(),
+      JSON.stringify({ access_key_id: AK, secret_access_key: SK, uid: legacy }),
+      "utf8",
+    );
+    assert.equal(cred.load().uid, legacy);
+  });
+
+  it("存量清理：池内同一人的多个伪账号被合并成一个（实测过一个人躺 3 条）", () => {
+    // 造 3 条「按 AK 派生 uid」的历史伪账号 —— 与线上实测形状一致：
+    // 同一个人、同一 account_id、但 AK 不同（华为每次签发都换）
+    const aks = ["HSTANDPR0TVVRVICXOQS", "HSTA5H4R3ML6WTZ8NRL5", "HSTAQAB7VQOR2KKBUYG0"];
+    rmSync(paths.credentialsPath(), { force: true });
+    const poolRoot = join(paths.channelDir(), "accounts");
+    rmSync(poolRoot, { recursive: true, force: true });
+    rmSync(join(paths.channelDir(), "accounts.json"), { force: true });
+    mkdirSync(poolRoot, { recursive: true });
+
+    const keys: string[] = [];
+    for (const [i, ak] of aks.entries()) {
+      const uid = createHash("sha256").update(ak).digest("hex").slice(0, 16);
+      const key = accounts.accountKey({ uid, domain: "" });
+      keys.push(key);
+      writeFileSync(
+        join(poolRoot, `${key}.json`),
+        JSON.stringify({
+          access_key_id: ak,
+          secret_access_key: SK,
+          security_token: `ST-${i}`,
+          refresh_token: refreshTokenJwt({ jti: `jti-${i}` }),
+          uid,
+        }),
+        "utf8",
+      );
+    }
+    writeFileSync(
+      join(paths.channelDir(), "accounts.json"),
+      JSON.stringify({
+        version: 1,
+        active: keys[0],
+        accounts: keys.map((key, i) => ({
+          key,
+          uid: createHash("sha256").update(aks[i]!).digest("hex").slice(0, 16),
+          domain: "",
+          label: `legacy-${i}`,
+          added_at: "2026-10-08T12:31:25.912Z",
+          last_used_at: "2026-10-08T12:31:25.912Z",
+          expires_at: null,
+          health: "ok",
+          health_at: "2026-10-08T12:31:25.912Z",
+        })),
+      }),
+      "utf8",
+    );
+    assert.equal(accounts.readIndex().accounts.length, 3, "先确认池里确实是 3 条");
+
+    const removed = cred.pruneLegacyAccounts();
+    assert.equal(removed, 2, "同一人的 2 条伪账号应被清掉");
+    const left = accounts.readIndex();
+    assert.equal(left.accounts.length, 1, "同一个人只留一条");
+    assert.equal(left.accounts[0]!.key, keys[0], "保留当前生效的那份");
+    assert.ok(!existsSync(join(poolRoot, `${keys[1]}.json`)), "被清掉的账号文件也要删");
+
+    // 幂等：再跑一次什么都不做
+    assert.equal(cred.pruneLegacyAccounts(), 0, "幂等");
+    assert.equal(accounts.readIndex().accounts.length, 1);
+
+    // 另一个人（不同 account_id）绝不能被当成同一个人清掉
+    const otherUid = "019fb1171afe7d21a114c649628b72e2";
+    const otherKey = accounts.accountKey({ uid: otherUid, domain: "" });
+    writeFileSync(
+      join(poolRoot, `${otherKey}.json`),
+      JSON.stringify({
+        access_key_id: "HSTASTABLEKEYXXXXXXXX",
+        secret_access_key: SK,
+        security_token: ST,
+        // 另一个人的 refresh token：account_id 不同
+        refresh_token: refreshTokenJwt({
+          user_profile: b64url({ ...USER_PROFILE, account_id: otherUid }),
+        }),
+        uid: otherUid,
+      }),
+      "utf8",
+    );
+    writeFileSync(
+      join(paths.channelDir(), "accounts.json"),
+      JSON.stringify({
+        version: 1,
+        active: otherKey,
+        accounts: [
+          ...left.accounts,
+          {
+            key: otherKey,
+            uid: otherUid,
+            domain: "",
+            label: "other-person",
+            added_at: "2026-10-08T12:31:25.912Z",
+            last_used_at: "2026-10-08T12:31:25.912Z",
+            expires_at: null,
+            health: "ok",
+            health_at: "2026-10-08T12:31:25.912Z",
+          },
+        ],
+      }),
+      "utf8",
+    );
+    assert.equal(cred.pruneLegacyAccounts(), 0, "另一个人的账号不参与清理");
+    assert.equal(accounts.readIndex().accounts.length, 2, "两个人各留一条");
   });
 
   it("PKCE：verifier 48 字节 base64url，challenge = base64url(sha256(verifier))", () => {
@@ -665,6 +903,57 @@ describe("7. 续期（STS + DPoP）", () => {
       assert.equal(next.securityToken, "ST-NEW");
       assert.equal(next.refreshToken, "rt-rotated", "refresh_token 一次性轮换必须落盘");
       assert.equal(cred.load().refreshToken, "rt-rotated");
+    } finally {
+      delete process.env["CODEARTS_STS_URL"];
+      await new Promise<void>((r) => fake.server.close(() => r()));
+    }
+  });
+
+  it("续期**不拿新 AK 的哈希覆盖稳定 uid**（否则每次续期都换一个账号身份）", async () => {
+    const fake = await startFakeUpstream();
+    process.env["CODEARTS_STS_URL"] = `${fake.base}/v1/oauth2/tokens`;
+    fake.routes.set("/v1/oauth2/tokens", () => ({
+      status: 200,
+      body: {
+        credentials: {
+          // ⚠ 换了一套新 AK —— 旧算法会据此算出**不同**的伪 uid
+          access_key_id: "HSTANEWKEYAFTERREFRESH",
+          secret_access_key: SK,
+          security_token: "ST-NEW",
+          expiration: "2030-01-01T00:00:00Z",
+        },
+        // ⚠ 关键：返回一个**解不出身份**的 refresh token（非 JWT）。
+        // 这种信封下 `credentialFromTokenResponse` 只能退到「新 AK 的哈希」，
+        // 于是 `next.uid` 是个伪身份 —— 续期路径必须**不采信**它，否则
+        // 每次续期都会把账号身份换掉，账号池随之把同一个人记成新账号。
+        refresh_token: "opaque-token-not-a-jwt",
+      },
+    }));
+    const keyPair = cred.generateDpopKeyPair();
+    const stableUid = "019fb1171afe7d21a114c649628b72e1";
+    await cred.save({
+      ...FAKE_CREDENTIAL,
+      uid: stableUid, // 已修正的稳定身份
+      accessKeyId: AK,
+      dpopPrivateKeyJwk: keyPair.privateKeyJwk,
+      codeVerifier: "cv-1",
+      refreshToken: refreshTokenJwt({ jti: "old" }),
+    });
+    cred.resetRefreshQueue();
+    try {
+      const next = await cred.refresh(cred.load());
+      assert.equal(next.accessKeyId, "HSTANEWKEYAFTERREFRESH", "AK 确实换了");
+      assert.equal(
+        next.uid,
+        stableUid,
+        "uid 必须仍是那个人的 account_id，不能被新 AK 的哈希顶掉",
+      );
+      assert.equal(cred.load().uid, stableUid, "落盘同样保持");
+      assert.notEqual(
+        next.uid,
+        createHash("sha256").update("HSTANEWKEYAFTERREFRESH").digest("hex").slice(0, 16),
+        "尤其不能等于新 AK 的哈希",
+      );
     } finally {
       delete process.env["CODEARTS_STS_URL"];
       await new Promise<void>((r) => fake.server.close(() => r()));

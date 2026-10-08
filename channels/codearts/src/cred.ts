@@ -41,7 +41,7 @@ import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 
-import { credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
+import { accounts, credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
 import * as upstream from "./upstream.js";
 
 /** 上游 API 基址（snap-access 网关，硬编码 cn-north-4，无多区域）。 */
@@ -344,7 +344,64 @@ export function exchangeRefreshToken(
   );
 }
 
-/** 由 token 响应组装可持久化凭据（含刷新所需字段）。 */
+/**
+ * 从 `refresh_token` 里解出**稳定的用户身份**（`user_profile.account_id`）。
+ *
+ * ## 为什么必须这么做
+ *
+ * STS 的信封（登录与续期都一样）**只给 `credentials` + `refresh_token`**，
+ * 从不给 `user_id` / `domain_id` —— 于是本模块原来退化成 `sha256(access_key_id)[:16]`
+ * 当 `uid`。但**华为 STS 每次签发都换一套新 AK**，所以同一个人每次登录/续期都算出
+ * 不同的 `uid`，账号池就把它当成不同账号：
+ *
+ * - 池子无限膨胀（实测一个用户躺了 3 个"账号"）
+ * - 更糟：这些伪账号**共享同一个 refresh token 家族**，一个被消费就全体作废，
+ *   池子的故障转移于是从"救命"变成"把一个失败放大成 N 次无效重试"
+ *
+ * `refresh_token` 是 JWT，其 `user_profile` 声明里带着真实且**稳定**的身份
+ * （`account_id` / `principal_id`），同一个人跨登录完全一致（实测三个伪账号的
+ * `account_id` 都是 `019fb1171afe7d21a114c649628b72e1`）。
+ *
+ * ⚠ 只做 base64 解码，**不验签**：这个值仅用于「是不是同一个人」的去重，
+ * 不参与鉴权判断 —— 真伪由上游对 token 本身的校验负责。解不开就返回空串，
+ * 由调用方退回到旧算法（保守，不改变既有行为）。
+ */
+export function identityFromRefreshToken(refreshToken: string): string {
+  try {
+    const parts = refreshToken.split(".");
+    if (parts.length < 2) return "";
+    const segment = parts[1] ?? "";
+    // JWT 用 base64url；补齐 padding 后解码
+    const padded = segment + "=".repeat((4 - (segment.length % 4)) % 4);
+    const payload = JSON.parse(
+      Buffer.from(padded.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"),
+    ) as Record<string, unknown>;
+    // 只认 refreshToken 类型：access token / id token 的身份声明未必同一口径
+    if (str(payload["type"]) && str(payload["type"]) !== "refreshToken") return "";
+    const profileRaw = payload["user_profile"];
+    if (typeof profileRaw !== "string" || !profileRaw) return "";
+    const profilePadded = profileRaw + "=".repeat((4 - (profileRaw.length % 4)) % 4);
+    const profile = JSON.parse(
+      Buffer.from(profilePadded.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"),
+    ) as Record<string, unknown>;
+    // account_id 是账号级身份；缺失时退到 principal_id（用户级）
+    return str(profile["account_id"]) || str(profile["principal_id"]);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * 由 token 响应组装可持久化凭据（含刷新所需字段）。
+ *
+ * `uid` 的优先级（**顺序不可换**）：
+ * 1. STS 信封里的 `user_id`（若上游哪天开始给）
+ * 2. `refresh_token` JWT 里的 `account_id` —— 稳定，同一个人跨登录一致
+ * 3. `sha256(access_key_id)[:16]` —— 最后兜底，**每次登录都会变**，只保证不空
+ *
+ * ⚠ 第 3 条会让账号池把同一个人当成不同账号（见 `identityFromRefreshToken` 说明），
+ * 所以只要第 2 条可用就绝不走它。
+ */
 export function credentialFromTokenResponse(
   token: TokenResponse,
   pkce: PkcePair,
@@ -355,11 +412,13 @@ export function credentialFromTokenResponse(
   const accessKeyId = str(credentials.access_key_id);
   const securityToken = str(credentials.security_token);
   const userId = str(token.user_id);
+  const refreshToken = str(token.refresh_token);
+  const identity = userId || identityFromRefreshToken(refreshToken);
   return {
     ...EMPTY_CREDENTIALS,
     // 契约的 accessToken：本渠道的「令牌」就是 security_token。
     accessToken: securityToken || accessKeyId,
-    uid: userId || createHash("sha256").update(accessKeyId).digest("hex").slice(0, 16),
+    uid: identity || createHash("sha256").update(accessKeyId).digest("hex").slice(0, 16),
     accessKeyId,
     secretAccessKey: str(credentials.secret_access_key),
     securityToken,
@@ -367,7 +426,7 @@ export function credentialFromTokenResponse(
     domainId: str(token.domain_id),
     userId,
     userName: str(token.user_name),
-    refreshToken: str(token.refresh_token),
+    refreshToken,
     codeVerifier: pkce.codeVerifier,
     dpopPrivateKeyJwk: keyPair.privateKeyJwk,
     obtainedAt: nowIso(),
@@ -472,10 +531,28 @@ export function load(): Credentials {
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new NotLoggedInError();
   const c = fromDisk(data as Record<string, unknown>);
   if (!c.accessKeyId || !c.secretAccessKey) throw new NotLoggedInError();
-  if (!c.uid) {
-    return { ...c, uid: createHash("sha256").update(c.accessKeyId).digest("hex").slice(0, 16) };
-  }
-  return c;
+  return { ...c, uid: resolveUid(c) };
+}
+
+/**
+ * 定稿 `uid`：**修掉历史上按 AK 派生的伪身份**。
+ *
+ * 老版本的 `uid` 是 `sha256(access_key_id)[:16]`（因为 STS 信封不给 `user_id`）。
+ * AK 每次签发都换，所以同一个人被记成多个账号，账号池因此把一次失败放大成多次
+ * 无效重试（详见 `identityFromRefreshToken`）。
+ *
+ * 判定「是不是旧算法」用**精确比对**：只有当存盘值恰好等于「当前 AK 的 sha256 前 16 位」
+ * 时才认为它是伪身份，改用 JWT 里的稳定 `account_id`。这样：
+ * - 真·上游 `user_id`（若哪天有）不会被误改；
+ * - 已经修好的凭据（uid = account_id）不会被二次改写；
+ * - 老凭据在**第一次读取时**自动纠正，不需要用户重登。
+ */
+function resolveUid(c: Credentials): string {
+  const legacy = createHash("sha256").update(c.accessKeyId).digest("hex").slice(0, 16);
+  const stable = identityFromRefreshToken(c.refreshToken);
+  if (!c.uid) return stable || legacy;
+  if (c.uid === legacy && stable) return stable;
+  return c.uid;
 }
 
 /** 尝试读取；不可用时返回 null（不抛）。 */
@@ -756,10 +833,84 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   try {
     const c = await callback.result;
     await save(c);
+    pruneLegacyAccounts();
     options.onStatus?.("授权成功，凭据已保存。");
     return c;
   } finally {
     await callback.close();
+  }
+}
+
+// ── 存量清理：把「按 AK 派生的伪账号」合并掉 ─────────────────────────────────
+
+/**
+ * 清掉池内**同一个人的历史伪账号**（渠道自己的修复，不动共享层）。
+ *
+ * ## 为什么需要
+ *
+ * 老版本的 `uid` 是 `sha256(access_key_id)[:16]`。华为 STS 每次签发都换 AK，
+ * 于是同一个人的每次登录/续期都变成池内一条**新账号** —— 实测一个用户躺了 3 条。
+ * 它们共享同一个 refresh token 家族：一个被消费，全体作废，池子的故障转移
+ * 于是把一次失败放大成 3 次无效重试（`STS5.1806 the refresh token has been used`）。
+ *
+ * ## 判定：按 JWT 身份分组，**不看存盘的 uid**
+ *
+ * 存盘的 `uid` 本身就是坏的那个值（伪账号的定义），拿它分组会把同一个人分成几组。
+ * 所以以「各自 refresh token 里解出的 `account_id`」为身份；解不出的（非 JWT /
+ * 已被消费成 opaque 串）各自独立成组 —— 宁可不合并，也不误删别人的凭据。
+ *
+ * ## 保留策略
+ *
+ * 同一身份只留一份，优先级：**当前生效** → 身份可解 → `last_used_at` 最新。
+ * 其余删掉（连带 `accounts/<key>.json`，复用共享层 `removeAccount`）。
+ *
+ * ⚠ 存盘 uid 不改写：`load()` 已在内存里把它纠正为稳定身份（见 `resolveUid`），
+ * 而 `accountKey` 由 `load()` 的结果算出 —— 所以池子的 key 本来就是稳定的，
+ * 不会重新膨胀。索引里那个旧 `uid` 只是展示字段，改它反而要动共享层的写索引 API。
+ *
+ * 幂等；任何异常都吞掉 —— 清理失败不该影响登录/续期主流程。
+ */
+export function pruneLegacyAccounts(): number {
+  try {
+    const index = accounts.readIndex();
+    // 身份解析一次，后面复用
+    const identityOf = new Map<string, string>();
+    for (const entry of index.accounts) {
+      const raw = accounts.readAccountCredential(entry.key);
+      identityOf.set(entry.key, identityFromRefreshToken(str(raw["refresh_token"])));
+    }
+
+    // 分组：身份可解的按身份，解不出的各自独立（绝不误合并）
+    const groups = new Map<string, string[]>();
+    for (const entry of index.accounts) {
+      const identity = identityOf.get(entry.key) ?? "";
+      const bucket = identity || `__solo__${entry.key}`;
+      const list = groups.get(bucket) ?? [];
+      list.push(entry.key);
+      groups.set(bucket, list);
+    }
+
+    let removed = 0;
+    for (const keys of groups.values()) {
+      if (keys.length < 2) continue; // 一个人只有一份：无事可做
+      const ordered = [...keys].sort((a, b) => {
+        if (a === index.active) return -1;
+        if (b === index.active) return 1;
+        const ia = identityOf.get(a) ?? "";
+        const ib = identityOf.get(b) ?? "";
+        if (Boolean(ia) !== Boolean(ib)) return ia ? -1 : 1;
+        const ea = index.accounts.find((x) => x.key === a)?.last_used_at ?? "";
+        const eb = index.accounts.find((x) => x.key === b)?.last_used_at ?? "";
+        return ea > eb ? -1 : ea < eb ? 1 : 0;
+      });
+      for (const key of ordered.slice(1)) {
+        if (key === index.active) continue; // 正在被 gateway 使用的绝不删
+        if (accounts.removeAccount(key).removed) removed += 1;
+      }
+    }
+    return removed;
+  } catch {
+    return 0; // 清理是尽力而为，绝不影响登录/续期主流程
   }
 }
 
@@ -829,9 +980,15 @@ async function refreshInner(passedIn: Credentials): Promise<Credentials> {
     ),
   };
   // 保留身份字段（STS 响应常常不带 user 信息）。
+  //
+  // ⚠ `uid` 不能写 `next.uid || source.uid`：`next.uid` 在信封没有 `user_id` 时
+  // 会退化成「新 AK 的 sha256」—— 那是个**每次续期都变**的伪身份，会覆盖掉
+  // `source.uid` 里那个稳定的 `account_id`，等于每次续期都换一个账号身份。
+  // 故续期**只接受来自 refresh token 的稳定身份**，其余一律沿用 source。
+  const stableUid = identityFromRefreshToken(next.refreshToken || source.refreshToken);
   const merged: Credentials = {
     ...next,
-    uid: next.uid || source.uid,
+    uid: str(token.user_id) || stableUid || source.uid || next.uid,
     userId: source.userId,
     userName: source.userName,
     domainId: source.domainId,
