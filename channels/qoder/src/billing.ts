@@ -46,3 +46,16 @@ export async function fetchCredits(
 ): Promise<CreditsResult> {
   todo("billing.fetchCredits");
 }
+
+// ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；契约要求**每个渠道都提供**）──────
+
+import type { SigninModule } from "@model-bridge/gateway";
+/** 签到 / 领取能力：**未实现**（桩语义：立即抛错并指向协议文档）。 */
+export const signin: SigninModule = {
+  async status() {
+    return todo("billing.signin.status");
+  },
+  async claim() {
+    return todo("billing.signin.claim");
+  },
+};

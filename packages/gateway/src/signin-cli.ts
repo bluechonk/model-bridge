@@ -20,16 +20,8 @@ export interface CheckinOptions {
   statusOnly?: boolean;
 }
 
-function noSignin(channel: Channel): string {
-  return (
-    `${channel.config.cid}: 该渠道没有签到端点 —— ` +
-    `上游不发签到奖励（或奖励由上游自动发放，见 docs/protocols/ 或 docs/journals/）`
-  );
-}
-
 interface ChannelReport {
   cid: string;
-  supported: boolean;
   /** 查询或领取**抛错**了（未登录、上游拒绝…）—— 影响退出码。 */
   failed?: boolean;
   status?: SigninStatus;
@@ -42,45 +34,30 @@ interface ChannelReport {
 async function checkinOne(channel: Channel, statusOnly: boolean): Promise<ChannelReport> {
   const cid = channel.config.cid;
   const { signin } = channel.billing;
-  if (!signin) return { cid, supported: false, summary: noSignin(channel) };
 
   return runInChannel(cid, async () => {
     let status: SigninStatus;
     try {
       status = await signin.status();
     } catch (err) {
-      return { cid, supported: true, failed: true, summary: `查签到状态失败: ${String(err)}` };
+      return { cid, failed: true, summary: `查签到状态失败: ${String(err)}` };
     }
 
     if (statusOnly || status.claimable === false) {
       return {
         cid,
-        supported: true,
         status,
         claimed: false,
-        summary: status.claimable === false ? `${status.summary}（无可领，未领）` : status.summary,
+        // 「没有端点 / 没有可领」时 summary 就是渠道自己给的那句话，原样透出（不加任何修饰）
+        summary: status.summary,
       };
     }
 
     try {
       const outcome = await signin.claim();
-      return {
-        cid,
-        supported: true,
-        status,
-        claimed: outcome.ok,
-        summary: outcome.summary,
-        detail: outcome.detail,
-      };
+      return { cid, status, claimed: outcome.ok, summary: outcome.summary, detail: outcome.detail };
     } catch (err) {
-      return {
-        cid,
-        supported: true,
-        failed: true,
-        status,
-        claimed: false,
-        summary: `领取失败: ${String(err)}`,
-      };
+      return { cid, failed: true, status, claimed: false, summary: `领取失败: ${String(err)}` };
     }
   });
 }
@@ -95,18 +72,15 @@ export async function runCheckin(options: CheckinOptions = {}): Promise<number> 
     console.error("没有渠道被注册（入口忘了 import 渠道包？）");
     return 2;
   } else {
-    // 仓库级：只挑**声明了签到能力**的渠道，别把 10 个"没端点"的噪音也打出来
-    targets = channels().filter((c) => Boolean(c.billing.signin));
-    if (targets.length === 0) {
-      console.error("没有任何渠道支持签到（已注册的渠道都没实现 signin 能力）");
-      return 2;
-    }
+    // 仓库级：**所有**渠道都过一遍 —— 没有端点的渠道会返回它自己的一句说明，
+    // 那不是失败（共享层不区分"支持/不支持"，一视同仁）
+    targets = channels();
   }
 
   const reports: ChannelReport[] = [];
   for (const channel of targets) reports.push(await checkinOne(channel, statusOnly));
 
-  const bad = reports.some((r) => !r.supported || r.failed);
+  const bad = reports.some((r) => r.failed);
 
   if (json) {
     console.log(JSON.stringify({ status_only: statusOnly, channels: reports }, null, 2));
@@ -114,10 +88,6 @@ export async function runCheckin(options: CheckinOptions = {}): Promise<number> 
   }
 
   for (const report of reports) {
-    if (!report.supported) {
-      console.log(`· ${report.summary}`);
-      continue;
-    }
     const mark = statusOnly ? "·" : report.claimed ? "✓" : "·";
     console.log(`${mark} [${report.cid}] ${report.summary}`);
   }

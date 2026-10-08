@@ -300,7 +300,7 @@ interface CreditsResult {
   claimable?: Array<Record<string, unknown>>;
 }
 
-// 可选：签到 / 领取能力（有端点就实现；CLI 的 `<cid> checkin` 用）
+// 签到 / 领取能力（**必需**：每个渠道都要提供；CLI 的 `<cid> checkin` 用）
 export const signin: SigninModule;
 interface SigninModule {
   status(): Promise<{ claimable: boolean | null; summary: string; items?: … }>;  // 只读
@@ -308,9 +308,12 @@ interface SigninModule {
 }
 ```
 
-⚠ `signin` **可选**：上游没有签到/领取端点的渠道**不要**提供它（CLI 会明确报「该渠道没有签到端点」，
-而不是静默返回空）。各渠道叫法不同（`check-in` / `signin` / 活动 `claim` / 上游自动发），统一收敛成
-`status()` + `claim()` 两个动作；`claim()` 必须是幂等的或至少可安全重复调用。
+⚠ `signin` 是**必需**的（契约统一，共享层**不做能力探测、不特判任何渠道**）：
+上游确实没有签到端点的渠道，也照样实现它 —— `status()` 返回 `claimable: false` + 一句**自己的说明**，
+`claim()` 原样回同一句；那**不是失败**，也不影响退出码。用户看到的就是那句说明。
+各渠道叫法不同（`check-in` / `signin` / 活动 `claim` / 上游自动发），统一收敛成 `status()` + `claim()`
+两个动作；`claim()` 必须是幂等的或至少可安全重复调用。
+未实现的渠道（桩）保持「立即抛错 + 实现依据指引」的语义。
 
 ⚠ **「查不到」不能显示成 0**：失败时抛 `CreditsError`，而不是返回 `remain: 0`。
 ⚠ 未登录时抛 `cred.NotLoggedInError`。

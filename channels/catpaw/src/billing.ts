@@ -29,3 +29,26 @@ export function fetchCredits(): Promise<never> {
     ),
   );
 }
+
+// ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；契约要求**每个渠道都提供**）──────
+
+import type { SigninModule } from "@model-bridge/gateway";
+/**
+ * 签到 / 领取能力（`<cid> checkin`）。
+ *
+ * **CatPaw 没有签到端点** —— 额度随账号订阅提供，上游没有签到 / 领取接口（见 docs/protocols/catpaw/）
+ *
+ * 按契约仍要提供这个能力（共享层对**所有**渠道一视同仁，不做能力探测），
+ * 所以这里不假装有端点、也不当成错误：`status()` 只说"没有可领的"，
+ * `claim()` 原样回同一句说明。用户看到的就是这句。
+ */
+const NO_ENDPOINT = "CatPaw 没有签到端点 —— 额度随账号订阅提供，上游没有签到 / 领取接口（见 docs/protocols/catpaw/）";
+
+export const signin: SigninModule = {
+  async status() {
+    return { claimable: false, summary: NO_ENDPOINT };
+  },
+  async claim() {
+    return { ok: true, summary: NO_ENDPOINT };
+  },
+};
