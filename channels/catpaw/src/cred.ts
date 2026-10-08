@@ -4,17 +4,17 @@
  * ## 登录协议（实测，见 docs/protocols/catpaw/PROTOCOL.md）
  *
  *   1. GET  {LOGIN_CONFIG_URL}                          → { loginEntryUrl }
- *   2. 本地起一个 loopback 回调服务器（动态端口），redirect 指向
- *      `http://127.0.0.1:<实际端口>/callback`（**必须是 POST**）
- *   3. auth_url = `${loginEntryUrl}?sid=&state=&redirect=`（三参数缺一不可）
+ *   2. auth_url = `${loginEntryUrl}?sid=&state=&redirect=`（三参数缺一不可；
+ *      缺 `redirect` 网关直接 400 —— 但它只是形式要求，见下）
  *      → 302 到 passport.meituan.com 登录页
- *   4. 用户在浏览器完成登录（唯一人工步骤）
- *   5. **双通道并行**（对齐妙手桌面端 `CatxPassportLoginProvider` 实现）：
- *      - 通道 A：浏览器 `GET` 或 `POST /callback`（query / JSON / 表单三种形态都收）
- *      - 通道 B：GET {POLL_TOKEN_URL}?sid=...  每 1s 轮询，≤10 分钟
- *      `Promise.race` 谁先拿到 token 谁赢 —— 任一通道成功即视为登录成功；
- *      赢家出现后**立刻取消另一条通道**（否则登录成功了进程还要空转到超时）。
- *   6. GET {CURRENT_USER_URL}（`X-Auth-Token`）取 uid —— 账号池靠它认「同一账号」
+ *   3. 用户在浏览器完成登录（唯一人工步骤）
+ *   4. GET {POLL_TOKEN_URL}?sid=...  每 1s 轮询，≤10 分钟 → token
+ *   5. GET {CURRENT_USER_URL}（`X-Auth-Token`）取 uid —— 账号池靠它认「同一账号」
+ *
+ * ⚠ **没有本地回调服务器**：早期实现起过 loopback 回调与轮询并行 race，
+ * 但三次真机登录回调一次都没赢（`source` 恒为 `catpaw-login-poll`），
+ * 已删除。轮询通道独立于 redirect（`sid` 是我们自己生成的），
+ * 不需要浏览器把任何东西打回本地。详见 `login()` 的注释。
  *
  * 返回的是与桌面端登录同一身份的不透明 SSO token（非 JWT）。
  * 落盘到 `~/.model-bridge/catpaw/credentials.json`。
@@ -31,7 +31,6 @@
 
 import { readFileSync } from "node:fs";
 import { writeFile, rename, chmod } from "node:fs/promises";
-import { createServer, type Server } from "node:http";
 
 import { credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
 
@@ -64,7 +63,13 @@ export const AUTH_PING_URL = "https://catx.nocode.cn/api/gateway/auth/ping";
 function authPingUrl(): string {
   return process.env["CATPAW_AUTH_PING_URL"] || AUTH_PING_URL;
 }
-/** 本地回调路径（对齐妙手桌面端实现的 `callback`）。 */
+
+/**
+ * `redirect` 参数里用的回调路径。
+ *
+ * ⚠ 我们**不再监听**这个端口：它只是网关的必填参数（实测缺了 400），
+ * token 一律从 `poll-token` 取。留着常量是为了 URL 形态与桌面端一致。
+ */
 const CALLBACK_PATH = "/callback";
 
 /** 登录轮询周期（毫秒）。 */
@@ -73,8 +78,6 @@ const POLL_INTERVAL_MS = 1_000;
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 /** HTTP 请求超时（毫秒）。 */
 const HTTP_TIMEOUT_MS = 15_000;
-/** 本地回调 body 上限（64 KiB，对齐官方实现）。 */
-const CALLBACK_BODY_MAX = 65_536;
 
 const NOT_LOGGED_IN_MSG =
   "no credentials found; run `catpaw login` to complete browser authorization";
@@ -229,7 +232,7 @@ export function buildAuthUrl(loginEntryUrl: string, redirect: string, sid?: stri
   return `${loginEntryUrl}?sid=${s}&state=${st}&redirect=${encRedirect}`;
 }
 
-/** 从 loginEntryUrl + redirect 拼 auth_url，同时返回 sid/state（供 poll 与回调校验）。 */
+/** 从 loginEntryUrl + redirect 拼 auth_url，同时返回 sid/state（供轮询用）。 */
 export function buildAuthParams(loginEntryUrl: string, redirect: string): {
   authUrl: string;
   sid: string;
@@ -242,249 +245,11 @@ export function buildAuthParams(loginEntryUrl: string, redirect: string): {
   return { authUrl, sid, state };
 }
 
-// ── 本地回调服务器（对齐妙手桌面端 `Bx()` 实现）──────────────────────────────
-
-/** 回调服务器的对外契约。 */
-interface CallbackServer {
-  /** 实际监听端口（请求 0 或端口被占时会退到随机端口，调用方须用此值重算 URL）。 */
-  readonly port: number;
-  /**
-   * 等首个**校验通过**的回调（超时抛错）。
-   *
-   * ⚠ 只认 `{token, state}` 且 state 与本次登录一致的回调；
-   * state 不匹配的请求会被就地拒绝（400）并**继续等待** —— 见 `login()` 里的说明。
-   */
-  wait(timeoutMs: number): Promise<{ token: string; state: string }>;
-  /** 关闭服务器（幂等；未等到回调时会让 wait 拒绝）。 */
-  close(): void;
-}
-
-/**
- * 启动本地回调服务器。
- *
- * `expectedState` 是本次登录的 state：不匹配的回调一律拒绝且**不 settle**
- * （可能是上一轮登录残留的标签页、或本机其它进程的注入）。详见 `login()`。
- */
-function startCallbackServer(expectedState: string): Promise<CallbackServer> {
-  return new Promise((resolve, reject) => {
-    let settle: (v: { token: string; state: string }) => void = () => {};
-    let fail: (e: Error) => void = () => {};
-    let settled = false;
-    const params = new Promise<{ token: string; state: string }>((res, rej) => {
-      settle = res;
-      fail = rej;
-    });
-    void params.catch(() => {});
-
-    const server: Server = createServer((req, res) => {
-      const url = new URL(req.url ?? "/", "http://127.0.0.1");
-      if (url.pathname !== CALLBACK_PATH) {
-        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-        res.end("Not Found");
-        return;
-      }
-      if (req.method === "OPTIONS") {
-        res.writeHead(204, {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Private-Network": "true",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
-        });
-        res.end();
-        return;
-      }
-
-      // 回调可能是 GET（query）或 POST（JSON / 表单）。参考实现两种都收：
-      // 登录页的 CSP 允许 `form-action http://127.0.0.1:*`，即表单提交，
-      // 而表单方法由页面决定 —— 只认 POST 会在页面用 GET 时静默失联。
-      if (req.method === "GET") {
-        const q = url.searchParams;
-        finish(q.get("token") ?? "", q.get("state") ?? "");
-        return;
-      }
-      if (req.method !== "POST") {
-        res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8", Allow: "GET, POST, OPTIONS" });
-        res.end("Method Not Allowed");
-        return;
-      }
-
-      let body = "";
-      let tooLarge = false;
-      req.on("data", (chunk: Buffer) => {
-        if (tooLarge) return;
-        body += chunk.toString("utf8");
-        if (body.length > CALLBACK_BODY_MAX) {
-          tooLarge = true;
-          body = "";
-        }
-      });
-      req.on("end", () => {
-        if (tooLarge) {
-          res.writeHead(413, { "Content-Type": "text/plain; charset=utf-8" });
-          res.end("Payload Too Large");
-          return;
-        }
-        const parsed = parseCallbackBody(body, req.headers["content-type"]);
-        finish(parsed.token, parsed.state);
-      });
-      req.on("error", () => {
-        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-        res.end("Bad Request");
-      });
-
-      /** 校验并回页面；只有 state 匹配且 token 非空才 settle。 */
-      function finish(token: string, state: string): void {
-        if (!token) {
-          res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
-          res.end(CALLBACK_FAIL_HTML);
-          return;
-        }
-        if (state !== expectedState) {
-          // 不是本次登录的回调：拒绝，但**不结束等待**（真回调可能还在路上）。
-          res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
-          res.end(CALLBACK_STALE_HTML);
-          return;
-        }
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(CALLBACK_OK_HTML);
-        if (!settled) {
-          settled = true;
-          settle({ token, state });
-        }
-      }
-    });
-
-    server.once("error", (err: NodeJS.ErrnoException) => reject(err));
-    server.listen(0, "127.0.0.1", () => {
-      const addr = server.address() as { port: number } | null;
-      const port = addr?.port ?? 0;
-      resolve({
-        port,
-        wait(timeoutMs: number) {
-          return new Promise<{ token: string; state: string }>((res, rej) => {
-            const timer = setTimeout(() => {
-              if (!settled) {
-                settled = true;
-                rej(new Error(`等待授权回调超时（${Math.round(timeoutMs / 1000)} 秒）`));
-              }
-            }, timeoutMs);
-            params.then(
-              (v) => {
-                clearTimeout(timer);
-                res(v);
-              },
-              (e: Error) => {
-                clearTimeout(timer);
-                rej(e);
-              },
-            );
-          });
-        },
-        close() {
-          try {
-            server.close();
-            server.closeAllConnections?.();
-          } catch {
-            /* 已关闭 */
-          }
-          if (!settled) {
-            settled = true;
-            fail(new Error("回调服务器已关闭"));
-          }
-        },
-      });
-    });
-  });
-}
-
-/** 解析回调 body：JSON `{token,state}` 或 query 形式 `token=...&state=...`。 */
-function parseCallbackBody(body: string, contentType?: string | string[]): {
-  token: string;
-  state: string;
-} {
-  if (!body) return { token: "", state: "" };
-  const ct = Array.isArray(contentType)
-    ? (contentType[0] ?? "")
-    : (contentType ?? "");
-  if (ct.toLowerCase().includes("application/json")) {
-    try {
-      const parsed = JSON.parse(body) as Record<string, unknown>;
-      return {
-        token: typeof parsed["token"] === "string" && parsed["token"] ? parsed["token"] : "",
-        state: typeof parsed["state"] === "string" ? parsed["state"] : "",
-      };
-    } catch {
-      return { token: "", state: "" };
-    }
-  }
-  const params = new URLSearchParams(body);
-  return { token: params.get("token") ?? "", state: params.get("state") ?? "" };
-}
-
-/** 登录成功页（提示可关闭）。 */
-const CALLBACK_OK_HTML = [
-  "<!DOCTYPE html>",
-  '<html lang="zh-CN">',
-  "<head>",
-  '<meta charset="UTF-8">',
-  '<meta name="viewport" content="width=device-width, initial-scale=1">',
-  "<title>登录成功 - CatPaw</title>",
-  "<style>",
-  "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;",
-  "display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;",
-  "background:#f7f8fa;color:#1f2329;text-align:center;padding:24px;box-sizing:border-box}",
-  ".card{background:#fff;border-radius:12px;padding:40px 32px;box-shadow:0 2px 12px rgba(0,0,0,0.06);max-width:360px;width:100%}",
-  "h1{font-size:18px;margin:0 0 12px}",
-  "p{font-size:14px;color:#646a73;line-height:1.6;margin:0}",
-  "</style>",
-  "</head>",
-  "<body>",
-  '<div class="card">',
-  "<h1>登录成功</h1>",
-  "<p>已返回 CatPaw，可关闭此页面。</p>",
-  "</div>",
-  "</body>",
-  "</html>",
-].join("\n");
-
-/** 登录失败页（未获取到 token）。 */
-const CALLBACK_FAIL_HTML = [
-  "<!DOCTYPE html>",
-  '<html lang="zh-CN">',
-  "<head>",
-  '<meta charset="UTF-8">',
-  "<title>登录失败 - CatPaw</title>",
-  "</head>",
-  "<body>",
-  "<p>未获取到登录票据，请返回 CatPaw 重新发起登录。</p>",
-  "</body>",
-  "</html>",
-].join("\n");
-
-/**
- * 过期回调页（state 不属于本次登录）。
- *
- * 常见于「上一轮登录残留的标签页」或本机其它进程的注入 —— 不是本次登录失败，
- * 所以提示用户「请用刚打开的那个页面完成登录」，而不是笼统报失败。
- */
-const CALLBACK_STALE_HTML = [
-  "<!DOCTYPE html>",
-  '<html lang="zh-CN">',
-  "<head>",
-  '<meta charset="UTF-8">',
-  "<title>请重新发起登录 - CatPaw</title>",
-  "</head>",
-  "<body>",
-  "<p>这个授权页已过期（不属于本次登录），请在**最新打开的那个**授权页完成登录。</p>",
-  "</body>",
-  "</html>",
-].join("\n");
-
 /**
  * 轮询 poll-token，成功返回 token 字符串，超时返回 null。
  *
- * `signal` 用于外部取消（回调通道先拿到 token 时不再白轮询）。
- * 返回 `null` 有两种含义：超时，或被取消 —— 调用方按「没拿到 token」处理即可。
+ * 这是**唯一**的取 token 通道（本地回调那条路已删除，理由见 `login()`）。
+ * `signal` 用于外部取消；返回 `null` 表示超时或被取消 —— 调用方按「没拿到」处理。
  */
 async function pollToken(sid: string, signal?: AbortSignal): Promise<string | null> {
   const url = `${POLL_TOKEN_URL}?sid=${encodeURIComponent(sid)}`;
@@ -578,16 +343,24 @@ export interface LoginOptions {
 /**
  * 运行交互式浏览器登录并持久化结果。
  *
- * **双通道并行**（对齐妙手桌面端 `CatxPassportLoginProvider.login()`）：
- *   - 先起本地 loopback 回调服务器（动态端口），redirect 指向真实监听的 `/callback`
- *   - 拼 auth_url → onUrl(auth_url) → 打开浏览器
- *   - 并行：① 等浏览器 `POST /callback`（body `{token,state}`）
- *            ② 每 1s 轮询 `poll-token?sid=`
- *   - `Promise.race` 谁先拿到 token 谁赢；输的那一方被取消
+ * ## 只有一条取 token 通道：轮询 `poll-token?sid=`
  *
- * 关键：**redirect 必须是真实监听中的地址**。如果只写死一个端口而没起服务器，
- * passport 登录成功后会把 token POST 到一个没人收的端口 —— 表现就是
- * "登录失败 - 未获取到登录票据"（这正是旧实现的问题）。
+ * 早期实现还起了一个本地 loopback 回调服务器，与轮询并行 `Promise.race`
+ * （对齐桌面端 `CatxPassportLoginProvider`）。**实测三次真机登录，回调通道一次都没赢**
+ * （`source` 恒为 `catpaw-login-poll`），所以把它删掉了：
+ *
+ * - 桌面端能收到回调，是因为它自己就是那个「客户端」；我们只是复刻它的 URL 形态，
+ *   网关并不保证把 token POST 回 `127.0.0.1`（参考实现 `catpaw2api` 的注释也写
+ *   「回调到 127.0.0.1 打不开属正常，靠 poll-token 通道取 token」）。
+ * - 多一条通道就多一份维护面：GET/POST/表单三种形态、state 校验、过期标签页……
+ *   而它一次都没成功过 —— 那些复杂度是纯负债。
+ * - 轮询通道**独立于** redirect：`sid` 是我们自己生成的，`poll-token?sid=` 就能换 token，
+ *   不依赖浏览器把任何东西打回本地。
+ *
+ * `redirect` 参数仍然必须传（实测不带它网关直接 400），但只作为协议要求的形式参数 ——
+ * 我们不再监听那个端口，也就不再需要它「真实可达」。
+ *
+ * 流程：拼 auth_url（sid/state/redirect）→ 交给用户打开 → 每 1s 轮询 → 取 uid → 落盘。
  */
 export async function login(baseUrl: string, options: LoginOptions = {}): Promise<Credentials> {
   const { onUrl, onStatus } = options;
@@ -596,76 +369,27 @@ export async function login(baseUrl: string, options: LoginOptions = {}): Promis
   onStatus?.("获取登录入口…");
   const loginEntryUrl = await fetchLoginEntryUrl();
 
-  // sid/state 先定下来：回调服务器需要 state 做校验，所以它必须先起。
+  // redirect 是网关的**必填**参数（实测缺它直接 400），但只是形式要求：
+  // 我们不监听该端口，token 一律从 poll-token 取。
   const sid = randomHex(16);
   const state = randomHex(16);
-
-  // ① 先起本地回调服务器（动态端口，失败不阻塞——降级为纯 poll）
-  //    ⚠ 必须在**拼 auth_url 之前**起好：redirect 要指向真实监听中的端口。
-  let callback: CallbackServer | null = null;
-  try {
-    callback = await startCallbackServer(state);
-  } catch {
-    callback = null;
-  }
-
-  const redirect = callback
-    ? `http://127.0.0.1:${callback.port}${CALLBACK_PATH}`
-    : `http://127.0.0.1:0${CALLBACK_PATH}`; // 兜底；无服务器时纯 poll
+  const redirect = `http://127.0.0.1:37890${CALLBACK_PATH}`;
   const finalAuthUrl = buildAuthUrl(loginEntryUrl, redirect, sid, state);
 
   onUrl?.(finalAuthUrl);
-  const channel = callback ? "回调 + 轮询" : "轮询";
-  onStatus?.(`请在浏览器完成登录（${channel}双通道，登录成功后页面会显示"登录成功"）`);
+  onStatus?.('请在浏览器完成登录（登录成功后页面会显示"登录成功"）');
   if (process.env["CATPAW_NO_BROWSER"] !== "1") openBrowser(finalAuthUrl);
-
-  if (!sid) throw new Error("无法从 auth_url 解析 sid");
 
   onStatus?.("等待授权中（最多 10 分钟）…");
 
-  // ② 双通道并行：谁先拿到 token 谁赢。
-  //
-  // 两条通道都用 `AbortController` 绑到同一个 signal：赢家出现后立刻取消另一条。
-  // ⚠ 不取消的话，轮询循环会一直跑到 10 分钟超时，**登录成功了进程也不退出**
-  // （实测：回调 0.2s 拿到 token，poll 仍在每秒请求，CLI 挂到超时才肯结束）。
-  const abort = new AbortController();
-  const pollPromise = pollToken(sid, abort.signal).catch(() => null);
-
-  let token = "";
-  let source = "catpaw-login";
-  try {
-    if (callback) {
-      // state 不匹配的回调在服务器里就地拒绝、不 settle，所以这里拿到的必然匹配；
-      // 仍然再校验一次（纵深防御，且防「空 state」这类畸形请求）。
-      const won = await Promise.race([
-        callback.wait(LOGIN_WINDOW_MS).then((cb) => {
-          if (cb.state !== state) throw new Error("回调 state 与本次登录不一致");
-          if (!cb.token) throw new Error("回调返回了空 token");
-          return { token: cb.token, channel: "callback" as const };
-        }),
-        pollPromise.then((t) => ({ token: t ?? "", channel: "poll" as const })),
-      ]);
-      token = won.token;
-      source = `catpaw-login-${won.channel}`;
-    } else {
-      const t = await pollPromise;
-      if (!t) throw new Error("轮询超时：10 分钟内未检测到登录");
-      token = t;
-      source = "catpaw-login-poll";
-    }
-  } finally {
-    // 关掉回调服务器、取消还在跑的轮询（幂等）
-    abort.abort();
-    callback?.close();
-  }
-
+  const token = await pollToken(sid);
   if (!token) throw new Error("轮询超时：10 分钟内未检测到登录");
 
-  // ③ 取 uid：账号池靠它认「同一个账号」（见 fetchCurrentUserId）
+  // 取 uid：账号池靠它认「同一个账号」（见 fetchCurrentUserId）
   onStatus?.("登录成功，正在获取账号信息…");
   const uid = await fetchCurrentUserId(token);
 
-  const c = fromToken(token, source, uid);
+  const c = fromToken(token, "catpaw-login-poll", uid);
   await save(c);
   return c;
 }
