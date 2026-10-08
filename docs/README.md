@@ -45,7 +45,8 @@
 | `qoder` | Qoder | [PROTOCOL.md](./protocols/qoder/PROTOCOL.md)（**桩**：模块尚未实现） |
 | `raccoon` | Raccoon（商汤） | [PROTOCOL.md](./protocols/raccoon/PROTOCOL.md) |
 | `trae` | TRAE（字节） | [PROTOCOL.md](./protocols/trae/PROTOCOL.md) |
-| `workbuddyai` | WorkBuddyAI | [findings.md](./journals/workbuddyai/findings.md) —— 该渠道的协议事实记在调研笔记里（无独立 PROTOCOL.md） |
+| `workbuddy` | WorkBuddy（国内版 CodeBuddy） | 与 `workbuddyai` **同一套插件端点协议**（无独立 PROTOCOL.md）；差异与用法见 [bridges/workbuddy.md](./bridges/workbuddy.md) |
+| `workbuddyai` | WorkBuddyAI（国际版） | [findings.md](./journals/workbuddyai/findings.md) —— 该渠道的协议事实记在调研笔记里（无独立 PROTOCOL.md） |
 
 `catpaw` 的规格不是单文件，而是一条完整的凭据逆向链路（`PROTOCOL.md` 是它的索引）：
 
@@ -64,7 +65,7 @@
 | --- | --- | --- | --- |
 | [catpaw](./bridges/catpaw.md) | [cline](./bridges/cline.md) | [codearts](./bridges/codearts.md) | [gemini](./bridges/gemini.md) |
 | [lobsterai](./bridges/lobsterai.md) | [loomy](./bridges/loomy.md) | [minimax](./bridges/minimax.md) | [qoder](./bridges/qoder.md) |
-| [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddyai](./bridges/workbuddyai.md) | （空） |
+| [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddy](./bridges/workbuddy.md) | [workbuddyai](./bridges/workbuddyai.md) |
 
 ## 4. 进度与调研 `docs/journals/<cid>/`
 

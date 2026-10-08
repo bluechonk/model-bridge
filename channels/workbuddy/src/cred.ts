@@ -1,15 +1,15 @@
 /**
  * 认证状态：浏览器设备登录流程、凭证持久化与访问令牌刷新。
  *
- * 登录协议（实测）：
+ * 登录协议（实测，与国际版 workbuddyai 同一套插件端点）：
  *   1. `POST {base}/v2/plugin/auth/state?platform=workbuddy`（匿名头）→ {state, authUrl}
  *   2. 浏览器打开 authUrl，人工授权（唯一人工步骤）
  *   3. `GET {base}/v2/plugin/auth/token?state=...` 每 5s 轮询，≤5 分钟 → 令牌
  *   4. 落盘为 credentials.json（Go 风格字段名）
  * 刷新：`POST /v2/plugin/auth/refresh`（纯 HTTP，无需浏览器）
  *
- * ⚠ 本渠道**只有一个域**（国际版 workbuddy.ai）。国内版（codebuddy.ai）是**独立渠道**
- * `workbuddy` —— 账号属于哪个域就用哪个渠道登录，不再有 `--realm` 二选一。
+ * ⚠ 本渠道**只有一个域**（国内版 codebuddy.ai）。账号属于哪个域就必须用哪个渠道
+ * 登录：国内账号走本渠道，国际账号走 `workbuddyai` —— 不再有 `--realm` 二选一。
  */
 
 import { readFileSync } from "node:fs";
@@ -21,10 +21,10 @@ import {
   login as sharedLogin,
 } from "@model-bridge/gateway";
 
-/** 登录基址（国际版 workbuddy.ai）。 */
-export const DEFAULT_BASE_URL = "https://www.workbuddy.ai";
+/** 登录基址（国内版 CodeBuddy）。 */
+export const DEFAULT_BASE_URL = "https://www.codebuddy.ai";
 
-/** 向 WorkBuddyAI 插件端点标识本客户端。 */
+/** 向插件端点标识本客户端。 */
 const PLATFORM_QS = "platform=workbuddy";
 
 const LOGIN_WINDOW_MS = 5 * 60 * 1000;
@@ -81,9 +81,7 @@ const str = sharedLogin.str;
 /**
  * 解析登录基址。
  *
- * 国际版**只有一个域**（workbuddy.ai），`realm` 参数仅作兼容保留（共享层 CLI 会传进来）。
- * 国内版是**独立渠道** `workbuddy`（codebuddy.ai）—— 域是渠道身份的一部分，
- * 不在这里按参数分流（那会让登录链路与凭证落点随 `--realm` 漂移）。
+ * 国内版**只有一个域**，`realm` 参数仅作兼容保留（共享层 CLI 会传进来）。
  */
 export function resolveBaseUrl(_realm = "auto"): string {
   return DEFAULT_BASE_URL;

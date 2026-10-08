@@ -6,7 +6,7 @@
  * cred / upstream / catalog / billing。
  *
  * 旧实现里这些配置（目录名/端口/日志前缀…）靠 scaffold 的字符串替换注入到
- * 11 份共享模块副本里；现在集中在这里一处。
+ * 12 份共享模块副本里；现在集中在这里一处。
  */
 
 import { setChannel, type BridgeConfig, type Channel } from "@model-bridge/gateway";

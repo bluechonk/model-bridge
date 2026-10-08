@@ -1,10 +1,10 @@
 /**
- * workbuddyai-bridge 自检（离线，不出网）。
+ * workbuddy-bridge（国内版 CodeBuddy）自检（离线，不出网）。
  *
  * 覆盖：
- *  1. 路径与目录迁移
- *  2. 模型目录（别名映射 + 未知名透传）
- *  3. 凭据落盘/读取/损坏容忍
+ *  1. 路径与「无历史目录」边界
+ *  2. 模型目录（对外名 = 上游名；旧短名仅作输入兼容）
+ *  3. 凭据落盘/读取/损坏容忍 + 单域登录基址
  *  4. 上游 URL 组装与鉴权头
  *  5. SSE 规范化（注释行剔除、空 tool_calls 剔除）与聚合
  *  6. 端到端网关（假上游）：system 注入、强制流式、指纹改写、非流式聚合、错误信封
@@ -20,12 +20,12 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 // 必须在 import 被测模块之前设置（paths 每次调用都重新解析存储根）
-const HOME = mkdtempSync(join(tmpdir(), "wb-selftest-"));
+const HOME = mkdtempSync(join(tmpdir(), "wb-cn-selftest-"));
 process.env["MODEL_BRIDGE_HOME"] = HOME;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
 const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
-await import("../dist/channel.js");
+const channelModule = await import("../dist/channel.js");
 const catalog = await import("../dist/catalog.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");
@@ -111,29 +111,20 @@ async function readSseFrames(url: string, body: unknown): Promise<string> {
 // ── 测试 ─────────────────────────────────────────────────────────────────────
 
 describe("1. 路径", () => {
-  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/workbuddyai", () => {
+  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/workbuddy", () => {
     assert.equal(paths.rootDir(), HOME);
-    assert.equal(paths.channelDir(), join(HOME, "workbuddyai"));
+    assert.equal(paths.channelDir(), join(HOME, "workbuddy"));
     assert.ok(paths.credentialsPath().endsWith("credentials.json"));
     assert.ok(paths.pidPath().endsWith("gateway.pid"));
     assert.ok(paths.logPath().endsWith("gateway.log"));
   });
 
-  it("旧目录存在时迁移（保留凭据）", () => {
-    const alt = mkdtempSync(join(tmpdir(), "wb-legacy-"));
-    const legacy = join(alt, ".workbuddyai2api");
-    mkdirSync(legacy, { recursive: true });
-    writeFileSync(join(legacy, "credentials.json"), '{"accessToken":"legacy"}', "utf8");
-
-    const saved = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = alt;
-    try {
-      assert.equal(paths.channelDir(), join(alt, "workbuddyai"));
-      assert.ok(paths.credentialsPath().includes("workbuddyai"));
-    } finally {
-      process.env["MODEL_BRIDGE_HOME"] = saved;
-      rmSync(alt, { recursive: true, force: true });
-    }
+  it("不认国际版的历史目录与变量（跨产品串号防护）", () => {
+    // 本渠道是拆分后新建的：`.workbuddy-bridge` 里是国际版凭证，归 workbuddyai。
+    // 声明它会把这些数据迁进国内渠道 —— 所以必须为空。
+    assert.deepEqual([...channelModule.config.legacyDirs], []);
+    assert.deepEqual([...channelModule.config.legacyEnvVars], []);
+    assert.equal(channelModule.config.debugDumpEnv, "WORKBUDDY_DEBUG_DUMP");
   });
 });
 
@@ -157,14 +148,14 @@ describe("2. 模型目录", () => {
       "utf8",
     );
     const savedCwd = process.cwd();
-    const savedEnv = process.env["WBAI_MODELS_FILE"];
-    process.env["WBAI_MODELS_FILE"] = join(dir, "models.json");
+    const savedEnv = process.env["WB_MODELS_FILE"];
+    process.env["WB_MODELS_FILE"] = join(dir, "models.json");
     catalog.clearCache();
     try {
       assert.equal(catalog.resolveModel("short-x"), "upstream-x");
     } finally {
-      if (savedEnv === undefined) delete process.env["WBAI_MODELS_FILE"];
-      else process.env["WBAI_MODELS_FILE"] = savedEnv;
+      if (savedEnv === undefined) delete process.env["WB_MODELS_FILE"];
+      else process.env["WB_MODELS_FILE"] = savedEnv;
       process.chdir(savedCwd);
       catalog.clearCache();
       rmSync(dir, { recursive: true, force: true });
@@ -186,12 +177,12 @@ describe("3. 凭据", () => {
       ...cred.EMPTY_CREDENTIALS,
       accessToken: jwt,
       refreshToken: "r",
-      domain: "www.workbuddy.ai",
+      domain: "www.codebuddy.ai",
       obtainedAt: "2026-10-08T00:00:00.000Z",
     });
     const c = cred.load();
     assert.equal(c.uid, "user-123", "uid 应从 JWT sub 提取");
-    assert.equal(c.domain, "www.workbuddy.ai");
+    assert.equal(c.domain, "www.codebuddy.ai");
   });
 
   it("凭据文件损坏时按未登录处理（不抛解析异常）", () => {
@@ -204,30 +195,26 @@ describe("3. 凭据", () => {
     assert.throws(() => cred.load(), cred.NotLoggedInError);
   });
 
-  it("登录基址恒为国际域（realm 参数被忽略）", async () => {
+  it("登录基址恒为国内域（realm 参数被忽略）", async () => {
     const payload = Buffer.from(JSON.stringify({ sub: "u" })).toString("base64url");
     await cred.save({
       ...cred.EMPTY_CREDENTIALS,
       accessToken: `h.${payload}.s`,
-      domain: "www.codebuddy.ai",
+      domain: "www.workbuddy.ai",
     });
-    assert.equal(cred.resolveBaseUrl("auto"), "https://www.workbuddy.ai");
-    assert.equal(cred.resolveBaseUrl("intl"), "https://www.workbuddy.ai");
-    assert.equal(
-      cred.resolveBaseUrl("cn"),
-      "https://www.workbuddy.ai",
-      "国内版是独立渠道 workbuddy，不在这里分流",
-    );
+    assert.equal(cred.resolveBaseUrl("auto"), "https://www.codebuddy.ai");
+    assert.equal(cred.resolveBaseUrl("intl"), "https://www.codebuddy.ai", "没有 intl 一说，恒国内域");
+    assert.equal(cred.resolveBaseUrl("cn"), "https://www.codebuddy.ai");
   });
 });
 
 describe("4. 上游配置", () => {
   it("URL 组装（chat 路径不用 prefixPath）", () => {
     const cfg = upstream.defaultConfig();
-    assert.equal(upstream.chatUrl(cfg), "https://www.workbuddy.ai/v2/chat/completions");
+    assert.equal(upstream.chatUrl(cfg), "https://www.codebuddy.ai/v2/chat/completions");
     assert.equal(
       upstream.modelsUrl(cfg),
-      "https://www.workbuddy.ai/v2/enterprises/personal/models",
+      "https://www.codebuddy.ai/v2/enterprises/personal/models",
     );
   });
 
@@ -236,7 +223,7 @@ describe("4. 上游配置", () => {
     upstream.applyAuth(headers, upstream.defaultConfig(), "tok", "uid-1");
     assert.equal(headers["Authorization"], "Bearer tok");
     assert.equal(headers["X-User-Id"], "uid-1");
-    assert.equal(headers["X-Domain"], "www.workbuddy.ai");
+    assert.equal(headers["X-Domain"], "www.codebuddy.ai");
     // 上游按 UA 归因「使用端」，缺品牌字样会让账单显示为 `-`
     assert.equal(headers["User-Agent"], "CodeBuddyCode/1.0");
   });
@@ -244,14 +231,14 @@ describe("4. 上游配置", () => {
   it("resolveConfig 取 endpoint 与鉴权属性", () => {
     const cfg = upstream.resolveConfig(
       {
-        endpoint: "https://www.codebuddy.ai",
+        endpoint: "https://www.workbuddy.ai",
         authentication: {
           attributes: { tokenHeader: "X-Token", usernameHeader: "X-Uid" },
         },
       },
       upstream.defaultConfig(),
     );
-    assert.equal(cfg.baseUrl, "https://www.codebuddy.ai");
+    assert.equal(cfg.baseUrl, "https://www.workbuddy.ai");
     assert.equal(cfg.tokenHeader, "X-Token");
     assert.equal(cfg.usernameHeader, "X-Uid");
     // 即使载荷声明了 prefixPath，chat 路径也固定为 /v2/chat/completions

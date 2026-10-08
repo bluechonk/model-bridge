@@ -1,0 +1,44 @@
+{
+  "name": "workbuddy-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WorkBuddy 国内版（腾讯 CodeBuddy / codebuddy.ai）的本地 OpenAI Chat Completion 透明代理网关（TypeScript，无窗口，ZCode 插件引擎）",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "bin": {
+    "workbuddy": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test tests/selftest.test.ts",
+    "test:all": "npm run build && node --test tests/*.test.ts"
+  },
+  "keywords": [
+    "workbuddy",
+    "codebuddy",
+    "gateway",
+    "openai",
+    "proxy",
+    "cli",
+    "typescript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@model-bridge/gateway": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.2"
+  }
+}
