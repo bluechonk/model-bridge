@@ -5,7 +5,7 @@
 ## 0. 一句话架构
 
 **共享层在 `packages/gateway`（工作区名 `@model-bridge/gateway`），渠道差异通过
-`Channel` 注册表注入。每个 `<cid>-bridge` 只实现 4 个渠道特有模块，其余一律复用共享包。**
+`Channel` 注册表注入。每个 `channels/<cid>/` 只实现 4 个渠道特有模块，其余一律复用共享包。**
 
 旧实现（已废弃）是「每个项目各存一份共享模块副本 + 用 `scaffold_ts.py` 做字符串替换」，
 改一处要重刷 11 份。现在共享模块只有一份，字符串替换已彻底移除。
@@ -34,7 +34,7 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 ├── plugins/model-bridge/         ← **唯一的 ZCode 插件**（命令/技能/hook）
 ├── marketplace.json              ← ZCode 市场清单（单条目 → ./plugins/model-bridge）
 ├── channels/                     ← 12 个渠道（每个 = 一个模型池 + 账号池）
-│   └── <cid>-bridge/             ← 结构见下
+│   └── <cid>/                    ← 结构见下
 ├── packages/cli/                 ← **仓库级入口**（bin `model-bridge`）
 │   └── src/
 │       ├── channels.ts           ← import 全部 12 个渠道包（副作用 = setChannel）
@@ -43,10 +43,10 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 └── tools/                        ← 仓库级工具（verify-storage.mjs 等）
 ```
 
-`channels/<cid>-bridge/` 内部（= 一个**池子**）：
+`channels/<cid>/` 内部（= 一个**池子**）：
 
 ```
-<cid>-bridge/
+channels/<cid>/
 └── src/
     ├── channel.ts                ← **本渠道装配**：BridgeConfig + 4 个模块 → setChannel()
     ├── cli.ts                    ← bin 入口：注册本渠道后调共享 `main()`（单渠道调试用）
@@ -62,12 +62,12 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 > 多渠道路由下对外模型 id 是 `<cid>/<模型>`（如 `workbuddy/deepseek-flash`）；
 > 只注册一个渠道时仍是裸短名（兼容既有客户端配置）。
 
-**每个 `<cid>-bridge` 的 `src/` 只有 7 个文件。** 任何不在上表里的 `src/*.ts`
+**每个 `channels/<cid>/` 的 `src/` 只有 7 个文件。** 任何不在上表里的 `src/*.ts`
 （`gateway.ts` / `daemon.ts` / `paths.ts` / `sse-stream.ts` …）都是旧副本残留，应删除。
 
 ### 1.1 各渠道的共享依赖声明
 
-每个 `<cid>-bridge/package.json` 必须声明：
+每个 `channels/<cid>/package.json` 必须声明：
 
 ```json
 { "dependencies": { "@model-bridge/gateway": "*" } }
