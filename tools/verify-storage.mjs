@@ -31,14 +31,25 @@ function packageDirs() {
   const out = [];
   for (const pattern of patterns) {
     if (typeof pattern !== "string") continue;
+    const candidates = [];
     if (pattern.includes("*")) {
+      // 目录名不做要求：是不是渠道包由「包名不在 @model-bridge/ 作用域 + 有 src/channel.ts」判定
       const base = join(workspaceRoot, dirname(pattern));
       if (!existsSync(base)) continue;
-      for (const name of readdirSync(base)) {
-        if (name.endsWith("-bridge")) out.push(join(base, name));
+      for (const name of readdirSync(base)) candidates.push(join(base, name));
+    } else {
+      candidates.push(join(workspaceRoot, pattern));
+    }
+    for (const dir of candidates) {
+      // 本仓库自己的基础设施包（@model-bridge/gateway、@model-bridge/cli）不是渠道包 ——
+      // 注意 packages/gateway/src/channel.ts 是共享层的**注册表模块**，不能按文件名判据放行。
+      try {
+        const name = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).name;
+        if (typeof name === "string" && name.startsWith("@")) continue;
+      } catch {
+        continue;
       }
-    } else if (pattern.endsWith("-bridge")) {
-      out.push(join(workspaceRoot, pattern));
+      out.push(dir);
     }
   }
   return out;
@@ -53,8 +64,8 @@ function check(ok, message) {
 
 const bridges = [];
 for (const dir of packageDirs()) {
-  // 「渠道包」的判据是**有 src/channel.ts**（注册表入口）。仓库级包（如 packages/model-bridge）
-  // 名字也带 -bridge，但它不注册单一渠道，跳过。
+  // 「渠道包」的判据是**有 src/channel.ts**（注册表入口）。仓库级包（如 packages/gateway、
+  // packages/cli）没有它，跳过。
   if (!existsSync(join(dir, "src", "channel.ts"))) continue;
 
   const entry = join(dir, "dist/channel.js");

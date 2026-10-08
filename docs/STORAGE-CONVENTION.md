@@ -1,7 +1,7 @@
 # 存储落点与文件命名规范（工作区 `model-bridge`）
 
 本文件只规定**放在哪里、叫什么名字**：存储根、cid 分层、覆盖用环境变量、目录内的文件命名、
-历史名迁移。**凭证/配置的字段内容不在此列** —— 各 `<cid>-bridge` 自己决定
+历史名迁移。**凭证/配置的字段内容不在此列** —— 各 `channels/<cid>/` 自己决定
 （见 `CONTRACT-TS.md` §5）。
 
 适用范围：工作区内全部 12 个渠道包 + 共享包 `packages/gateway`。
@@ -104,7 +104,7 @@
 
 其它渠道的目录外文件都是**只读的包内资源**，不是用户存储，属正当例外：
 
-- `zcode-bridge/tools/zcode-identity.json`（身份块，随包分发；`ZCODE_IDENTITY_FILE` 可覆盖路径）
+- `channels/zcode/tools/zcode-identity.json`（身份块，随包分发；`ZCODE_IDENTITY_FILE` 可覆盖路径）
 - 各包根目录的 `models.json`（兜底模型表，随包分发）
 
 `*_DEBUG_DUMP` 是运行期由用户指定的抓包目录（opt-in），不构成固定落点，但命名见 §3.3。

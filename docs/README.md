@@ -10,9 +10,9 @@
 | `docs/journals/<cid>/` | 各渠道的**进度与调研**（寻宝记录，不参与构建） |
 | `docs/archive/` | 已废弃的历史产物 |
 
-> 各 `<cid>-bridge/` 目录里只留一份**指针 README**（指向本目录），
+> 各 `channels/<cid>/` 目录里只留一份**指针 README**（指向本目录），
 > 免得同一份说明散在 12 个子文件夹里各改一遍。
-> 唯一例外：`catpaw-bridge/AGENTS.md`（那是给工具读的目录级指令，必须留在原处）。
+> 唯一例外：`channels/catpaw/AGENTS.md`（那是给工具读的目录级指令，必须留在原处）。
 
 ---
 
@@ -55,7 +55,7 @@
 
 ## 3. 渠道说明 `docs/bridges/<cid>.md`
 
-各渠道包的使用说明（原 `<cid>-bridge/README.md` 的内容）：特性、快速开始、存储与配置、
+各渠道包的使用说明（原 `channels/<cid>/README.md` 的内容）：特性、快速开始、存储与配置、
 模型映射、测试、上游约束。
 
 | 渠道 | 渠道 | 渠道 | 渠道 |
@@ -85,14 +85,14 @@
 | 位置 | 是什么 |
 | --- | --- |
 | `plugins/model-bridge/` | ZCode 插件的命令/技能/hook（**必须**待在插件目录里，工具按固定路径加载） |
-| `catpaw-bridge/AGENTS.md` | 该目录的 agent 级指令（工具从目录读取，不能搬） |
-| `packages/*/README.md`、`<cid>-bridge/README.md` | 指针，指向本目录 |
+| `channels/catpaw/AGENTS.md` | 该目录的 agent 级指令（工具从目录读取，不能搬） |
+| `packages/*/README.md`、`channels/<cid>/README.md` | 指针，指向本目录 |
 
 ## 7. 新增一个渠道要动哪些地方
 
-1. 建 `<cid>-bridge/`：7 个 `src/*.ts`（`channel`/`cli`/`index` + `cred`/`upstream`/`catalog`/`billing`）
+1. 建 `channels/<cid>/`：7 个 `src/*.ts`（`channel`/`cli`/`index` + `cred`/`upstream`/`catalog`/`billing`）
    + `tests/selftest.test.ts` + `package.json` + `tsconfig.json` + 指针 `README.md`
-2. `packages/cli/src/channels.ts` 加一行 `import "<cid>-bridge"`
+2. `packages/cli/src/channels.ts` 加一行 `import "<cid>-bridge"`（**包名**仍为 `<cid>-bridge`；目录名与包名解耦，npm 不要求同名）
 3. 工作区根 `package.json` 的 `workspaces`；`packages/cli/package.json` 的 `dependencies`
 4. `docs/protocols/<cid>/PROTOCOL.md`、`docs/bridges/<cid>.md`
 5. `npm install && npm run build && npm test`（`tools/verify-storage.mjs` 会校验落点规范）
