@@ -129,7 +129,7 @@ describe("1. 路径", () => {
     process.env["MODEL_BRIDGE_HOME"] = alt;
     try {
       assert.equal(paths.channelDir(), join(alt, "workbuddyai"));
-      assert.ok(paths.credentialsPath().includes("workbuddy"));
+      assert.ok(paths.credentialsPath().includes("workbuddyai"));
     } finally {
       process.env["MODEL_BRIDGE_HOME"] = saved;
       rmSync(alt, { recursive: true, force: true });
