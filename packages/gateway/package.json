@@ -30,7 +30,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -b tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test tests/*.test.ts"
   },
