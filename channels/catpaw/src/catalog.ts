@@ -34,15 +34,38 @@ export interface CatalogEntry {
 /**
  * 兜底表：上游模型目录不可用时仍可暴露的模型。
  *
- * ⚠ 只放 flash 家族（白名单 `/flash/i`）。catpaw 上游实际模型名以
- * `/model-types` 返回为准，兜底表是「未拉到上游也能看到模型」的保险。
+ * ⚠ **内容取自一次真实的上游 `/model-types` 返回**（2026-10-08 实测，见
+ * `docs/protocols/catpaw/PROTOCOL.md`），只留池策略放行的那些
+ * （`(deepseek|glm) && flash`，判据在共享 `isAllowedFamily()`）。
+ *
+ * ⚠ 曾被写成占位名 `catpaw-flash` —— 那个 id 上游**根本不存在**，
+ * 池策略改成「家族 + flash」后它必然被过滤，于是「未回填前」池子是空的。
+ * 兜底表要能真的兜住，就得用真实 id。
  */
 const FALLBACK_MODELS: CatalogEntry[] = [
   {
-    id: "catpaw-flash",
-    name: "CatPaw Flash",
+    id: "glm-5.3-flashx",
+    name: "GLM-5.3-FlashX",
     modelType: 1,
-    reasoning: false,
+    reasoning: true,
+    contextWindow: 0,
+    description: "fallback (upstream unavailable)",
+    supportsImages: false,
+  },
+  {
+    id: "glm-5.3-flash",
+    name: "GLM-5.3-Flash",
+    modelType: 1,
+    reasoning: true,
+    contextWindow: 0,
+    description: "fallback (upstream unavailable)",
+    supportsImages: false,
+  },
+  {
+    id: "deepseek-v4-flash",
+    name: "DeepSeek-V4-Flash",
+    modelType: 1,
+    reasoning: true,
     contextWindow: 0,
     description: "fallback (upstream unavailable)",
     supportsImages: false,

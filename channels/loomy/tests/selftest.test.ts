@@ -912,10 +912,11 @@ describe("8. 模型目录（倍率归一化 / type=chat 过滤 / 档位清洗）
       const ids = catalog.exposedIds();
       assert.deepEqual(
         ids,
-        ["deepseek-v4-flash-0731", "GLM-5.3-Flash", "qwen3.8-flash"],
-        "flash-only 池策略：8 条兜底里 3 条是 flash 家族",
+        ["deepseek-v4-flash-0731", "GLM-5.3-Flash"],
+        "池策略 (deepseek|glm)×flash：8 条兜底里 2 条命中；qwen3.8-flash 是 flash 但非 deepseek/glm → 挡下",
       );
-      assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能是 flash 家族");
+      assert.ok(ids.every((id) => /flash/i.test(id)), "池子里必须带 flash");
+      assert.ok(ids.every((id) => /deepseek|glm/i.test(id)), "且必须属于 deepseek 或 glm 家族");
       // 过滤只发生在呈现层：兜底表整表 8 条仍在 details 里（下面 spark-x 的断言依赖它）
       const detailRows = catalog.details();
       assert.equal(detailRows.length, 8, "details 仍给出全部 8 条兜底");

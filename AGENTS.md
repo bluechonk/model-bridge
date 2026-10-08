@@ -5,7 +5,7 @@
 ## 1. 这是什么
 
 一个本地 OpenAI 兼容网关 + 10 个渠道，**仓库本身就是一个 ZCode 插件**。
-每个渠道在下游是一个**池子**：模型池（`catalog` + flash 白名单）+ 账号池（同渠道多账号）。
+每个渠道在下游是一个**池子**：模型池（`catalog` + `(deepseek|glm) × flash` 白名单）+ 账号池（同渠道多账号）。
 
 ```
 packages/gateway/    共享层（gateway / daemon / headless / paths / 渠道注册表；**不许出现渠道知识**）

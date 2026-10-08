@@ -155,20 +155,35 @@ interface Channel {
 - **目录**：各渠道的 `catalog.ts` 维护的完整模型表（兜底表 + `models.json` + 远端目录）。
 - **池子**：`/v1/models` 与选择器实际暴露的 id —— 由共享层白名单过滤 `exposedIds()` 得到。
 
-白名单是**网关级策略**，放在共享层，一次改动覆盖全部渠道：
+白名单是**网关级策略**，放在共享层，一次改动覆盖全部渠道。
+判据是**两道闸门同时成立**：家族 + 型号。
 
 ```ts
-export const FAMILY_ALLOWLIST: RegExp[] = [/flash/i];
+export const FAMILY_ALLOWLIST: RegExp[] = [/\bdeepseek/i, /\bglm/i];  // 家族（并集）
+export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号（必须全中）
 ```
 
-- **只放行 flash 家族，大小写不敏感**（`/flash/i` 用宽匹配：模型名里 flash 常靠连字符
-  或大小写混排 —— `M3.1-Flash-Preview`、`glm-5.3-flash`、`sn-deepseek-v4-1-flash`）。
+- **只放行 `(deepseek | glm)` 的 flash 模型**。因此：
+  - 同家族的非 flash（`deepseek-v4-pro`、`glm-5.2`）**挡下**；
+  - **别家的 flash 也挡下**（`qwen3.8-flash`、`gemini-3.8-flash`、`mimo-v2.6-flash`）。
+- **两条判据都用前置词边界** `\b`：
+  - 上游写法里家族名/型号名前面总是 `-` / `/` / `~` / 串首，都有词边界 —— `\b` 覆盖
+    全部真实变体（`deepseek-v4.1-flash`、`sn-glm-5-3-flash`、`z-ai/glm-5.3-flashx`、
+    `~deepseek/deepseek-flash-latest`、`DeepSeek-V4-Flash-Official`）；
+  - 而裸子串会误命中 `alglmx-flash`、`glimmer-flash`、`flashlight` 这类名字 ——
+    误放行 = 把别家模型塞进用户的选择器。
+  - `REQUIRED_ALLOWLIST` **只加前置边界**（`\bflash`）：同系变体靠后缀识别
+    （`glm-5.3-flashx` 的 FlashX、`glm-flash-latest` 的跟随最新），加后置 `\b` 会全丢。
 - 判据同时看 **id 与展示名**（`isAllowedFamily(id, name, slug)`）：某些渠道的家族信息
   只在展示名里（如 Qoder 的 `dfmodel`）。
 - **过滤只发生在呈现层**：被挡在池外的模型**仍保留在目录里**（`catalog.details()` 可见），
   数据不丢。各渠道的 `resolveModel()` 对这些 id 仍能正常解析。
 - 想放行全部模型：把 `FAMILY_ALLOWLIST` 置为 `[]`。
+- 想放宽型号要求：把 `REQUIRED_ALLOWLIST` 置为 `[]`（不再强制 flash）。
 - 临时排查：设 `BRIDGE_ALLOW_ALL_MODELS=1` 绕过白名单（不改代码）。
+
+> ⚠ 策略收窄有**渠道级后果**：没有 deepseek/glm 产品的渠道池子会恒空。
+> `gemini` / `minimax` 两个渠道因此已被删除（见 `docs/README.md` 的「已移除的渠道」）。
 
 > ⚠ 各渠道 **不要**在自己的 `catalog.ts` 里再实现一遍家族过滤。`exposedIds()`
 > 只需调用共享的 `isAllowedFamily()`，被判据覆盖的完整条目仍从 `details()` 给出。

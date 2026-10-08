@@ -723,11 +723,13 @@ describe("9. 模型目录：兜底表 / 图片能力 / 倍率规则", () => {
 
   it("未登录时同样列出兜底表；未知模型原样透传", () => {
     catalog.clearCache();
-    assert.equal(
-      catalog.exposedIds().length,
-      4,
-      "6 条兜底里 4 条是 flash 家族（未登录也必须有模型，否则渠道在选择器里消失）",
+    const ids = catalog.exposedIds();
+    assert.deepEqual(
+      ids,
+      ["sn-glm-5-3-flash", "sn-deepseek-v4-1-flash"],
+      "池策略 (deepseek|glm)×flash：6 条兜底里 2 条命中（命中 flash 但非 deepseek/glm 的挡下）",
     );
+    assert.ok(ids.every((id) => /flash/i.test(id) && /deepseek|glm/i.test(id)), "两道闸门都要过");
     assert.equal(catalog.resolveModel("sn-brand-new"), "sn-brand-new");
     assert.equal(catalog.resolveModel("sn-glm-5-3"), "sn-glm-5-3");
   });
@@ -779,7 +781,11 @@ describe("10. 模型目录：远端优先与缓存", () => {
     st.sentModels = 0;
     catalog.clearCache();
     await catalog.refreshCatalog();
-    assert.deepEqual(catalog.exposedIds(), ["sn-glm-5-3-flash"], "远端 flash 模型进池；非 flash 被过滤");
+    assert.deepEqual(
+      catalog.exposedIds(),
+      ["sn-glm-5-3-flash"],
+      "远端 glm flash 进池；sn-deepseek-v4-1-flash 不在这个假上游里，别家 flash 被策略挡下",
+    );
     assert.equal(st.sentModels, 1);
     await catalog.refreshCatalog();
     assert.equal(st.sentModels, 1, "远端命中缓存（不重复请求）");
