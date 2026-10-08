@@ -11,7 +11,7 @@
  * 4. **兜底表**：未登录或上游目录未拉取时，仍能暴露 flash 模型。
  */
 
-import { isAllowedFamily } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
 
 /** 一条模型目录条目。 */
 export interface CatalogEntry {
@@ -51,16 +51,54 @@ const FALLBACK_MODELS: CatalogEntry[] = [
 
 /** 上游目录缓存（由 upstream.fetchModels() 成功时回填）。 */
 let _remote: CatalogEntry[] | null = null;
+let cacheLoaded = false;
 
-/** 回填上游模型目录（由 upstream.fetchModels 成功后调用）。 */
+/** 回填上游模型目录（由 upstream.fetchModels 成功后调用），并落盘。 */
 export function setCatalog(entries: CatalogEntry[]): void {
   _remote = entries.length > 0 ? entries : null;
+  cacheLoaded = true;
+  if (entries.length > 0) writeCatalogCache(entries);
+}
+
+/**
+ * 首次使用时把**磁盘缓存**（`cache/models.json`）读进来。
+ *
+ * 惰性而非模块加载时读：`channelFile()` 依赖渠道已注册（`setChannel`），
+ * 而 `channel.ts` 是在 import 本模块**之后**才注册的 —— 模块加载时读会抛错。
+ */
+function ensureCachedModels(): void {
+  if (cacheLoaded) return;
+  cacheLoaded = true;
+  try {
+    const cached = readCatalogCache<CatalogEntry>();
+    if (cached) _remote = cached;
+  } catch {
+    /* 读不到就回落兜底表 */
+  }
 }
 
 /** 当前目录（上游缓存优先，缺则兜底）。 */
 export function loadCatalog(): CatalogEntry[] {
+  ensureCachedModels();
   if (_remote && _remote.length > 0) return [..._remote];
   return FALLBACK_MODELS.map((e) => ({ ...e }));
+}
+
+/**
+ * 强制从上游重拉目录并落盘（CLI `--refresh` / `model refresh`）。
+ *
+ * 解析与落盘已在 `upstream.fetchModels()` 里完成（它调 `setCatalog()`），
+ * 这里只负责「要一次真实的拉取，并且失败要抛出去」。
+ */
+export async function refresh(): Promise<void> {
+  // 动态 import：避免 catalog ↔ upstream/cred 的静态环
+  const [upstream, cred] = await Promise.all([import("./upstream.js"), import("./cred.js")]);
+  const c = cred.load();
+  const data = await upstream.fetchModels(c);
+  const models = data["models"];
+  if (!Array.isArray(models) || models.length === 0) {
+    throw new Error("上游返回的模型目录为空");
+  }
 }
 
 /**

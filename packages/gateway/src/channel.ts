@@ -73,7 +73,7 @@ export interface LoginUi {
 /*
  * 下面四个接口描述「渠道模块必须提供哪些成员」。凭据/配置形态各渠道不同，
  * 故这些位置用 `any`：共享层只在**结构**上依赖它们（调用点已由 CONTRACT-TS.md
- * 固定），不做跨渠道的类型统一 —— 那会在 11 个异构渠道间制造大量摩擦。
+ * 固定），不做跨渠道的类型统一 —— 那会在 12 个异构渠道间制造大量摩擦。
  */
 
 /** 渠道 `cred.ts` 需要提供的接口。 */
@@ -118,6 +118,21 @@ export interface UpstreamModule {
 export interface CatalogModule {
   exposedIds(): string[];
   resolveModel(name: string): string;
+  /**
+   * **强制**从上游重拉目录并落盘（CLI 的 `--refresh` 用）。
+   *
+   * 可选：只有具备「远端目录层」的渠道才实现（catpaw / codearts / lobsterai /
+   * trae / raccoon / loomy / cline）。目录本身就是静态内置表的渠道
+   * （gemini / minimax / workbuddyai / qoder）**不实现** —— 共享层据此回报
+   * 「该渠道的模型表是内置的，没有可刷新的远端」，而不是假装刷了一遍。
+   *
+   * 实现约定：
+   * - 成功时把新目录写进 `cache/models.json`（见 `catalog-cache.ts`），
+   *   使**下一个进程**直接读到它；
+   * - 失败**抛错**（与自动路径的「静默回落」相反）—— 用户显式要求刷新时
+   *   必须知道到底成没成，而不是看到一张旧表还以为刷成功了。
+   */
+  refresh?(): Promise<void>;
 }
 
 /** 签到 / 领取的**只读**状态。 */

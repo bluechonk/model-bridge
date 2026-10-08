@@ -1,4 +1,4 @@
-import { isAllowedFamily } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
 
 /**
  * LobsterAI 模型目录：远端 `/api/models/available` 的解析、缓存与兜底表。
@@ -6,10 +6,14 @@ import { isAllowedFamily } from "@model-bridge/gateway";
  * ## 兜底表是必需的，但**不能**替代远端
  *
  * 未登录或上游目录失败时用户仍要在模型选择器里看到模型（否则渠道凭空消失，
- * 用户以为插件坏了）——故保留 Go `handler.go:94-114` 的 19 条静态表。
+ * 用户以为插件坏了）——故保留一张静态兜底表。
  * 但远端列表才是权威：实测它会下发 `contextWindow`（多为 1000000）、
- * `thinkingConfig`、`costMultiplier`（裸数字）等静态表没有的信息，
- * 且**只有远端列表里有 `kimi-k3`**（兜底表是 2026-08-06 的快照）。
+ * `thinkingConfig`、`costMultiplier`（裸数字）等静态表没有的信息。
+ *
+ * 兜底表与远端**必然脱节**（它只是某个时刻的快照）：实测 2026-08-06 那份 19 条里
+ * 只有 1 条 flash，而 2026-10-08 上游真实是 30 条、8 条 flash —— 故兜底表已对齐到
+ * 2026-10-08 的一次真实拉取，并且**成功拉到远端时会写磁盘缓存**（见下「缓存由谁填充」），
+ * 让新进程直接看到真实目录，而不是随包发布的兜底快照。
  *
  * ## 两个语义不可混用的档位
  *
@@ -24,6 +28,11 @@ import { isAllowedFamily } from "@model-bridge/gateway";
  * 拉取动作挂在 `upstream.fetchModels()` 上（`auth-flow` 在启动/登录时必调），
  * 拉到后调 `setRemoteModels()` 灌进本模块的内存缓存 —— 这样网关保持同步、
  * 且不会为了列模型额外打一次上游。
+ *
+ * `setRemoteModels()` 同时把这份**真实目录**写进 `<cid>/cache/models.json`，
+ * 于是一个**新进程**（比如 `model list`）能直接读到它，不必重拉、也不回落到兜底表。
+ * 读取是惰性的（`ensureCachedModels()`）：`channelFile()` 要求渠道上下文已建立，
+ * 模块加载期读盘会踩空。
  */
 
 /** 一条目录条目。 */
@@ -48,34 +57,53 @@ export interface ModelEntry {
 }
 
 /**
- * 兜底模型表（19 条，全部 `contextWindow: 131072`）。
+ * 兜底模型表（30 条，全部 `contextWindow: 131072`）。
  *
- * 来源：Go `handler.go:94-114` 的 `staticModels`（2026-08-06 从
- * `GET /api/models/available` 实测拉取）。顺序照抄原表，不重排 ——
- * 它是实测时的返回顺序，重排会让「与上游对比」失去可比性。
+ * 来源：`GET /api/models/available` 在 **2026-10-08** 的一次真实拉取
+ * （此前是 2026-08-06 的 19 条快照，与上游已脱节）。顺序照抄上游返回顺序，
+ * 不重排 —— 它是实测时的返回顺序，重排会让「与上游对比」失去可比性。
  *
  * ⚠️ 不含 `costMultiplier`：编译期快照，价格会变，**不猜**。
  */
+/**
+ * 兜底目录：**未登录 / 上游拉不到时**给用户看的那份。
+ *
+ * ⚠ 这是**快照**不是实时数据：内容来自 2026-10-08 的一次真实拉取
+ * （`upstream.fetchModels()`，当时 30 条）。真机拉到远端后会用远端目录覆盖它，
+ * 并落盘到 `cache/models.json`（见共享层 `catalog-cache.ts`）——
+ * 所以正常使用时看到的**不是**这张表。
+ */
 const FALLBACK: readonly string[] = [
-  "deepseek-v4-flash",
+  "deepseek-flash",
   "deepseek-v4-pro",
+  "glm-5.3-flashx",
+  "glm-5.3-flash",
+  "glm-5.3",
+  "MiniMax-M3.1-Flash-Preview",
   "MiniMax-M3",
+  "qwen3.8-max",
+  "qwen3.8-flash",
+  "qwen3.8-omni-flash",
+  "kimi-k3",
+  "kimi-k2.8-preview",
+  "kimi-k2.7-code",
+  "doubao-seed-2-1-pro-260915",
+  "deepseek-v4-flash-vision-exp",
+  "deepseek-v4-flash",
   "MiniMax-M2.7",
   "qwen3.7-max",
   "qwen3.7-plus",
   "qwen3.6-plus",
   "qwen3.5-plus-2026-04-20",
-  "kimi-k2.7-code",
   "kimi-k2.7-code-highspeed",
   "kimi-k2.6",
   "kimi-k2.5",
-  "doubao-seed-2-1-pro-260628",
-  "doubao-seed-2-1-turbo-260628",
-  "doubao-seed-2-0-code-preview-260215",
   "glm-5.2",
   "glm-5.1",
   "glm-5v-turbo",
   "glm-5",
+  "doubao-seed-2-1-turbo-260628",
+  "doubao-seed-2-0-code-preview-260215",
 ];
 
 /** 兜底上下文窗口估计值（统一填，非逐个实测）。 */
@@ -90,6 +118,24 @@ export const FALLBACK_MODELS: readonly ModelEntry[] = FALLBACK.map((id) => ({
 }));
 
 let remoteCache: ModelEntry[] | null = null;
+let cacheLoaded = false;
+
+/**
+ * 首次使用时把**磁盘缓存**（`cache/models.json`）读进来。
+ *
+ * 惰性而非模块加载时读：`channelFile()` 依赖渠道已注册（`setChannel`），而
+ * `channel.ts` 是在 import 本模块**之后**才注册的 —— 模块加载时读会抛错。
+ */
+function ensureCachedModels(): void {
+  if (cacheLoaded) return;
+  cacheLoaded = true;
+  try {
+    const cached = readCatalogCache<ModelEntry>();
+    if (cached) remoteCache = cached;
+  } catch {
+    /* 读不到就回落兜底表 */
+  }
+}
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -188,13 +234,20 @@ export function parseRemoteModels(rows: readonly unknown[]): ModelEntry[] {
   return entries;
 }
 
-/** 灌入远端目录（由 upstream.fetchModels 在拉到列表后调用）。 */
+/**
+ * 灌入远端目录（由 `upstream.fetchModels` 在拉到列表后调用）。
+ *
+ * 同时**落盘**到 `cache/models.json`：否则换个新进程就只剩兜底表（实测过这个坑）。
+ */
 export function setRemoteModels(entries: readonly ModelEntry[]): void {
   remoteCache = entries.length > 0 ? [...entries] : null;
+  cacheLoaded = true;
+  if (entries.length > 0) writeCatalogCache(entries);
 }
 
-/** 当前远端缓存；未拉取过时返回 null。 */
+/** 当前远端缓存（磁盘缓存的也算）；都没有时返回 null。 */
 export function remoteModels(): ModelEntry[] | null {
+  ensureCachedModels();
   return remoteCache ? [...remoteCache] : null;
 }
 
@@ -203,8 +256,30 @@ export function resetRemoteCache(): void {
   remoteCache = null;
 }
 
+/**
+ * 强制从上游重拉目录并落盘（CLI `--refresh` / `model refresh`）。
+ *
+ * 解析与落盘已在 `upstream.fetchModels()` 里完成（它调 `setRemoteModels()`），
+ * 这里只负责「要一次真实的拉取，并且失败要抛出去」。
+ *
+ * 与自动路径的区别：**失败抛错**。用户显式要求刷新时必须知道成没成，
+ * 而不是看到一张旧表还以为刷成功了。
+ */
+export async function refresh(): Promise<void> {
+  // 动态 import：`upstream.ts` 静态依赖本模块（它调 `setRemoteModels`），
+  // 这里再静态反向依赖会形成环。函数体内延迟取，运行时两边都已求值完毕。
+  const [upstream, cred] = await Promise.all([import("./upstream.js"), import("./cred.js")]);
+  const c = cred.load();
+  const data = await upstream.fetchModels(c);
+  const models = data["models"];
+  if (!Array.isArray(models) || models.length === 0) {
+    throw new Error("上游返回的模型目录为空");
+  }
+}
+
 /** 当前生效的目录：远端优先，未拉到时用兜底表。 */
 export function entries(): ModelEntry[] {
+  ensureCachedModels();
   return remoteCache && remoteCache.length > 0 ? [...remoteCache] : [...FALLBACK_MODELS];
 }
 

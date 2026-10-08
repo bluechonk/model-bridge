@@ -58,6 +58,16 @@ export type { SigninLedger, ClaimRecord } from "./signin-ledger.js";
 export * as accounts from "./account-pool.js";
 export type { PoolAccount, PoolIndex, AccountHealth } from "./account-pool.js";
 
+// 远端目录的磁盘缓存（渠道层内 cache/models.json）
+export {
+  CATALOG_CACHE_FILE,
+  catalogCachePath,
+  readCatalogCache,
+  writeCatalogCache,
+  catalogCacheFetchedAt,
+} from "./catalog-cache.js";
+export type { CachedModel } from "./catalog-cache.js";
+
 // 模型池（对外 id 恒小写 + 大小写不敏感解析）
 export { poolIds, qualifiedId, resolvePoolModel } from "./model-pool.js";
 
