@@ -584,7 +584,12 @@ export function buildHeaders(
     ...(benefit ? { extraSignedHeaders: { maas_type: "benefit" } } : {}),
   });
   const headers = withoutHost(signed);
-  headers["Content-Type"] = "application/json";
+  // ⚠ **不要**再设 `Content-Type`：`signRequest` 已经返回了参与签名的 `content-type`。
+  // 两个键只在大小写上不同，而 Node 的 fetch 会把它们**都发出去**、拼成
+  // `content-type: application/json, application/json` —— 服务端按实际收到的值重算
+  // canonical request，与签名时的 `application/json` 不符，于是回
+  // `401 APIG.0301 verify ak sk signature fail`（实测 2026-10-08，抓包确认）。
+  // 签名头必须原样发出，一个字节都不能变。
   const sessionKey = pending?.sessionKey ?? deriveSessionKey("", []);
   headers["Chat-Id"] = sessionKey;
   headers["Session-Id"] = sessionKey;
