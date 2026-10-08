@@ -55,8 +55,8 @@ ${verbLines.join("\n")}
   credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
   checkin [--status]        签到 / 领活动奖励（不加 <cid> = 所有支持的渠道；--status 只查不领）
   login                     登录（可加 --channel <cid>，等价 <cid> login）
-  -h, --help                显示本帮助
-  -v, --version             显示版本
+  help                      显示本帮助（等价 -h / --help）
+  version                   显示版本（等价 -v / --version）
 
 选项:
   --addr <host:port>        网关监听地址（默认 ${defaultAddr()}）
@@ -77,7 +77,24 @@ ${verbLines.join("\n")}
   --force-login             serve：忽略已有凭证重新登录
   --verbose                 serve：打印每个上游请求
   --no-console              serve：不启动控制台 API 服务
+  -h, --help                显示本帮助
+  -v, --version             显示版本
+
+示例:
+  ${cid} start                          # 起网关（守护式，幂等）
+  ${cid} model list                     # 看全部渠道（池子）与各自模型
+  ${cid} trae login                     # 登录 trae（浏览器授权）
+  ${cid} trae billing                   # 看 trae 的剩余额度 / 账单
+  ${cid} checkin --status               # 看各渠道签到状态（只读，不领）
+  ${cid} checkin                        # 给所有能领的渠道签到
+  ${cid} workbuddyai status --json       # 结构化状态（脚本用）
 `;
+}
+
+/** 打印版本：`<入口名> <版本>（N 个渠道；node vX）`。 */
+function printVersion(cid?: string): void {
+  const label = cid ?? (channelCount() === 1 ? getChannel().config.cid : "model-bridge");
+  console.log(`${label} ${version(cid)}（${channelCount()} 个渠道；node ${process.version}）`);
 }
 
 type RawValues = Record<string, string | boolean | undefined>;
@@ -163,8 +180,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
   if (boolOpt(o, "version")) {
-    const label = cid ?? (channelCount() === 1 ? getChannel().config.cid : "model-bridge");
-    console.log(`${label} ${version(cid)}`);
+    printVersion(cid);
     return 0;
   }
 
@@ -184,6 +200,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     lines: numOpt(o, "lines") ?? 40,
     ...(strOpt(o, "workspace") !== undefined ? { workspace: strOpt(o, "workspace")! } : {}),
   };
+
+  // 常见惯例：`help` / `version` 作为子命令也认（等价 -h/--help、-v/--version）
+  if (command === "help") {
+    console.log(usage());
+    return 0;
+  }
+  if (command === "version") {
+    printVersion(cid);
+    return 0;
+  }
 
   // ① 以渠道为第一参数：`model-bridge <cid> <动词>`
   if (hasChannel(command)) {

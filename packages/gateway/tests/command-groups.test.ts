@@ -44,19 +44,23 @@ function makeChannel(cid: string, withSignin: boolean): Channel {
     CreditsError: class CreditsError extends Error {},
     fetchCredits: async () => ({ ok: true, total: {}, packages: [] }),
   };
-  if (withSignin) {
-    billing["signin"] = {
-      status: async () => {
-        calls.status += 1;
-        return { claimable: !calls.claimed, summary: calls.claimed ? "今天已签到" : "今天未签到" };
-      },
-      claim: async () => {
-        calls.claim += 1;
-        calls.claimed = true;
-        return { ok: true, summary: "签到成功，+5", detail: { points: 5 } };
-      },
-    };
-  }
+  // 契约要求**每个**渠道都给 signin：有端点的真查真领，没端点的返回一句自己的说明
+  billing["signin"] = withSignin
+    ? {
+        status: async () => {
+          calls.status += 1;
+          return { claimable: !calls.claimed, summary: calls.claimed ? "今天已签到" : "今天未签到" };
+        },
+        claim: async () => {
+          calls.claim += 1;
+          calls.claimed = true;
+          return { ok: true, summary: "签到成功，+5", detail: { points: 5 } };
+        },
+      }
+    : {
+        status: async () => ({ claimable: false, summary: `${cid} 没有签到端点 —— 说明文字` }),
+        claim: async () => ({ ok: true, summary: `${cid} 没有签到端点 —— 说明文字` }),
+      };
   return {
     config,
     cred: {
@@ -189,15 +193,17 @@ describe("3. checkin：有端点/无端点", () => {
     assert.equal(calls.claim, before, "无可领时不再发领取请求");
   });
 
-  it("没有 signin 能力的渠道：明确报「没有签到端点」，退出码非零", async () => {
+  it("没有端点的渠道：返回渠道自己的文本说明，且**不算失败**（退出码 0）", async () => {
     const out: string[] = [];
     const orig = console.log;
     console.log = (...args: unknown[]) => void out.push(args.join(" "));
+    let code: number;
     try {
-      assert.equal(await signinCli.runCheckin({ cid: "beta", statusOnly: true }), 1);
+      code = await signinCli.runCheckin({ cid: "beta", statusOnly: true });
     } finally {
       console.log = orig;
     }
+    assert.equal(code, 0, "「没端点」是正常情况，不是失败");
     assert.ok(out.join("\n").includes("没有签到端点"), out.join("\n"));
   });
 
@@ -219,17 +225,19 @@ describe("3. checkin：有端点/无端点", () => {
     }
   });
 
-  it("仓库级 checkin：只挑声明了能力的渠道", async () => {
+  it("仓库级 checkin：对所有渠道一视同仁（没端点的也出现，给文本说明）", async () => {
     const out: string[] = [];
     const orig = console.log;
     console.log = (...args: unknown[]) => void out.push(args.join(" "));
+    let code: number;
     try {
-      assert.equal(await signinCli.runCheckin({ statusOnly: true }), 0);
+      code = await signinCli.runCheckin({ statusOnly: true });
     } finally {
       console.log = orig;
     }
+    assert.equal(code, 0);
     const text = out.join("\n");
-    assert.ok(text.includes("alpha"), "支持的渠道会被处理");
-    assert.ok(!text.includes("beta"), "没端点的渠道不出现（不刷噪音）");
+    assert.ok(text.includes("[alpha]"), "有端点的渠道报状态");
+    assert.ok(text.includes("[beta]"), "没端点的渠道也在（口径统一，输出它自己的说明）");
   });
 });

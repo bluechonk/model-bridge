@@ -55,8 +55,9 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 「对某个渠道做点什么」写成 `<cid> <动词>`（如 `model-bridge trae login`、`model-bridge trae billing`、
 `model-bridge trae checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
 
-`checkin` 只处理**声明了签到能力**的渠道（codearts / lobsterai / loomy / minimax / raccoon / trae）；
-workbuddyai / catpaw / cline / gemini / qoder 没有签到端点（奖励由上游自动发），单查会明确报出来。
+`checkin` 对**所有**渠道口径统一：有端点的真查真领（codearts / lobsterai / loomy / minimax /
+raccoon / trae），没端点的返回渠道自己的一句说明（workbuddyai / catpaw / cline / gemini —— 上游自动发奖励），
+qoder 是桩（报"尚未实现"）。「没有端点」不是故障、退出码仍为 0；只有查询/领取**抛错**（未登录等）才非零。
 
 ## 标准流程
 

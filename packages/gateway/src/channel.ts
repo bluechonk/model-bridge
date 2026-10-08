@@ -140,14 +140,19 @@ export interface SigninOutcome {
 }
 
 /**
- * 渠道的**签到 / 领取**能力（可选实现）。
+ * 渠道的**签到 / 领取**能力（**必需**：每个渠道都要给）。
  *
  * 有的渠道叫「签到」（check-in / signin），有的叫「活动领取」（claim / 奖励），
- * 还有的靠上游自动发（无端点）—— 统一收敛成这两个动作，CLI 的
- * `<cid> checkin` 与 `<cid> checkin --status` 就靠它。
+ * 还有的**根本没有端点**（奖励由上游自动发）。统一收敛成这两个动作，CLI 的
+ * `<cid> checkin` / `checkin --status` 对**所有**渠道一视同仁地调用它们。
  *
- * ⚠ `claim()` 是**写**操作（会真的领掉），实现方要保证幂等或至少安全重复调用。
- * 未实现该能力的渠道**不要**提供这个字段，CLI 会明确报告「该渠道没有签到端点」。
+ * ⚠ **共享层不做能力探测、也不特判任何渠道**：
+ * - 有端点的渠道 → 真的查 / 真的领；
+ * - 没有端点的渠道 → 由**渠道自己**返回一句人读说明
+ *   （`status()` 给 `claimable: false` + 说明；`claim()` 给 `ok: true` + 同句说明），
+ *   不是错误、也不影响退出码。
+ *
+ * ⚠ `claim()` 是**写**操作（会真的领掉），实现方要保证幂等或至少可安全重复调用。
  */
 export interface SigninModule {
   status(): Promise<SigninStatus>;
@@ -158,8 +163,8 @@ export interface SigninModule {
 export interface BillingModule {
   CreditsError: new (message?: string) => Error;
   fetchCredits(options?: { refreshOn401?: boolean }): Promise<any>;
-  /** 可选：签到 / 领取能力（见 `SigninModule`）。 */
-  signin?: SigninModule;
+  /** 签到 / 领取能力（见 `SigninModule`；**每个渠道都必须提供**）。 */
+  signin: SigninModule;
 }
 
 /**
