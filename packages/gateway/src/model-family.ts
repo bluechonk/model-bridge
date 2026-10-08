@@ -18,7 +18,7 @@
  * | raccoon | `sn-glm-5-3-flash` / `sn-deepseek-v4-1-flash` | id 里（带渠道前缀） |
  * | trae | `DeepSeek-V4-Flash-Official` | id 里 |
  * | qoder | `dfmodel` / `gfmodel` / `qfmodel` | **只在展示名里**（DeepSeek-Flash / GLM-5.3-Flash） |
- * | workbuddy | `deepseek-flash` | id 里（短名即家族名） |
+ * | workbuddyai | `deepseek-v4.1-flash` | id 里 |
  * | cline | `cline-free/mimo-v2.6-flash` | id 里（斜杠前缀） |
  * | minimax | `MiniMax-M3.1-Flash-Preview` | id 里 |
  * | gemini | `gemini-3.8-flash` | id 里 |

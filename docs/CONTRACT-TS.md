@@ -59,7 +59,7 @@ channels/<cid>/
 
 > **一个渠道 = 一个池子**：模型池 = `catalog` + 白名单（网关级）；账号池见
 > [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md)。
-> 多渠道路由下对外模型 id 是 `<cid>/<模型>`（如 `workbuddyai/deepseek-flash`）；
+> 多渠道路由下对外模型 id 是 `<cid>/<模型>`（如 `workbuddyai/deepseek-v4.1-flash`）；
 > 只注册一个渠道时仍是裸短名（兼容既有客户端配置）。
 
 **每个 `channels/<cid>/` 的 `src/` 只有 7 个文件。** 任何不在上表里的 `src/*.ts`

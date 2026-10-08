@@ -138,9 +138,11 @@ describe("1. 路径", () => {
 });
 
 describe("2. 模型目录", () => {
-  it("内置别名映射可用", () => {
-    assert.ok(catalog.exposedIds().includes("deepseek-flash"));
-    assert.equal(catalog.resolveModel("deepseek-flash"), "deepseek-v4.1-flash");
+  it("对外名 = 上游名；历史短名仅作输入兼容", () => {
+    assert.ok(catalog.exposedIds().includes("deepseek-v4.1-flash"), "对外暴露上游真名");
+    assert.ok(!catalog.exposedIds().includes("deepseek-flash"), "旧短名不再出现在列表里");
+    assert.equal(catalog.resolveModel("deepseek-v4.1-flash"), "deepseek-v4.1-flash");
+    assert.equal(catalog.resolveModel("deepseek-flash"), "deepseek-v4.1-flash", "旧短名仍能解析（老配置不断）");
   });
 
   it("未知模型名原样透传", () => {
@@ -304,11 +306,11 @@ describe("6. 端到端网关", () => {
     await new Promise<void>((r) => fake.server.close(() => r()));
   });
 
-  it("/v1/models 返回短名列表", async () => {
+  it("/v1/models 返回上游模型名", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string }> };
-    assert.ok(payload.data.some((m) => m.id === "deepseek-flash"));
+    assert.ok(payload.data.some((m) => m.id === "deepseek-v4.1-flash"));
   });
 
   it("/health 报告 ok 与登录状态", async () => {
@@ -319,6 +321,7 @@ describe("6. 端到端网关", () => {
   });
 
   it("流式对话：正常出字", async () => {
+    // 顺带验证旧短名仍可用（老客户端配置写 deepseek-flash 也不断）
     const text = await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
       model: "deepseek-flash",
       messages: [{ role: "user", content: "hi" }],
@@ -330,7 +333,7 @@ describe("6. 端到端网关", () => {
   it("上游约束：注入 system + 强制 stream + 模型名映射", async () => {
     fake.captured.length = 0;
     await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-flash",
+      model: "deepseek-v4.1-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
@@ -344,7 +347,7 @@ describe("6. 端到端网关", () => {
   it("上游约束：指纹改写为等价表述", async () => {
     fake.captured.length = 0;
     await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-flash",
+      model: "deepseek-v4.1-flash",
       messages: [
         { role: "system", content: "Main branch (you will usually use this for PRs)" },
         { role: "user", content: "hi" },
@@ -365,7 +368,7 @@ describe("6. 端到端网关", () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "deepseek-flash",
+        model: "deepseek-v4.1-flash",
         messages: [{ role: "user", content: "hi" }],
       }),
       headers: { "Content-Type": "application/json" },
@@ -425,7 +428,7 @@ describe("7. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "deepseek-flash",
+          model: "deepseek-v4.1-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),
