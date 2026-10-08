@@ -67,7 +67,7 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 控制台 8788），11 个渠道按 `<cid>/<模型>` 从它路由；`BridgeConfig.defaultAddr`/`uiPort`
 只在**单渠道独立运行**（`channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
 
-**构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出 14 个包），
+**构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出 13 个包），
 公共编译选项在根 `tsconfig.base.json` 里（各包 `extends` 它）；`tsc -b` 一次调度整个依赖图，
 产物仍落在各包 `dist/`（包边界不破），增量状态在 `dist/tsconfig.tsbuildinfo`。
 实测：冷编译 ~5s、无改动 ~1.2s、改一个渠道 ~1.3s、改共享层公开 API ~4s（连带重编依赖者）。
