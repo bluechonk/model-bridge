@@ -10,6 +10,9 @@
 | `docs/journals/<cid>/` | 各渠道的**进度与调研**（寻宝记录，不参与构建） |
 | `docs/archive/` | 已废弃的历史产物 |
 
+> 规则本身写在根 [`AGENTS.md`](../AGENTS.md) §2：**所有 `.md` 必须在 `docs/` 里**（只有插件固定路径、
+> 包根指针 README、目录级 AGENTS.md 三类例外）。由 `tools/verify-docs.mjs` 在 `npm test` 里强制检查。
+
 > 各 `channels/<cid>/` 目录里只留一份**指针 README**（指向本目录），
 > 免得同一份说明散在 12 个子文件夹里各改一遍。
 > 唯一例外：`channels/catpaw/AGENTS.md`（那是给工具读的目录级指令，必须留在原处）。

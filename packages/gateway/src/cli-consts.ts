@@ -8,7 +8,28 @@
  * 都能引用它而不互相 import。
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
 import { channelCount, getChannel } from "./channel.js";
+
+/**
+ * 入口包（`process.argv[1]` 所在包）的版本。
+ *
+ * 多渠道路由下没有"渠道版本"可言，`--version` 该报**仓库级 CLI**（bin `model-bridge`）的版本；
+ * 而共享层不知道自己在哪个入口下被跑，故从入口脚本的位置反推它的 package.json。
+ */
+function entryVersion(): string {
+  try {
+    const entry = process.argv[1];
+    if (!entry) return "0.0.0";
+    const parsed: unknown = JSON.parse(readFileSync(join(dirname(entry), "..", "package.json"), "utf8"));
+    const version = (parsed as { version?: unknown })?.version;
+    return typeof version === "string" ? version : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
 
 /**
  * 仓库级（多渠道路由）默认值。
@@ -19,11 +40,11 @@ import { channelCount, getChannel } from "./channel.js";
 export const REPO_DEFAULT_ADDR = "127.0.0.1:8787";
 export const REPO_DEFAULT_UI_PORT = 8788;
 
-/** CLI 版本号。 */
+/** CLI 版本号：渠道级 = 该渠道的版本；多渠道路由 = 入口包（仓库级 CLI）的版本。 */
 export function version(cid?: string): string {
   if (cid !== undefined) return getChannel(cid).config.version;
   if (channelCount() === 1) return getChannel().config.version;
-  return "0.0.0";
+  return entryVersion();
 }
 
 /** 网关默认监听地址（多渠道路由时用仓库级默认值）。 */

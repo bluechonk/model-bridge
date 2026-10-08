@@ -12,7 +12,8 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "verify:storage": "node tools/verify-storage.mjs",
-    "test": "npm run verify:storage && npm run test --workspaces --if-present",
+    "verify:docs": "node tools/verify-docs.mjs",
+    "test": "npm run verify:storage && npm run verify:docs && npm run test --workspaces --if-present",
     "test:all": "npm run build && npm test"
   },
   "engines": {
