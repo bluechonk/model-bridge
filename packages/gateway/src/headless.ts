@@ -125,8 +125,11 @@ export async function runLogin(options: {
     }),
   );
 
-  // 登录即入池：把刚拿到的凭证收进账号池（幂等；失败不影响登录结果）
-  if (ok && target) syncPool(cid);
+  // 登录即入池：把刚拿到的凭证收进账号池（幂等；失败不影响登录结果）。
+  // ⚠ 必须包 `runInChannel`：`syncPool` 内部走 `cred.load()` → `paths.*`，
+  // 而这些在多渠道模式下靠 ALS 上下文才知道为谁解析。裸调用会静默收不到
+  // （`loadLive` 的 catch 吞掉「无上下文」），表现为「登录了但池子是空的」。
+  if (ok && target) runInChannel(target.config.cid, () => syncPool(target.config.cid));
 
   if (json) {
     const done: Record<string, unknown> = { event: "done", ok };

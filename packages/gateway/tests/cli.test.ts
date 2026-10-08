@@ -13,12 +13,13 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { credentialsPath } from "../dist/paths.js";
 import { main } from "../dist/cli.js";
 import { writeCatalogCache } from "../dist/catalog-cache.js";
 
@@ -62,6 +63,16 @@ function makeChannel(cid: string, opts: FakeSigninSpec): Channel {
     legacyDirs: [`.${cid}`],
     debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
   };
+  // ⚠ 必须像真实渠道那样用 **`credentialsPath()`（不带 cid）**：它内部走
+  // `configOf(undefined)` → `activeCid()`，即依赖 ALS 上下文。若传 cid（或自己
+  // 拼路径）就绕开了这个要求 —— 而「有没有上下文」正是「裸 syncPool 收不到账号」
+  // 的关键，绕开它这个回归测试就永远抓不到 bug。
+  const credPath = (): string => credentialsPath();
+  const writeCreds = (c: { accessToken: string; uid: string; domain: string }): void => {
+    mkdirSync(dirname(credPath()), { recursive: true });
+    writeFileSync(credPath(), JSON.stringify(c), "utf8");
+  };
+  const fakeCred = { accessToken: "tok", uid: `${cid}-user`, domain: "" };
   const billing: Record<string, unknown> = {
     CreditsError: class CreditsError extends Error {},
     fetchCredits: async () => ({
@@ -98,9 +109,23 @@ function makeChannel(cid: string, opts: FakeSigninSpec): Channel {
     cred: {
       DEFAULT_BASE_URL: "http://127.0.0.1:1",
       NotLoggedInError: class NotLoggedInError extends Error {},
-      load: () => ({ accessToken: "tok", uid: `${cid}-user`, domain: "" }),
-      save: async () => {},
-      login: async () => ({ accessToken: "tok", uid: `${cid}-user`, domain: "" }),
+      load: () => {
+        // 没有凭据文件就抛 —— 真实渠道的 `cred.load()` 就是这样（`NotLoggedInError`）。
+        // ⚠ 不能「有就返回、没有也给」：账号池的 `loadLive` 靠这个异常判断
+        // 「没东西可收」，而裸 `syncPool`（无渠道上下文）走的正是这条错误路径 ——
+        // 假渠道太宽容就测不出「登录即入池」失效。
+        if (!existsSync(credPath())) {
+          throw new (class NotLoggedInError extends Error {})("not logged in");
+        }
+        return { ...fakeCred };
+      },
+      // 真实渠道的 login/save 会**落盘**（账号池靠 `existsSync(credentialsPath)` 判断
+      // 有没有可收的凭证）。假渠道照做，否则测不出「登录即入池」。
+      save: async (c: { accessToken: string; uid: string; domain: string }) => writeCreds(c),
+      login: async () => {
+        writeCreds(fakeCred);
+        return { ...fakeCred };
+      },
       refresh: async (c: unknown) => c,
       resolveBaseUrl: () => "http://127.0.0.1:1",
     },
@@ -502,6 +527,40 @@ describe("5. 账号池与落点（也走 CLI）", () => {
     const r = await run(["alpha", "accounts"]);
     assert.equal(r.code, 0);
     assert.ok(r.out.includes("alpha"), r.out);
+  });
+
+  it("<cid> login 成功后账号**真的**进池（回归：syncPool 必须包 runInChannel）", async () => {
+    // 曾经的 bug：`runLogin` 里裸调 `syncPool(cid)`，而 `syncPool` → `cred.load()`
+    // → `paths.*` 在多渠道模式下靠 ALS 上下文解析；没有上下文时它被 catch 吞掉，
+    // 表现为「登录成功但池子是空的」（cline/codearts/minimax 实测中招）。
+    // ⚠ 必须注册**两个以上**渠道才会暴露这个 bug：只有一个渠道时
+    // `getChannel(undefined)` 仍能解析（单渠道特例），裸 `syncPool` 照样成功。
+    // 真实的仓库级 CLI 注册 12 个渠道 —— 那才是 bug 的现场。
+    // ⚠ 断言必须**直接读磁盘**，不能借 `<cid> accounts` 去看：那个命令自己会
+    // 包着 `runInChannel` 再 syncPool 一次，等于把裸调用漏掉的账号补回来 ——
+    // 用它断言就永远看不出这个 bug。
+    // ⚠ 还要先清掉磁盘上的渠道层：套件里更早的用例（如 `alpha accounts`）会留下
+    // `accounts.json`，不清的话断言读到的是**上一个用例的残留**，永远为真。
+    rmSync(join(root, "alpha"), { recursive: true, force: true });
+    rmSync(join(root, "beta"), { recursive: true, force: true });
+    clearChannels();
+    setChannel(makeChannel("alpha", { signin: true }));
+    setChannel(makeChannel("beta", { signin: false }));
+    try {
+      const login = await run(["alpha", "login"]);
+      assert.equal(login.code, 0);
+
+      const indexFile = join(root, "alpha", "accounts.json");
+      assert.ok(existsSync(indexFile), "登录后应写出账号池索引");
+      const index = JSON.parse(readFileSync(indexFile, "utf8")) as {
+        accounts: Array<{ key: string }>;
+        active: string;
+      };
+      assert.equal(index.accounts.length, 1, "登录后池内应有 1 个账号（裸 syncPool 会得 0）");
+      assert.ok(index.active, "新登录的账号应成为当前生效账号");
+    } finally {
+      resetChannels();
+    }
   });
 
   it("<cid> paths 打印该渠道落点，且是只读", async () => {

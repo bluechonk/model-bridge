@@ -13,6 +13,7 @@
  * 用法：node tools/verify-docs.mjs
  */
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 
@@ -28,6 +29,35 @@ const ALLOWED = [
 ];
 
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".tmp", ".box-agent", ".box-agent-scratch"]);
+
+/**
+ * 被 git 忽略的路径（如 `channels/<cid>/reference/` 里 clone 的第三方实现）
+ * **不算本仓库的文档**，不参与检查。
+ *
+ * 为什么需要：那些目录是「clone 下来读源码」的学习材料（各渠道 `.gitignore` 里
+ * 明确标了「不入库」），里面必然带着上游自己的 `.md`。要求它们遵守本仓库的
+ * 文档规则既不合理、也做不到 —— 而且一 clone 就让 `npm test` 变红。
+ *
+ * 用 `git check-ignore` 问 git 要答案，而不是在这里重写一遍忽略规则：
+ * 忽略规则会演进，抄一份必然漂移。非 git 环境（无 .git）时退化为「不忽略任何东西」。
+ */
+function gitIgnored(paths) {
+  if (paths.length === 0) return new Set();
+  try {
+    // --stdin 一次问完：几百个文件也只是一次进程调用
+    const out = execFileSync("git", ["check-ignore", "--stdin"], {
+      cwd: workspaceRoot,
+      input: paths.join("\n"),
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    return new Set(out.split("\n").map((l) => l.trim()).filter(Boolean));
+  } catch (err) {
+    // check-ignore 无匹配时退出码为 1（正常）；非 git 环境会抛 ENOENT
+    const out = typeof err.stdout === "string" ? err.stdout : "";
+    return new Set(out.split("\n").map((l) => l.trim()).filter(Boolean));
+  }
+}
 
 function walk(dir, out = []) {
   let entries;
@@ -55,9 +85,13 @@ function walk(dir, out = []) {
 const problems = [];
 let checked = 0;
 
-for (const abs of walk(workspaceRoot)) {
-  const rel = relative(workspaceRoot, abs).split(sep).join("/");
-  if (SKIP_DIRS.has(rel.split("/")[0])) continue;
+const candidates = walk(workspaceRoot)
+  .map((abs) => relative(workspaceRoot, abs).split(sep).join("/"))
+  .filter((rel) => !SKIP_DIRS.has(rel.split("/")[0]));
+const ignored = gitIgnored(candidates);
+
+for (const rel of candidates) {
+  if (ignored.has(rel)) continue; // 被忽略的第三方材料：不归本仓库文档规则管
   checked += 1;
   if (ALLOWED.some((re) => re.test(rel))) continue;
   problems.push(`${rel} —— md 必须放进 docs/（规则见 AGENTS.md §2）`);
