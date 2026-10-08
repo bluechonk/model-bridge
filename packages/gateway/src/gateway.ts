@@ -167,7 +167,7 @@ export function resolveTarget(
     return { channel: channels()[0]!, upstreamModel: model };
   }
   throw new Error(
-    `多渠道路由下模型 id 必须带渠道前缀（如 "workbuddy/deepseek-flash"）；` +
+    `多渠道路由下模型 id 必须带渠道前缀（如 "workbuddyai/deepseek-v4.1-flash"）；` +
       `已注册: ${channels().map((c) => c.config.cid).join(", ")}`,
   );
 }

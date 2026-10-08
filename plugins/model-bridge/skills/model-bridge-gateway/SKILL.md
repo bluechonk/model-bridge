@@ -13,7 +13,7 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 - **一个网关 + N 个池子**：本仓库注册 11 个渠道（`catpaw` `cline` `codearts` `gemini` `lobsterai`
   `loomy` `minimax` `qoder` `raccoon` `trae` `workbuddyai`）。每个渠道是一个**模型池**：
   自己的一套模型目录 + 凭证 + 上游协议。
-- **对外模型 id**：`<cid>/<模型>`，**恒为小写**（`workbuddyai/deepseek-flash`、`trae/deepseek-v4-flash`）。
+- **对外模型 id**：`<cid>/<模型>`，**恒为小写**（`workbuddyai/deepseek-v4.1-flash`、`trae/deepseek-v4-flash`）。
   解析大小写不敏感；上游 slug 仍用目录里的原始写法。
 - **只放行 flash 家族**（网关级白名单）。某渠道池子为空通常是未登录或上游目录拉取失败，不是插件坏了。
 - **不只服务 ZCode**：网关是普通 HTTP 端点，其它客户端（Hermes、任意 OpenAI 客户端）直接把 base url

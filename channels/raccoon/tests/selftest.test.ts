@@ -473,7 +473,16 @@ describe("4. 扫码登录（code 本地生成 / canceled 换码 / 异常降级�
       timeoutMs: 5000,
     });
     assert.equal(st.qrCalls, 5, "含 1 次 500 重试与 1 次空 token");
-    assert.equal(c.accessToken, fakeJwt(Math.floor(Date.now() / 1000) + 3600, { sub: "u-1" }));
+    // 只比 payload，不比整个 JWT 串：假上游签发用的 now 与这里重算的 now 可能跨过 1 秒边界
+    // （曾因此偶发失败）。exp 允许 ±1s 误差。
+    const payload = JSON.parse(
+      Buffer.from(c.accessToken.split(".")[1]!, "base64url").toString("utf8"),
+    ) as { sub: string; exp: number };
+    assert.equal(payload.sub, "u-1");
+    assert.ok(
+      Math.abs(payload.exp - (Math.floor(Date.now() / 1000) + 3600)) <= 1,
+      `exp 应为签发时刻 +3600s，实际 ${payload.exp}`,
+    );
     assert.equal(c.refreshToken, "rt-1");
     assert.equal(c.officeIdentity, "personal");
     assert.equal(c.uid, "u-1", "uid 取 user_id（而非自动 nickname）");

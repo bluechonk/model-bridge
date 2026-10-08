@@ -1103,7 +1103,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
       data: Array<{ id: string }>;
     };
     const ids = models.data.map((m) => m.id);
-    // flash-only 池策略：免费池的 mimo-flash 与推荐池的 deepseek-flash 进池；
+    // flash-only 池策略：免费池的 mimo-flash 与推荐池的 deepseek-v4.1-flash 进池；
     // 非 flash（如 z-ai/glm-4.7）被挡在池外
     assert.deepEqual(
       ids,

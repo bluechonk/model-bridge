@@ -78,7 +78,7 @@ workbuddyai status / models / credits / stop
 
 要让 ZCode 真正走这个网关，还需在 ZCode 设置里添加 provider：
 类型 `openai-chat-completions`、baseUrl `http://127.0.0.1:8787/v1`、
-API key 任意非空、模型 `deepseek-flash`。插件注册不了 provider，这一步需手动。
+API key 任意非空、模型 `deepseek-v4.1-flash`。插件注册不了 provider，这一步需手动。
 
 ## 源码结构
 
@@ -114,8 +114,8 @@ tests/
 
 ## 模型短名映射
 
-- 网关对外暴露短名：**`deepseek-flash`**（`/v1/models`、客户端配置均用短名）
-- 内部转发时映射回上游 slug：`deepseek-flash → deepseek-v4.1-flash`
+- 网关对外暴露短名：**`deepseek-v4.1-flash`**（`/v1/models`、客户端配置均用短名）
+- 内部转发时映射回上游 slug：`deepseek-v4.1-flash → deepseek-v4.1-flash`
 - 映射关系由项目根目录 `models.json` 校验（缺失时用内置默认）；未识别的模型名原样透传
 
 ## 测试
