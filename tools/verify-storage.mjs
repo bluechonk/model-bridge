@@ -91,6 +91,8 @@ const { rootDirFor } = await import(
 );
 
 const cids = new Set(bridges.map((b) => b.config.cid));
+/** 历史目录名 → 声明它的渠道（用于发现跨渠道重复声明）。 */
+const dirOwners = new Map();
 const ownDirNames = new Set(bridges.map((b) => `.${b.config.cid}-bridge`));
 const debugEnvs = new Map(bridges.map((b) => [b.config.cid, b.config.debugDumpEnv]));
 const ports = new Map();
@@ -113,22 +115,31 @@ for (const { dir, config } of bridges) {
     `${where}: debugDumpEnv 应为 ${expectedDebug}，实际 ${config.debugDumpEnv}`,
   );
 
-  // §3.1 / §4.8 迁移链只许本渠道的历史名
+  // §3.1 / §4.8 迁移链：真正要防的是**跨渠道劫持** —— 一个历史目录名只能属于一个渠道。
+  // 名字不要求含本渠道 cid：渠道可能改过名（如 workbuddy → workbuddyai），
+  // 改名前的历史名天然不含新 cid，那是正常的历史。
   for (const name of config.legacyDirs ?? []) {
-    check(
-      typeof name === "string" && name.includes(cid),
-      `${where}: legacyDirs 含非本渠道的目录名 ${name}（跨渠道迁移会劫持数据）`,
-    );
+    check(typeof name === "string" && name.startsWith("."), `${where}: legacyDirs 项须是以 . 开头的目录名: ${name}`);
+    const claimed = dirOwners.get(name);
+    if (claimed && claimed !== cid) {
+      check(false, `${where}: legacyDirs 名字 ${name} 已被 ${claimed} 声明（跨渠道迁移会劫持数据）`);
+    } else {
+      dirOwners.set(name, cid);
+    }
     const foreign = [...ownDirNames].filter((d) => d !== `.${cid}-bridge`);
     check(!foreign.includes(name), `${where}: legacyDirs 含其它渠道的现行目录名 ${name}`);
+    if (typeof name === "string" && !name.includes(cid)) {
+      notes.push(`${where}: legacyDirs ${name} 不含本渠道 cid（改名前的历史名，属正常）`);
+    }
   }
 
   // §4.3 旧的分渠道 home 变量仍须被识别
+  // 历史变量名**不要求**等于 `<CID>_HOME`（渠道历史可能叫别的，如 workbuddyai 的历史名是
+  // WORKBUDDY_HOME）；硬要求的是「不含其它渠道的现行变量」。缺 `<CID>_HOME` 只提示不改判。
   const expectedHome = `${cid.toUpperCase().replace(/-/g, "_")}_HOME`;
-  check(
-    (config.legacyEnvVars ?? []).includes(expectedHome),
-    `${where}: legacyEnvVars 应保留 ${expectedHome}（兼容旧脚本）`,
-  );
+  if (!(config.legacyEnvVars ?? []).includes(expectedHome)) {
+    notes.push(`${where}: legacyEnvVars 未含 ${expectedHome}（历史名不同属正常，确认无遗漏即可）`);
+  }
   for (const name of config.legacyEnvVars ?? []) {
     const isOtherHome = bridges.some(
       (b) => b.config.cid !== cid && name === `${b.config.cid.toUpperCase().replace(/-/g, "_")}_HOME`,

@@ -45,7 +45,7 @@
 | `qoder` | Qoder | [PROTOCOL.md](./protocols/qoder/PROTOCOL.md)（**桩**：模块尚未实现） |
 | `raccoon` | Raccoon（商汤） | [PROTOCOL.md](./protocols/raccoon/PROTOCOL.md) |
 | `trae` | TRAE（字节） | [PROTOCOL.md](./protocols/trae/PROTOCOL.md) |
-| `workbuddy` | WorkBuddyAI | [findings.md](./journals/workbuddy/findings.md) —— 该渠道的协议事实记在调研笔记里（无独立 PROTOCOL.md） |
+| `workbuddyai` | WorkBuddyAI | [findings.md](./journals/workbuddyai/findings.md) —— 该渠道的协议事实记在调研笔记里（无独立 PROTOCOL.md） |
 
 `catpaw` 的规格不是单文件，而是一条完整的凭据逆向链路（`PROTOCOL.md` 是它的索引）：
 
@@ -64,13 +64,13 @@
 | --- | --- | --- | --- |
 | [catpaw](./bridges/catpaw.md) | [cline](./bridges/cline.md) | [codearts](./bridges/codearts.md) | [gemini](./bridges/gemini.md) |
 | [lobsterai](./bridges/lobsterai.md) | [loomy](./bridges/loomy.md) | [minimax](./bridges/minimax.md) | [qoder](./bridges/qoder.md) |
-| [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddy](./bridges/workbuddy.md) | （空） |
+| [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddyai](./bridges/workbuddyai.md) | （空） |
 
 ## 4. 进度与调研 `docs/journals/<cid>/`
 
 | 渠道 | 文件 | 说明 |
 | --- | --- | --- |
-| workbuddy | [findings](./journals/workbuddy/findings.md) · [progress](./journals/workbuddy/progress.md) · [task_plan](./journals/workbuddy/task_plan.md) | 调研结论 / 进度日志 / 任务计划 |
+| workbuddyai | [findings](./journals/workbuddyai/findings.md) · [progress](./journals/workbuddyai/progress.md) · [task_plan](./journals/workbuddyai/task_plan.md) | 调研结论 / 进度日志 / 任务计划 |
 | catpaw | [findings](./journals/catpaw/findings.md) · [progress](./journals/catpaw/progress.md) · [task_plan](./journals/catpaw/task_plan.md) | 同上 |
 
 `progress.md` 是**追加式日志**（按会话追加，不删旧条目）；`task_plan.md` 是阶段与勾选项；

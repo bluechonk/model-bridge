@@ -59,7 +59,7 @@ channels/<cid>/
 
 > **一个渠道 = 一个池子**：模型池 = `catalog` + 白名单（网关级）；账号池见
 > [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md)。
-> 多渠道路由下对外模型 id 是 `<cid>/<模型>`（如 `workbuddy/deepseek-flash`）；
+> 多渠道路由下对外模型 id 是 `<cid>/<模型>`（如 `workbuddyai/deepseek-flash`）；
 > 只注册一个渠道时仍是裸短名（兼容既有客户端配置）。
 
 **每个 `channels/<cid>/` 的 `src/` 只有 7 个文件。** 任何不在上表里的 `src/*.ts`
@@ -316,7 +316,7 @@ interface CreditsResult {
 
 | 类型 | 用法 | 渠道 |
 |---|---|---|
-| **A. 创建 flow + 轮询** | `POST .../auth/state` 或 `.../oauth/cli/init` → 取 `authorize_url`/`authUrl` → 轮询拿 token | workbuddy |
+| **A. 创建 flow + 轮询** | `POST .../auth/state` 或 `.../oauth/cli/init` → 取 `authorize_url`/`authUrl` → 轮询拿 token | workbuddyai |
 | **B. 本地回调服务器** | 起 `http://127.0.0.1:<port>` 回调服务 → 拼授权 URL（含 PKCE/DPoP 等）→ 等浏览器重定向回填 | trae、codearts、lobsterai |
 | **C. 设备码 / 扫码轮询** | 申请 device code 或二维码 URL → 轮询 token | cline、loomy、raccoon |
 

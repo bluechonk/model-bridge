@@ -18,4 +18,4 @@ import "minimax-bridge";
 import "qoder-bridge";
 import "raccoon-bridge";
 import "trae-bridge";
-import "workbuddy-bridge";
+import "workbuddyai-bridge";

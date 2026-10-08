@@ -101,3 +101,10 @@
   加载名 `skill_view("workbuddy-bridge:workbuddyai-gateway")`。无 hook、无 tool、无副作用。
 
 - **后续（2026-10-08）**：`channels/workbuddy/.hermes-plugin/` 已移除。Hermes 不必再有一层插件 —— ZCode 侧启动的仓库级网关（`http://127.0.0.1:8787/v1`）本身就是一个普通 HTTP 端点，Hermes 直接把它当 OpenAI 兼容服务请求即可（凭据/账号池由网关统一管理）。
+
+- **改名（2026-10-08）**：cid `workbuddy` → `workbuddyai`。原 cid 用的是**国内版**产品名（WorkBuddy，
+  codebuddy.ai），而本渠道 display 是 WorkBuddyAI、默认域是 workbuddy.ai（**国际版**），前缀叫错了。
+  同步改：目录 `channels/workbuddyai`、包名 `workbuddyai-bridge`、bin `workbuddyai`、
+  调试变量 `WORKBUDDYAI_DEBUG_DUMP`（旧的进 legacyDebugDumpEnv）、存储层 `~/.model-bridge/workbuddyai/`。
+  历史名一律保留（`.workbuddy-bridge`/`.zcode-connect-workbuddyai`/`.workbuddyai2api` 等 legacyDirs、
+  `WORKBUDDY_HOME`/`ZCB_HOME`/`WBAI2API_HOME` 等 legacyEnvVars）。realm（intl/cn）机制不变。
