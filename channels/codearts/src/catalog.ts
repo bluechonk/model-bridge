@@ -259,6 +259,24 @@ export function resetRemoteCache(): void {
   benefitCache = null;
 }
 
+/**
+ * 强制从上游重拉目录并落盘（CLI `--refresh` / `model refresh`）。
+ *
+ * 解析与落盘已在 `upstream.fetchModels()` 里完成（它调 `setRemoteModels()`，
+ * 本渠道用的是自己的 `cache/models.json` + `benefit-models.json`），
+ * 这里只负责「要一次真实的拉取，并且失败要抛出去」。
+ */
+export async function refresh(): Promise<void> {
+  // 动态 import：避免 catalog ↔ upstream/cred 的静态环
+  const [upstream, cred] = await Promise.all([import("./upstream.js"), import("./cred.js")]);
+  const c = cred.load();
+  const data = await upstream.fetchModels(c);
+  const models = data["models"];
+  if (!Array.isArray(models) || models.length === 0) {
+    throw new Error("上游返回的模型目录为空");
+  }
+}
+
 /** 当前生效的目录：远端优先，未拉到时用兜底表。 */
 export function entries(): ModelEntry[] {
   ensureCaches();

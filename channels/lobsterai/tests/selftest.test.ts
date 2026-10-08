@@ -16,7 +16,7 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -178,20 +178,55 @@ describe("1. 路径", () => {
 });
 
 describe("2. 模型目录", () => {
-  it("兜底 19 条、窗口 131072、底层表含 kimi-k2.7-code（白名单过滤后池内只剩 1 条 flash）、不含价格快照", () => {
+  it("兜底 30 条（对齐一次真实上游拉取）、窗口 131072、底层表含 kimi-k2.7-code（白名单过滤后池内 8 条 flash）、不含价格快照", () => {
     catalog.resetRemoteCache();
-    assert.equal(catalog.FALLBACK_MODELS.length, 19);
+    assert.equal(catalog.FALLBACK_MODELS.length, 30);
     assert.equal(catalog.FALLBACK_MODELS[0]!.context_window, 131_072);
     const ids = catalog.exposedIds();
-    assert.deepEqual(ids, ["deepseek-v4-flash"], "19 条兜底里只有 deepseek-v4-flash 带 flash");
+    assert.equal(ids.length, 8, "30 条兜底里有 8 条带 flash");
+    assert.ok(ids.includes("deepseek-v4-flash"), "含上游真名 deepseek-v4-flash");
     assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能有 flash 模型");
-    assert.ok(!ids.includes("kimi-k2.7-code"), "非 flash 被白名单过滤");
+    assert.ok(!ids.some((id) => /^kimi-k2\.7-code$/.test(id)), "非 flash 被白名单过滤");
     assert.ok(!ids.includes("deepseek-v4-pro") && !ids.includes("glm-5.2"), "同家族的非 flash 型号也挡在池外");
     // 过滤只发生在呈现层：底层表/合并逻辑仍保留被过滤的条目
     const underlying = catalog.details().map((r) => r["id"]);
-    assert.equal(underlying.length, 19, "details 仍给出全部 19 条兜底");
+    assert.equal(underlying.length, 30, "details 仍给出全部 30 条兜底");
     assert.ok(underlying.includes("kimi-k2.7-code"), "底层表含被过滤的 kimi（数据没丢）");
     assert.equal(catalog.FALLBACK_MODELS[0]!.cost_multiplier, undefined);
+  });
+
+  it("拉到远端即落盘 cache/models.json；新进程（全新实例）读到真实目录而不是兜底表", async () => {
+    catalog.resetRemoteCache();
+    catalog.setRemoteModels([
+      { id: "seeded-flash-xyz", name: "seeded-flash-xyz", context_window: 131_072, source: "remote" },
+    ]);
+
+    // 落点固定为 <root>/<cid>/cache/models.json（见 docs/STORAGE-CONVENTION.md §4.5）
+    const file = join(paths.cacheDir(), "models.json");
+    assert.ok(existsSync(file), "成功拉到远端目录必须落盘，否则新进程只剩兜底表");
+    const envelope = JSON.parse(readFileSync(file, "utf8")) as {
+      version: number;
+      fetched_at: string;
+      models: Array<{ id: string }>;
+    };
+    assert.equal(envelope.version, 1);
+    assert.ok(envelope.fetched_at, "信封带拉取时刻，便于排查「这份目录是什么时候的」");
+    assert.deepEqual(
+      envelope.models.map((m) => m.id),
+      ["seeded-flash-xyz"],
+    );
+
+    // 模拟新进程：重新求值模块（内存状态全空），只该看到磁盘上那份目录
+    const fresh = (await import("../dist/catalog.js?cache-seed")) as typeof catalog;
+    assert.deepEqual(
+      fresh.remoteModels()!.map((m) => m.id),
+      ["seeded-flash-xyz"],
+    );
+    assert.deepEqual(fresh.exposedIds(), ["seeded-flash-xyz"]);
+    assert.equal(fresh.details().length, 1, "磁盘缓存优先于兜底表：不是 30 条");
+
+    rmSync(file, { force: true });
+    catalog.resetRemoteCache();
   });
 
   it("远端行解析：level 与 openclawLevel 分离，裸数字 costMultiplier 也认", () => {

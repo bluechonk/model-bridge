@@ -43,7 +43,9 @@ export function usage(): string {
 
 模型池:
   model list                列出全部渠道（池子）与各自模型（= channels）
+                            读本地缓存；本地没有才拉一次上游并把结果记录下来
   model show <cid>          只看某个渠道的模型
+  model refresh [cid]       强制重新拉取上游模型目录并记录到本地（可只刷一个渠道）
 
 按渠道操作（<cid> 是已注册的渠道，如 workbuddyai）:
 ${verbLines.join("\n")}
@@ -63,8 +65,9 @@ ${verbLines.join("\n")}
   --ui-port <port>          控制台 API 端口（默认 ${defaultUiPort()}）
   --wait <seconds>          启动健康等待秒数（默认 8）
   --lines <n>               logs 显示行数（默认 40）
-  --realm <auto|intl|cn>    login 的登录域（默认 auto）
+  --realm <名>              login 的登录域（渠道自定义；单域渠道忽略）
   --channel <cid>           只操作该渠道（等价把 <cid> 写成第一个参数）
+  --refresh                 model list / <cid> models：强制重拉上游目录（失败即报错退出）
   --status                  checkin：只查状态，不领（只读）
   --daily-only              checkin：只处理"每日"语义的渠道（跳过一次性奖励）
   --fail-if-unclaimed       checkin：今天明确未签 → 退出码非零（"不知道"不算失败）
@@ -85,6 +88,8 @@ ${verbLines.join("\n")}
 示例:
   ${cid} start                          # 起网关（守护式，幂等）
   ${cid} model list                     # 看全部渠道（池子）与各自模型
+  ${cid} model refresh                  # 强制重拉全部渠道的模型目录（记到本地）
+  ${cid} trae models --refresh          # 只强制重拉 trae 的目录
   ${cid} trae login                     # 登录 trae（浏览器授权）
   ${cid} trae billing                   # 看 trae 的剩余额度 / 账单
   ${cid} checkin --status               # 今天签没签（只读；上方是上游、退化到本地台账）
@@ -163,6 +168,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         auto: { type: "boolean" },
         all: { type: "boolean" },
         force: { type: "boolean" },
+        refresh: { type: "boolean" },
         strict: { type: "boolean" },
         "ensure-login": { type: "boolean" },
         "force-login": { type: "boolean" },
@@ -201,6 +207,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     uiPort,
     realm: strOpt(o, "realm") ?? "auto",
     force: boolOpt(o, "force"),
+    refresh: boolOpt(o, "refresh"),
     statusOnly: boolOpt(o, "status"),
     dailyOnly: boolOpt(o, "daily-only"),
     failIfUnclaimed: boolOpt(o, "fail-if-unclaimed"),
@@ -327,7 +334,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       });
 
     case "channels":
-      return groups.listAllModels(ctx.json);
+      return groups.listAllModels(ctx.json, ctx.refresh);
 
     default:
       console.error(`未知命令: ${command}`);

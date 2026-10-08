@@ -4,7 +4,7 @@
 历史名迁移。**凭证/配置的字段内容不在此列** —— 各 `channels/<cid>/` 自己决定
 （见 `CONTRACT-TS.md` §5）。
 
-适用范围：工作区内的 11 个渠道包 + 共享包 `packages/gateway`。（2026-10-08 快照：当时为 12 个，zcode 渠道已移除。）
+适用范围：工作区内的 12 个渠道包 + 共享包 `packages/gateway`。（2026-10-08 快照：当时为 12 个，zcode 渠道已移除。）
 
 ---
 
@@ -38,13 +38,13 @@
 ```
 ~/.model-bridge/                 ← 唯一存储根（MODEL_BRIDGE_HOME 可覆盖）
 ├── prefs.json                   ← （可选）跨渠道共享偏好
-├── workbuddy/                   ← cid 层
+├── workbuddyai/                 ← cid 层
 │   ├── credentials.json
 │   ├── upstream.json
 │   ├── prefs.json
 │   ├── gateway.pid
 │   ├── gateway.log
-│   ├── cache/                   ← 可安全删除
+│   ├── cache/                   ← 可安全删除（含 cache/models.json）
 │   ├── state/                   ← 跨重启保持
 │   └── debug/                   ← 抓包落盘（opt-in）
 ├── catpaw/
@@ -95,6 +95,9 @@
 
 ⚠ = 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据；此后 zcode 渠道已移除，故下表 12 行对应的是当时的 12 个渠道。）`<root>` = `~/.model-bridge`。
 
+> 上表是**迁移前快照**，其中 `workbuddy` 一行指的是**当时**那个兼做国际/国内的渠道
+> （后来改名为 `workbuddyai`）。该渠道现已**拆成两条**，见 §2.4。
+
 ### 2.3 目录外的落盘点（唯一一处）
 
 | 渠道 | 位置 | 文件 | 覆盖变量 |
@@ -107,6 +110,25 @@
 - 各包根目录的 `models.json`（兜底模型表，随包分发）
 
 `*_DEBUG_DUMP` 是运行期由用户指定的抓包目录（opt-in），不构成固定落点，但命名见 §3.3。
+
+### 2.4 拆分歧义名（`workbuddy` / `workbuddyai`）
+
+`workbuddyai` 拆成**国际版** `workbuddyai`（workbuddy.ai）与**国内版** `workbuddy`
+（codebuddy.ai）两条渠道后，出现一组**歧义历史名**：
+
+| 历史名 | 历史归属 | 现归属 |
+|---|---|---|
+| `~/.workbuddy-bridge/` | 国际版旧凭证（实测 `domain=www.workbuddy.ai`） | **都不认领** |
+| `WORKBUDDY_HOME` | 国际版的存储根覆盖变量 | **都不认领** |
+| `WORKBUDDY_DEBUG_DUMP` | 国际版的抓包变量 | 归 `workbuddy`（= 它的 `<CID>_DEBUG_DUMP`，§3.3 强制） |
+
+规则：**一个历史名只能属于一个渠道**（防跨渠道劫持，§3.1）。这里故意让两条渠道都**不**认领
+前两个名字 —— 因为认领它们就是把**国际版**数据迁进**国内版**渠道（跨产品串号），比"不迁移"更糟。
+旧数据早已在改名时迁入 `<root>/workbuddyai/`，不迁也无损。
+
+`workbuddy` 因此声明 `legacyDirs: []` / `legacyEnvVars: []`（它是新建渠道，本就没有历史）；
+`workbuddyai` 的 `legacyDirs` / `legacyEnvVars` / `legacyDebugDumpEnv` 也相应移除了这三个裸
+`workbuddy` 名字。校验器只在「双方同时声明」时报错，此处的空声明是**有意为之**，不是遗漏。
 
 ---
 
@@ -196,10 +218,19 @@ if (existsSync(target)) return target;   // 新目录在 → 直接返回，lega
    | `gateway.log` | 守护进程 stdout/stderr |
 
 5. **渠道特有文件必须落在自己的 cid 层内**：
-   - `cache/` 可安全删除、可重建（含模型目录缓存）
+   - `cache/` 可安全删除、可重建（缓存，丢了只是变慢/回落兜底表）
+     - `cache/models.json` —— **远端模型目录缓存**：各渠道 `upstream.fetchModels()`
+       拉到的真实目录，由共享层 `catalog-cache.ts` 原子写入（信封
+       `{version, fetched_at, models}`，权限 `0600`）。
+       - **谁写**：渠道的 `catalog.ts` 在成功拉到远端目录的那一刻写一次（每次成功拉取覆盖）。
+       - **谁读**：同一渠道的 `catalog.ts` 在**首次被问**时读一次做种子 —— 于是
+         `model list` 这类**新进程**能看到真实目录，而不是回落到随包发布的兜底快照。
+       - **常态是读、不是写**：`model list` 命中缓存时**不打网络**；只有本地没有缓存
+         （首次使用）才会拉一次并记录。要更新用 `model refresh` / `--refresh`。
+       - **可安全删除**：删掉只影响下一个新进程的显示（回到兜底表），不影响登录态与额度。
+       - 没有远端目录层的渠道不会产生这个文件（它只是「不存在」，不是错误）。
    - `state/` 跨重启保持的**状态**：目前唯一使用者是 `state/signin.json`（签到台账：
      `{version, timezone, last_claim, history}`，由共享层在**领取成功**或**上游回填**时写入）
-   - `state/` 跨重启保持的状态
    - `debug/` 抓包落盘默认位置（`<CID>_DEBUG_DUMP` 仅作覆盖，值须为绝对路径）
    - **禁止**写 `~/` 下任何其它目录（含 `~/.cache/`、`~/.config/`）
 6. **权限**：根 `0700`，各 cid 层 `0700`，`credentials.json` 等含密文件 `0600`。

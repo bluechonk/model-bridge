@@ -22,7 +22,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAllowedFamily } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
 
 /** 缺省通道（`function` 字段）。 */
 export const DEFAULT_FUNCTION = "solo_work_lite";
@@ -294,15 +294,56 @@ export function parseRemoteCatalog(payload: Record<string, unknown>): ModelEntry
 
 /** 远端目录缓存（由 `mergeRemote` 写入；`refreshRemote` 在调用方拼装）。 */
 let remoteCache: ModelEntry[] | null = null;
+let cacheLoaded = false;
+
+/**
+ * 首次使用时把**磁盘缓存**（`cache/models.json`）读进来。
+ *
+ * 惰性而非模块加载时读：`channelFile()` 依赖渠道已注册，而 `channel.ts` 是在
+ * import 本模块**之后**才注册的。没有磁盘缓存时行为与以前一致（往下走文件/兜底表）。
+ */
+function ensureCachedModels(): void {
+  if (cacheLoaded) return;
+  cacheLoaded = true;
+  try {
+    const cached = readCatalogCache<ModelEntry>();
+    if (cached) remoteCache = cached;
+  } catch {
+    /* 读不到就继续走文件/兜底表 */
+  }
+}
 
 /** 写入远端目录缓存（解析后的条目）。 */
+/**
+ * 灌入远端目录（由 `refreshCatalog` 拉到后调用）。
+ *
+ * 同时**落盘**到 `cache/models.json` —— 否则换个新进程就只剩兜底表（实测过这个坑）。
+ */
 export function mergeRemote(entries: ModelEntry[]): void {
   remoteCache = entries.length > 0 ? entries : null;
+  cacheLoaded = true;
+  if (entries.length > 0) writeCatalogCache(entries);
 }
 
 /** 清空远端缓存（仅测试/重登时用）。 */
 export function resetRemoteCache(): void {
   remoteCache = null;
+}
+
+/**
+ * 强制从上游重拉目录并落盘（CLI `--refresh` / `model refresh`）。
+ *
+ * 与自动路径的区别：**失败抛错**。用户显式要求刷新时必须知道成没成，
+ * 而不是看到一张旧表还以为刷成功了。
+ */
+export async function refresh(): Promise<void> {
+  // 动态 import：避免 catalog ↔ upstream/cred 的静态环
+  const [upstream, cred] = await Promise.all([import("./upstream.js"), import("./cred.js")]);
+  const c = cred.load();
+  const payload = await upstream.fetchModels(c);
+  const entries = parseRemoteCatalog(payload);
+  if (entries.length === 0) throw new Error("上游返回的模型目录为空（或全部通道被白名单过滤）");
+  mergeRemote(entries);
 }
 
 // ── models.json 兜底与对外接口 ───────────────────────────────────────────────
@@ -364,6 +405,7 @@ function parseCatalogFile(path: string): ModelEntry[] {
 
 /** 当前目录（远端缓存 → models.json → 兜底表）。 */
 export function loadCatalog(): ModelEntry[] {
+  ensureCachedModels();
   if (remoteCache) return remoteCache.map((e) => ({ ...e }));
   for (const path of candidatePaths()) {
     let stat: ReturnType<typeof statSync>;

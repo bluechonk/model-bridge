@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 
 import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
-import { isAllowedFamily } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
 
 /** 档位词表（展示名必须与官方 IDE 一致 —— Loomy 基于 opencode 构建）。 */
 export const EFFORT_VOCABULARY = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -106,6 +106,8 @@ interface Snapshot {
 }
 
 let snapshot: Snapshot | null = null;
+/** 本进程是否已自动刷过一次（保持「每进程只刷一次」的原有语义）。 */
+let refreshAttempted = false;
 let remoteCache: { entries: CatalogEntry[]; version: string; at: number } | null = null;
 let refreshing = false;
 
@@ -275,6 +277,7 @@ export async function refreshCatalog(): Promise<void> {
       version = "";
     }
     remoteCache = { entries, version, at: now };
+    if (entries.length > 0) writeCatalogCache(entries);
   }
   const fresh = remoteCache;
   if (!fresh) {
@@ -288,24 +291,73 @@ export async function refreshCatalog(): Promise<void> {
 }
 
 /** 首次同步访问时触发后台刷新（不阻塞当前调用）。 */
-function ensureRefresh(): void {
-  if (snapshot || refreshing) return;
+/**
+ * 磁盘缓存里的目录**先顶上**（新进程 / 离线 / 未登录时也能显示真实目录），
+ * 随后的真实刷新会覆盖它 —— 所以这里只负责"有东西可显示"，不负责新鲜度。
+ */
+function seedFromDiskCache(): void {
+  if (snapshot) return;
+  try {
+    const cached = readCatalogCache<CatalogEntry>();
+    if (cached) {
+      snapshot = { entries: cached, catalogVersion: "" };
+      publish(cached);
+    }
+  } catch {
+    /* 读不到就继续走兜底表 */
+  }
+}
+
+/** 首次同步访问时触发后台刷新；返回**种入后的快照**（磁盘缓存可能已顶上）。 */
+function ensureRefresh(): Snapshot | null {
+  if (refreshAttempted) return snapshot; // 每进程只自动刷一次（原语义）
+  refreshAttempted = true;
+  seedFromDiskCache();
   refreshing = true;
   void refreshCatalog()
     .catch(() => {})
     .finally(() => {
       refreshing = false;
     });
+  return snapshot;
 }
 
 function currentEntries(): CatalogEntry[] {
   if (!snapshot) {
-    ensureRefresh();
+    // ensureRefresh() 会先用磁盘缓存顶上；只有连磁盘缓存都没有时才退回内置表。
+    // 直接 return fallbackEntries() 会让「新进程显示真实目录」失效 ——
+    // 多数 CLI 调用只问一次目录，这一次就决定了用户看到什么。
+    const seeded = ensureRefresh();
+    if (seeded) return seeded.entries;
     const entries = fallbackEntries();
     publish(entries);
     return entries;
   }
   return snapshot.entries;
+}
+
+/**
+ * 强制从上游重拉目录并落盘（CLI `--refresh` / `model refresh`）。
+ *
+ * 与 `refreshCatalog()` 的两点不同，都是「用户显式要求」带来的：
+ * 1. **绕过 TTL / 冷却**：不查 `remoteCache.at`，直接打一次上游；
+ * 2. **失败抛错**：`refreshCatalog` 静默回落是为了不打扰自动路径，但用户敲了
+ *    `--refresh` 却看到旧表会以为刷新成功 —— 必须让失败可见。
+ *
+ * 失败时**不写** `remoteCache`：否则会把一次失败记成冷却期，反而挡住后续自动刷新。
+ */
+export async function refresh(): Promise<void> {
+  const cfg = upstream.loadConfig()[0];
+  const c = cred.load();
+  const payload = await upstream.fetchModels(c, cfg);
+  const env = upstream.parseEnvelope(payload);
+  const entries = parseRemoteModels(env.data);
+  if (entries.length === 0) throw new Error("上游返回的模型目录为空");
+  const version = str(env.data["reasoning_catalog_version"]);
+  remoteCache = { entries, version, at: Date.now() };
+  writeCatalogCache(entries);
+  snapshot = { entries, catalogVersion: version };
+  publish(entries);
 }
 
 /** 远端 catalog 版本（`reasoning_catalog_version`）。 */

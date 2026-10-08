@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 
 import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
-import { isAllowedFamily } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
 
 /** models.dev 目录地址（可用 `CLINE_MODELS_DEV_URL` 覆盖，测试用）。 */
 export const DEFAULT_MODELS_DEV_URL = "https://models.dev/api.json";
@@ -442,22 +442,71 @@ export async function refreshCatalog(): Promise<void> {
   const dev = await fetchModelsDev();
   const entries = remoteUsable(catalog) ? mergeCatalog(catalog, dev) : fallbackEntries();
   snapshot = { entries, freeIds: new Set(catalog.free.map((f) => f.id)), modelsDev: dev };
+  // 只缓存**真实远端合并结果**：兜底表每次现算，落盘它没有意义
+  if (remoteUsable(catalog) && entries.length > 0) writeCatalogCache(entries);
 }
 
-/** 首次同步访问时触发一次后台刷新（不阻塞当前调用）。 */
-function ensureRefresh(): void {
-  if (snapshot || refreshing) return;
+/**
+ * 强制从上游重拉目录并落盘（CLI `--refresh` / `model refresh`）。
+ *
+ * 与 `refreshCatalog()` 的两点不同，都是「用户显式要求」带来的：
+ * 1. **绕过 TTL / 冷却**：直接重拉两个来源（free 集合 + models.dev 元数据）；
+ * 2. **失败抛错**：自动路径静默回落是为了不打扰，但用户敲了 `--refresh`
+ *    却看到旧表会以为刷新成功 —— 必须让失败可见。
+ *
+ * 失败时**不写** `remoteCache`：否则会把一次失败记成冷却期，挡住后续自动刷新。
+ */
+export async function refresh(): Promise<void> {
+  const cfg = upstream.loadConfig()[0];
+  const catalog = await fetchRemoteCatalog(cfg);
+  if (!remoteUsable(catalog)) {
+    throw new Error("上游没有返回可用的模型目录（free / recommended / clinePass 全空）");
+  }
+  const dev = await fetchModelsDev();
+  const entries = mergeCatalog(catalog, dev);
+  if (entries.length === 0) throw new Error("合并后的模型目录为空");
+  remoteCache = { catalog, at: Date.now() };
+  snapshot = { entries, freeIds: new Set(catalog.free.map((f) => f.id)), modelsDev: dev };
+  writeCatalogCache(entries);
+}
+
+/**
+ * 磁盘缓存里的目录**先顶上**（新进程 / 离线 / 未登录时也能显示真实目录）。
+ *
+ * 只恢复 `entries`（含合并后的展示字段）：`freeIds` / `modelsDev` 是**当下**的判断依据，
+ * 用缓存里的旧值会误判「免费」；缺了它们最多是展示名退化成 id，不会出错。
+ */
+function seedFromDiskCache(): void {
+  if (snapshot) return;
+  try {
+    const cached = readCatalogCache<CatalogEntry>();
+    if (cached) snapshot = { entries: cached, freeIds: new Set(), modelsDev: new Map() };
+  } catch {
+    /* 读不到就继续走兜底表 */
+  }
+}
+
+/** 首次同步访问时触发一次后台刷新；返回**种入后的快照**（磁盘缓存可能已顶上）。 */
+function ensureRefresh(): Snapshot | null {
+  if (snapshot || refreshing) return snapshot;
+  seedFromDiskCache();
+  if (snapshot) return snapshot;
   refreshing = true;
   void refreshCatalog()
     .catch(() => {})
     .finally(() => {
       refreshing = false;
     });
+  return snapshot;
 }
 
 function currentEntries(): CatalogEntry[] {
   if (!snapshot) {
-    ensureRefresh();
+    // ensureRefresh() 会先用磁盘缓存顶上；只有连磁盘缓存都没有时才退回兜底表。
+    // 直接 return fallbackEntries() 会让「新进程显示真实目录」失效 ——
+    // 多数 CLI 调用只问一次目录，这一次就决定了用户看到什么。
+    const seeded = ensureRefresh();
+    if (seeded) return seeded.entries;
     return fallbackEntries();
   }
   return snapshot.entries;

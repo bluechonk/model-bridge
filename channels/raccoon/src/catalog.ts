@@ -21,7 +21,7 @@
 
 import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
-import { isAllowedFamily } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
 
 /** 实测确认能读图、但远端未声明 vision 的个案（显式白名单，不是「恒 true」）。 */
 export const IMAGE_CAPABILITY_OVERRIDES: ReadonlySet<string> = new Set([
@@ -137,6 +137,8 @@ export const FALLBACK_MODELS: ModelEntry[] = [
 const EXCLUDED_IDS = new Set(["Raccoon-Auto"]);
 
 let snapshot: ModelEntry[] | null = null;
+/** 本进程是否已自动刷过一次（保持「每进程只刷一次」的原有语义）。 */
+let refreshAttempted = false;
 let remoteCache: { entries: ModelEntry[]; at: number } | null = null;
 let refreshing = false;
 
@@ -284,6 +286,7 @@ export async function refreshCatalog(): Promise<void> {
       entries = []; // 远端不可用 → 整表保底，绝不抛到调用方
     }
     remoteCache = { entries, at: now };
+    if (entries.length > 0) writeCatalogCache(entries);
   }
   const fresh = remoteCache;
   if (!fresh) {
@@ -293,8 +296,46 @@ export async function refreshCatalog(): Promise<void> {
   snapshot = fresh.entries.length > 0 ? fresh.entries : fallbackEntries();
 }
 
+/**
+ * 磁盘缓存里的目录**先顶上**（新进程 / 离线 / 未登录时也能显示真实目录），
+ * 随后的真实刷新会覆盖它 —— 所以这里只负责"有东西可显示"，不负责新鲜度。
+ */
+function seedFromDiskCache(): void {
+  if (snapshot) return;
+  try {
+    const cached = readCatalogCache<ModelEntry>();
+    if (cached) snapshot = cached;
+  } catch {
+    /* 读不到就继续走兜底表 */
+  }
+}
+
+/**
+ * 强制从上游重拉目录并落盘（CLI `--refresh` / `model refresh`）。
+ *
+ * 与 `refreshCatalog()` 的两点不同，都是「用户显式要求」带来的：
+ * 1. **绕过 TTL / 冷却**：不查 `remoteCache.at`，直接打一次上游；
+ * 2. **失败抛错**：`refreshCatalog` 静默回落是为了不打扰自动路径，但用户敲了
+ *    `--refresh` 却看到旧表会以为刷新成功 —— 必须让失败可见。
+ *
+ * 失败时**不写** `remoteCache`：否则会把一次失败记成冷却期，反而挡住后续自动刷新。
+ */
+export async function refresh(): Promise<void> {
+  const cfg = upstream.loadConfig()[0];
+  const c = cred.load();
+  const payload = await upstream.fetchModels(c, cfg);
+  const data = isRecord(payload["data"]) ? payload["data"] : {};
+  const entries = parseRemoteModels(data);
+  if (entries.length === 0) throw new Error("上游返回的模型目录为空");
+  remoteCache = { entries, at: Date.now() };
+  writeCatalogCache(entries);
+  snapshot = entries;
+}
+
 function ensureRefresh(): void {
-  if (snapshot || refreshing) return;
+  if (refreshAttempted) return; // 每进程只自动刷一次（原语义）
+  refreshAttempted = true;
+  seedFromDiskCache();
   refreshing = true;
   void refreshCatalog()
     .catch(() => {})
@@ -306,7 +347,10 @@ function ensureRefresh(): void {
 function currentEntries(): ModelEntry[] {
   if (!snapshot) {
     ensureRefresh();
-    return fallbackEntries();
+    // ensureRefresh() 会先用磁盘缓存顶上；只有连磁盘缓存都没有时才退回内置表。
+    // 直接 return fallbackEntries() 会让「新进程显示真实目录」失效 ——
+    // 多数 CLI 调用只问一次目录，这一次就决定了用户看到什么。
+    return snapshot ?? fallbackEntries();
   }
   return snapshot;
 }

@@ -33,7 +33,7 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 │       └── index.ts              ← 对外的统一出口
 ├── plugins/model-bridge/         ← **唯一的 ZCode 插件**（命令/技能/hook）
 ├── marketplace.json              ← ZCode 市场清单（单条目 → ./plugins/model-bridge）
-├── channels/                     ← 11 个渠道（每个 = 一个模型池 + 账号池）
+├── channels/                     ← 12 个渠道（每个 = 一个模型池 + 账号池）
 │   └── <cid>/                    ← 结构见下
 ├── packages/cli/                 ← **仓库级入口**（bin `model-bridge`）
 │   └── src/
@@ -182,7 +182,7 @@ export const FAMILY_ALLOWLIST: RegExp[] = [/flash/i];
 
 > 类型定义在 `packages/gateway/src/channel.ts`（`CredModule` / `UpstreamModule` /
 > `CatalogModule` / `BillingModule`）。凭据/配置的具体形态各渠道不同，故这些位置用
-> `any` —— 共享层只在**结构**上依赖它们，不做跨渠道的类型统一（那会在 11 个异构
+> `any` —— 共享层只在**结构**上依赖它们，不做跨渠道的类型统一（那会在 12 个异构
 > 渠道间制造大量摩擦）。
 
 ### 5.1 `cred.ts`
@@ -279,6 +279,7 @@ export interface StreamTranslator {
 export function exposedIds(): string[];              // 池内模型短名（已过白名单）
 export function resolveModel(name: string): string;  // 短名 → 上游 slug；未知原样返回
 export function details(): Array<Record<string, unknown>>;  // 可选，供状态页
+export function refresh?(): Promise<void>;           // 可选：强制重拉上游目录（CLI --refresh）
 ```
 
 ⚠ **兜底表是必需的**：未登录或上游目录失败时用户仍应看到模型（否则渠道在选择器里
@@ -286,6 +287,45 @@ export function details(): Array<Record<string, unknown>>;  // 可选，供状�
 ⚠ 调用共享的 `isAllowedFamily()` 做池过滤，**不要自行实现家族判据**（见 §4）。
 ⚠ 但**不要列出实测用不了的模型** —— 用户选中后拿到空回答，而错误指向「模型」
 而非真实原因，比不列更糟（ZCode 的 `GLM-5-Turbo` 就是这种情况，已从目录移除）。
+
+#### 目录来源优先级（**所有渠道一致，按此顺序**）
+
+1. **磁盘缓存** `<root>/<cid>/cache/models.json` —— **常态来源**。上次真实拉到的目录，
+   由共享层 `readCatalogCache()` / `writeCatalogCache()` 读写（信封
+   `{version, fetched_at, models}`，原子写入 + `0600`；落点见
+   `STORAGE-CONVENTION.md` §4 第 5 条）。
+2. **远端目录**（`upstream.fetchModels()`）—— **只在本地没有缓存时才拉**（首次使用），
+   拉到后**必须立刻写一次缓存**，否则下一个进程拿不到它。
+3. **随包快照**（渠道内的 `models.json` / 内置兜底表）—— 拉不到时的最后兜底。
+
+一句话：**第一次 `model list` 把真实目录记到本地，之后一直用那个文件**；
+要更新就 `model refresh` / `--refresh`。
+
+规则：
+
+- **兜底表是数据、不是机制**：它随包发布，必然随时间与上游脱节（实测 lobsterai 兜底只有
+  1 条 flash，上游真实 8 条）。别指望它准；它的意义只是「未登录/离线时不留空白」。
+- 拉取失败 / 未登录时**不要清空缓存**：旧的远端目录通常比随包快照新，继续用它显示。
+- 惰性读取：`catalog.ts` 在**首次被问**时读缓存、再决定是否拉远端，避免模块加载期就碰磁盘
+  （模块加载可能发生在渠道上下文之外，那时 `paths.*` 不知道为谁解析）。
+- 没有远端目录层的渠道（catalog 只有兜底/随包快照）**不需要**缓存，也**不要**实现
+  `refresh()` —— 共享层据此回报「模型表是内置的」；先补该渠道的 fetch/parse，
+  缓存才有意义。
+
+#### `refresh()`：显式刷新的契约
+
+有远端目录层的渠道**必须**实现 `refresh()`（CLI 的 `--refresh` / `model refresh` 调它）：
+
+- **绕过 TTL / 冷却**：用户显式要求刷新，不能拿缓存糊弄；
+- **成功写缓存**：下次新进程直接读到新目录；
+- **失败抛错**：自动路径静默回落是为了不打扰，但显式刷新失败必须可见 ——
+  用户看到旧表却以为刷成功了是最坏的结果。失败时**不要**把失败记进 TTL/冷却状态，
+  否则会挡住后续的自动刷新；
+- 解析/落盘若已在 `upstream.fetchModels()` 里做过，`refresh()` 只需「要一次真实拉取 +
+  校验结果非空」，不要重复实现解析。
+
+共享层负责的（渠道不用管）：缓存命中判断、失败时回落内置表、退出码、
+以及告诉用户这次看的是哪份数据。
 
 ### 5.4 `billing.ts`
 
@@ -343,7 +383,7 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 
 | 类型 | 用法 | 渠道 |
 |---|---|---|
-| **A. 创建 flow + 轮询** | `POST .../auth/state` 或 `.../oauth/cli/init` → 取 `authorize_url`/`authUrl` → 轮询拿 token | workbuddyai |
+| **A. 创建 flow + 轮询** | `POST .../auth/state` 或 `.../oauth/cli/init` → 取 `authorize_url`/`authUrl` → 轮询拿 token | workbuddyai、workbuddy |
 | **B. 本地回调服务器** | 起 `http://127.0.0.1:<port>` 回调服务 → 拼授权 URL（含 PKCE/DPoP 等）→ 等浏览器重定向回填 | trae、codearts、lobsterai |
 | **C. 设备码 / 扫码轮询** | 申请 device code 或二维码 URL → 轮询 token | cline、loomy、raccoon |
 

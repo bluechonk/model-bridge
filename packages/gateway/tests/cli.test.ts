@@ -20,6 +20,7 @@ import { after, before, describe, it } from "node:test";
 
 import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
 import { main } from "../dist/cli.js";
+import { writeCatalogCache } from "../dist/catalog-cache.js";
 
 /** 跑一次 CLI，收 stdout/stderr 与退出码。 */
 async function run(argv: string[]): Promise<{ code: number; out: string; err: string }> {
@@ -130,6 +131,51 @@ function makeChannel(cid: string, opts: FakeSigninSpec): Channel {
 let root = "";
 let savedRoot: string | undefined;
 
+/** 远端目录层的假渠道：`refresh()` 记次数，并模拟成功/失败/不可用。 */
+const refreshState = {
+  calls: 0,
+  /** 下一次 `refresh()` 会从上游拿到的内容。 */
+  upstream: ["remote-flash-one"] as string[],
+  /** 设了就让 `refresh()` 抛这个错（模拟未登录 / 上游拒绝）。 */
+  failWith: null as string | null,
+  /**
+   * 渠道**自己**当前生效的目录（模拟真实渠道的内存缓存）。
+   *
+   * 真实渠道里 `exposedIds()` 读的是内存缓存，而内存缓存来自「磁盘缓存种子 →
+   * 被 refresh 覆盖」。假渠道照这个来，否则测不出「缓存优先」。
+   */
+  current: null as string[] | null,
+};
+
+/** 没有远端目录层的渠道（不提供 `refresh`）—— CLI 应报「内置表」。 */
+function makeBuiltinChannel(cid: string): Channel {
+  const ch = makeChannel(cid, { signin: false });
+  delete (ch.catalog as { refresh?: unknown }).refresh;
+  return ch;
+}
+
+/** 有远端目录层的渠道：同步读内存缓存，`refresh()` 打上游并覆盖缓存。 */
+function makeRemoteChannel(cid: string): Channel {
+  const ch = makeChannel(cid, { signin: false });
+  (ch.catalog as { exposedIds: () => string[] }).exposedIds = () => {
+    if (refreshState.current === null) {
+      // 惰性种子：真实渠道就是这样从 cache/models.json 起手的
+      const cached = readCatalogCache<{ id: string }>(cid);
+      refreshState.current = cached ? cached.map((m) => m.id) : [];
+    }
+    return refreshState.current.length > 0 ? [...refreshState.current] : ["builtin-fallback"];
+  };
+  (ch.catalog as { refresh?: () => Promise<void> }).refresh = async () => {
+    refreshState.calls += 1;
+    if (refreshState.failWith) throw new Error(refreshState.failWith);
+    const entries = refreshState.upstream.map((id) => ({ id }));
+    // 真实渠道在 refresh() 里落盘；照做，才能测「下次走缓存」
+    writeCatalogCache(entries, cid);
+    refreshState.current = [...refreshState.upstream];
+  };
+  return ch;
+}
+
 function resetChannels(): void {
   clearChannels();
   setChannel(makeChannel("alpha", { signin: true }));
@@ -207,6 +253,142 @@ describe("2. 模型池（model 分组与兼容命令）", () => {
     const r = await run(["model", "乱写"]);
     assert.equal(r.code, 2);
     assert.ok(r.err.includes("未知的 model 子命令"));
+  });
+});
+
+describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
+  /** 每个用例都在干净存储根上跑，避免上一条留下的 cache/models.json 串味。 */
+  function withFreshRoot(): void {
+    rmSync(root, { recursive: true, force: true });
+    root = mkdtempSync(join(tmpdir(), "mb-cli-catalog-"));
+    process.env["MODEL_BRIDGE_HOME"] = root;
+  }
+
+  function useRemoteOnly(): void {
+    clearChannels();
+    refreshState.calls = 0;
+    refreshState.upstream = ["remote-flash-one"];
+    refreshState.failWith = null;
+    refreshState.current = null; // 新进程：内存缓存为空，靠磁盘缓存种子
+    setChannel(makeRemoteChannel("remote"));
+  }
+
+  it("本地没有缓存 → 拉一次并记录；再问就走缓存（不再拉）", async () => {
+    withFreshRoot();
+    useRemoteOnly();
+
+    const first = await run(["remote", "models"]);
+    assert.equal(first.code, 0);
+    assert.equal(refreshState.calls, 1, "首次没有缓存，应该拉一次");
+    assert.match(first.out, /remote\/remote-flash-one/);
+    assert.ok(first.err.includes("刚从上游拉取"), "要告诉用户这次是现拉的");
+
+    const second = await run(["remote", "models"]);
+    assert.equal(second.code, 0);
+    assert.equal(refreshState.calls, 1, "第二次应命中缓存，不再拉");
+    assert.ok(!second.err.includes("刚从上游拉取"), "命中缓存不必打扰用户");
+    assert.match(second.out, /remote\/remote-flash-one/);
+
+    resetChannels();
+  });
+
+  it("缓存优先：即使上游换了内容，也先用本地那份（除非 --refresh）", async () => {
+    withFreshRoot();
+    useRemoteOnly();
+
+    await run(["remote", "models"]); // 写入缓存（remote-flash-one）
+    refreshState.upstream = ["remote-flash-two"]; // 上游变了
+
+    const cached = await run(["remote", "models"]);
+    assert.equal(refreshState.calls, 1, "仍不该打网络");
+    assert.match(cached.out, /remote-flash-one/, "用的是本地记录的那份");
+    assert.ok(!cached.out.includes("remote-flash-two"));
+
+    const forced = await run(["remote", "models", "--refresh"]);
+    assert.equal(forced.code, 0);
+    assert.equal(refreshState.calls, 2, "--refresh 必须真的重拉");
+    assert.match(forced.out, /remote-flash-two/, "重拉后是新内容");
+    assert.ok(forced.err.includes("刚从上游拉取"));
+
+    resetChannels();
+  });
+
+  it("model refresh [cid] 强制重拉；不带 cid 时刷全部", async () => {
+    withFreshRoot();
+    useRemoteOnly();
+
+    const one = await run(["model", "refresh", "remote"]);
+    assert.equal(one.code, 0);
+    assert.equal(refreshState.calls, 1);
+
+    const all = await run(["model", "refresh"]);
+    assert.equal(all.code, 0);
+    assert.equal(refreshState.calls, 2, "不带 cid 时刷全部（本例只有一个）");
+
+    resetChannels();
+  });
+
+  it("--refresh 失败必须非零退出（不能拿旧表冒充刷新成功）", async () => {
+    withFreshRoot();
+    useRemoteOnly();
+    await run(["remote", "models"]); // 先有缓存
+    refreshState.failWith = "上游拒绝：token 失效";
+
+    const r = await run(["remote", "models", "--refresh"]);
+    assert.equal(r.code, 1, "显式刷新失败要非零");
+    assert.ok(r.err.includes("刷新模型目录失败"), r.err);
+    assert.ok(r.err.includes("token 失效"), "要带上真实原因");
+
+    // 自动路径（不加 --refresh）仍然静默回落，不打扰、不报错
+    const auto = await run(["remote", "models"]);
+    assert.equal(auto.code, 0);
+
+    resetChannels();
+  });
+
+  it("自动拉取失败 → 回落内置表并说明原因，退出码仍为 0", async () => {
+    withFreshRoot();
+    useRemoteOnly();
+    refreshState.failWith = "NotLoggedInError: 未登录";
+
+    const r = await run(["remote", "models"]);
+    assert.equal(r.code, 0, "列表本身要能打出来，不算命令失败");
+    assert.ok(r.err.includes("未能从上游拉取"), r.err);
+    assert.ok(r.err.includes("未登录"), "要说明为什么没拉到");
+
+    resetChannels();
+  });
+
+  it("没有远端目录层的渠道：报「内置表」，且不会被 --refresh 报错", async () => {
+    withFreshRoot();
+    clearChannels();
+    setChannel(makeBuiltinChannel("builtin"));
+
+    const r = await run(["builtin", "models"]);
+    assert.equal(r.code, 0);
+    assert.ok(r.err.includes("内置"), r.err);
+
+    const forced = await run(["builtin", "models", "--refresh"]);
+    assert.equal(forced.code, 0, "没有远端可刷不是错误");
+    assert.ok(forced.err.includes("内置"), forced.err);
+
+    resetChannels();
+  });
+
+  it("--json 带 source 字段（脚本据此判断数据来源）", async () => {
+    withFreshRoot();
+    useRemoteOnly();
+
+    const fetched = await run(["remote", "models", "--json"]);
+    const a = JSON.parse(fetched.out) as { source: string };
+    assert.equal(a.source, "fetched");
+
+    const cached = await run(["remote", "models", "--json"]);
+    const b = JSON.parse(cached.out) as { source: string; fetched_at?: string };
+    assert.equal(b.source, "cache");
+    assert.ok(b.fetched_at, "缓存命中要给出拉取时刻");
+
+    resetChannels();
   });
 });
 

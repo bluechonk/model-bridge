@@ -26,7 +26,7 @@ export interface AccountsOptions {
   /** 只操作该渠道；省略 = 全部已注册渠道（仓库级）。 */
   cid?: string;
   json?: boolean;
-  /** add 用：登录域（workbuddy 的 intl/cn）。 */
+  /** add 用：登录域（workbuddyai 的 intl/cn）。 */
   realm?: string;
   /** add 用：忽略已有凭证强制重登。 */
   force?: boolean;
