@@ -1,0 +1,47 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/gateway"
+    },
+    {
+      "path": "packages/cli"
+    },
+    {
+      "path": "channels/catpaw"
+    },
+    {
+      "path": "channels/cline"
+    },
+    {
+      "path": "channels/codearts"
+    },
+    {
+      "path": "channels/gemini"
+    },
+    {
+      "path": "channels/lobsterai"
+    },
+    {
+      "path": "channels/loomy"
+    },
+    {
+      "path": "channels/minimax"
+    },
+    {
+      "path": "channels/qoder"
+    },
+    {
+      "path": "channels/raccoon"
+    },
+    {
+      "path": "channels/trae"
+    },
+    {
+      "path": "channels/workbuddy"
+    },
+    {
+      "path": "channels/zcode"
+    }
+  ]
+}

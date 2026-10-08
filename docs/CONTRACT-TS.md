@@ -363,8 +363,8 @@ interface CreditsResult {
 - [ ] `channel.ts` 用 `setChannel()` 注册了 `BridgeConfig` + 4 个模块
 - [ ] `catalog.ts` 调用共享 `isAllowedFamily()`，未自行实现家族判据
 - [ ] 登录是真实 URL 链路，未读取其它应用的本地文件
-- [ ] `npm install && npm run build` 无错误（`tsc` 严格模式）
+- [ ] `npm install && npm run build` 无错误（`tsc -b`，严格模式；各包 `extends` 根 `tsconfig.base.json`）
 - [ ] `node --test tests/selftest.test.ts` 全绿
-- [ ] 全仓验证：`npm run build --workspaces --if-present && npm run test --workspaces --if-present` 退出码 0
+- [ ] 全仓验证：`npm run build && npm test` 退出码 0（根 `tsconfig.json` 为 solution 文件，一次 `tsc -b` 编全仓）
 - [ ] README 更新为 TypeScript 安装/使用说明，并指向 `docs/protocols/<cid>/PROTOCOL.md`
 - [ ] `docs/protocols/<cid>/PROTOCOL.md` 保留（协议规格，实现的依据）

@@ -9,7 +9,7 @@
     "channels/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "tsc -b",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "verify:storage": "node tools/verify-storage.mjs",
     "verify:docs": "node tools/verify-docs.mjs",
