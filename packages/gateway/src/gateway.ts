@@ -453,7 +453,29 @@ async function handleChat(
   const { catalog, cred, upstream } = channel;
 
   const wantStream = Boolean(payload["stream"]);
-  const resolvedModel = inChannel(channel, () => resolvePoolModel(channel, upstreamModel));
+
+  // 模型名解析：**渠道说了算**（目录里查不到就抛错）。
+  //
+  // ⚠ 必须接住这个错 —— 否则「模型名打错」这种**用户输入问题**会被上游异常
+  // 处理器兜成 `500 internal_error`，让人误以为网关/登录坏了（实测踩过：
+  // 用户把 workbuddyai 的 `deepseek-v4.1-flash` 用在 catpaw 上，收到的是
+  // 「网关内部错误」）。这里回 400 并列出该渠道的可用模型，直接指出怎么改。
+  let resolvedModel: string;
+  try {
+    resolvedModel = inChannel(channel, () => resolvePoolModel(channel, upstreamModel));
+  } catch (err) {
+    const available = inChannel(channel, () => {
+      try {
+        return catalog.exposedIds();
+      } catch {
+        return [] as string[];
+      }
+    });
+    const list = available.length > 0 ? `；可用模型：${available.map((m) => `${cid}/${m}`).join("、")}` : "";
+    opts.logger(`模型名无法解析（渠道 ${cid}）: ${String(err)}`);
+    writeJsonError(res, 400, "unknown_model", `渠道 ${cid} 没有模型 ${upstreamModel}${list}`);
+    return;
+  }
 
   let body: Record<string, unknown>;
   try {
