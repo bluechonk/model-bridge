@@ -31,25 +31,61 @@ import { createHash, randomBytes } from "node:crypto";
 /**
  * 用系统默认浏览器打开 URL。
  *
- * ⚠ Windows 下必须用 `cmd /c start "" "{url}"` —— **空标题 `""` 不可省**：
- * 否则 URL 里的 `&` 会被 cmd 当成命令分隔符，含多个查询参数的授权链接会被截断
- * （实测过的缺陷）。
+ * Windows 下走 `cmd /c start "" "{url}"`，两个坑叠在一起、缺一不可：
+ *
+ * 1. `start` 的第一个参数会被当成**窗口标题**，空标题 `""` 必须占位 ——
+ *    否则 URL 本身被当标题，什么都不打开。
+ * 2. URL 里的 `&` 是 **cmd 的命令分隔符**。Node 默认按 C 运行时的规则转义参数，
+ *    那套规则对 cmd.exe **无效**，于是 cmd 在第一个 `&` 处截断命令行。
+ *    实测：`spawn("cmd", ["/c","start","",url])` 时浏览器只拿到
+ *    `...?sid=xxx`，`state` / `redirect` 全丢 —— 用户看到的是「未获取到登录票据」。
+ *    修法是 `windowsVerbatimArguments` + 自己给 URL 加引号，让 cmd 把整个 URL
+ *    当成一个词元（引号内的 `&` 不是分隔符）。
  *
  * 打不开浏览器不影响登录：调用方继续轮询/等回调，用户可手动复制链接。
  */
 export function openBrowser(url: string): void {
   try {
-    const [cmd, args] =
-      process.platform === "win32"
-        ? (["cmd", ["/c", "start", "", url]] as const)
-        : process.platform === "darwin"
-          ? (["open", [url]] as const)
-          : (["xdg-open", [url]] as const);
-    const child = spawn(cmd, [...args], { detached: true, stdio: "ignore", windowsHide: true });
+    const spec = browserCommand(url);
+    const child = spawn(spec.cmd, spec.args, {
+      detached: true,
+      stdio: "ignore",
+      ...(spec.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
+      ...(spec.windowsHide ? { windowsHide: true } : {}),
+    });
     child.unref();
   } catch {
     /* 打不开浏览器不影响登录流程 */
   }
+}
+
+/** 打开浏览器的命令描述（纯函数，便于断言「URL 没被截断」）。 */
+export interface BrowserCommand {
+  cmd: string;
+  args: string[];
+  /** Windows 下必须为 true：否则 Node 的转义规则会让 cmd 在 `&` 处截断 URL。 */
+  windowsVerbatimArguments?: boolean;
+  windowsHide?: boolean;
+}
+
+/**
+ * 构造「用默认浏览器打开 url」的命令行。
+ *
+ * 单独抽成纯函数是为了**可断言**：Windows 上的截断 bug 只有真实执行才暴露，
+ * 而这里能直接检查 args 里 URL 是否完整（含 `&` 与后续参数）。
+ */
+export function browserCommand(url: string, platform: NodeJS.Platform = process.platform): BrowserCommand {
+  if (platform === "win32") {
+    // `start` 的窗口标题占位 `""` + URL 自带引号 + verbatim，三者缺一不可。
+    return {
+      cmd: "cmd",
+      args: ["/c", "start", "", `"${url}"`],
+      windowsVerbatimArguments: true,
+      windowsHide: true,
+    };
+  }
+  if (platform === "darwin") return { cmd: "open", args: [url] };
+  return { cmd: "xdg-open", args: [url] };
 }
 
 // ── URL ───────────────────────────────────────────────────────────────────────
