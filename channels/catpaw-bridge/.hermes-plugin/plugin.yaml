@@ -1,0 +1,12 @@
+name: catpaw-bridge
+version: 0.1.0
+manifest_version: 2
+description: >-
+  CatPaw（美团妙手）本地 OpenAI 兼容网关的 Hermes 侧接入：把本仓库 ZCode 插件自带的
+  catpaw-gateway 技能注册给 Hermes 原生技能加载器，日常用 catpaw CLI 管理网关
+  （login / start / stop / status / models）。
+author: bluechonk
+license: MIT
+homepage: https://github.com/bluechonk/catpaw-bridge
+requires_hermes: ">=0.21.5"
+tags: [catpaw, miaoshou, gateway, catpaw, zcode-plugin]

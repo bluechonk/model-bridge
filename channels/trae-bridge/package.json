@@ -1,0 +1,43 @@
+{
+  "name": "trae-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "TRAE 的本地 OpenAI Chat Completion 透明代理网关（TypeScript，无窗口，ZCode 插件引擎）",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "bin": {
+    "trae": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test tests/selftest.test.ts",
+    "test:all": "npm run build && node --test tests/*.test.ts"
+  },
+  "keywords": [
+    "gateway",
+    "openai",
+    "proxy",
+    "cli",
+    "typescript",
+    "trae"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@model-bridge/gateway": "*"
+  }
+}

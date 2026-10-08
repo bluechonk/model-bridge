@@ -1,0 +1,22 @@
+{
+  "name": "model-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "多渠道路由网关工作区：共享 gateway 层 + 仓库级 CLI + 各渠道（channels/ 下，每个渠道 = 一个模型池/账号池）",
+  "workspaces": [
+    "packages/*",
+    "channels/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "verify:storage": "node tools/verify-storage.mjs",
+    "test": "npm run verify:storage && npm run test --workspaces --if-present",
+    "test:all": "npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "license": "MIT"
+}
