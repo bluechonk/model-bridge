@@ -1,4 +1,4 @@
-# workbuddy-bridge
+# workbuddyai-bridge
 
 WorkBuddyAI 的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
 **纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 API 和
@@ -32,9 +32,9 @@ npm run build              # 编译到 dist/
 node dist/cli.js serve --json    # 前台无窗口运行：登录探测 + 网关 + 控制台 API
 node dist/cli.js login --json     # 无窗口登录：输出授权链接，浏览器授权后自动保存凭证
 
-npm link                   # 或用 npm i -g . 得到 workbuddy 命令
-workbuddy start            # 守护式启动（幂等）：分离后台进程 + PID 文件 + 健康等待
-workbuddy status / models / credits / stop
+npm link                   # 或用 npm i -g . 得到 workbuddyai 命令
+workbuddyai start            # 守护式启动（幂等）：分离后台进程 + PID 文件 + 健康等待
+workbuddyai status / models / credits / stop
 ```
 
 `serve` 未登录时默认只报告状态、不弹浏览器（`/api/state` 会给出提示）；
@@ -47,13 +47,13 @@ workbuddy status / models / credits / stop
 （控制台 API 端口，默认 `8788`）、`--verbose`（打印每个请求）、`--no-console`；
 `login` 另有 `--force`（忽略已有凭证强制重登）。
 
-`workbuddy credits` 直接请求上游 billing 端点（`/v2/billing/meter/get-user-resource`）查询账号
-剩余额度，不经本地网关、只读；`workbuddy status` 聚合网关健康与登录状态。
+`workbuddyai credits` 直接请求上游 billing 端点（`/v2/billing/meter/get-user-resource`）查询账号
+剩余额度，不经本地网关、只读；`workbuddyai status` 聚合网关健康与登录状态。
 
-`workbuddy start` 是守护式入口：幂等（先探测 `/health`）、分离后台进程、写
-`~/.model-bridge/workbuddy/gateway.pid`、日志落 `gateway.log`，健康等待后命令退出。
+`workbuddyai start` 是守护式入口：幂等（先探测 `/health`）、分离后台进程、写
+`~/.model-bridge/workbuddyai/gateway.pid`、日志落 `gateway.log`，健康等待后命令退出。
 `--auto`（hook 场景）受 prefs 的 `auto_start` 开关约束（默认开）；
-`--strict` 时失败以非零码退出。`workbuddy stop` 读 PID 文件杀进程树，不碰第三方进程。
+`--strict` 时失败以非零码退出。`workbuddyai stop` 读 PID 文件杀进程树，不碰第三方进程。
 
 ## 状态 API 与 ZCode 插件
 
@@ -106,7 +106,7 @@ tests/
 ## 存储与配置
 
 全部落点在统一存储根 `~/.model-bridge/` 下按渠道分层：凭证在
-`~/.model-bridge/workbuddy/credentials.json`（权限 0600），不要提交到 git。
+`~/.model-bridge/workbuddyai/credentials.json`（权限 0600），不要提交到 git。
 历史顶层目录（`~/.workbuddy-bridge/`、`~/.workbuddyai2api/`、`~/.workbuddyai-gateway/` 等）
 首次访问时自动收拢进该层，无需重新登录。`MODEL_BRIDGE_HOME` 可把整个存储根指到别处
 （旧的 `WORKBUDDY_HOME` / `WBAI2API_HOME` 仍被识别但已弃用），便携/测试用。

@@ -1,5 +1,5 @@
 /**
- * workbuddy-bridge 自检（离线，不出网）。
+ * workbuddyai-bridge 自检（离线，不出网）。
  *
  * 覆盖：
  *  1. 路径与目录迁移
@@ -113,7 +113,7 @@ async function readSseFrames(url: string, body: unknown): Promise<string> {
 describe("1. 路径", () => {
   it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/workbuddy", () => {
     assert.equal(paths.rootDir(), HOME);
-    assert.equal(paths.channelDir(), join(HOME, "workbuddy"));
+    assert.equal(paths.channelDir(), join(HOME, "workbuddyai"));
     assert.ok(paths.credentialsPath().endsWith("credentials.json"));
     assert.ok(paths.pidPath().endsWith("gateway.pid"));
     assert.ok(paths.logPath().endsWith("gateway.log"));
@@ -128,7 +128,7 @@ describe("1. 路径", () => {
     const saved = process.env["MODEL_BRIDGE_HOME"];
     process.env["MODEL_BRIDGE_HOME"] = alt;
     try {
-      assert.equal(paths.channelDir(), join(alt, "workbuddy"));
+      assert.equal(paths.channelDir(), join(alt, "workbuddyai"));
       assert.ok(paths.credentialsPath().includes("workbuddy"));
     } finally {
       process.env["MODEL_BRIDGE_HOME"] = saved;

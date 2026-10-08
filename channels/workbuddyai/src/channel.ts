@@ -17,7 +17,7 @@ import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
 
 export const config: BridgeConfig = {
-  cid: "workbuddy",
+  cid: "workbuddyai",
   display: "WorkBuddyAI",
   version: "0.4.0",
   defaultAddr: "127.0.0.1:8787",
@@ -31,8 +31,8 @@ export const config: BridgeConfig = {
     ".workbuddyai-gateway",
   ],
   legacyEnvVars: ["WORKBUDDY_HOME", "ZCB_HOME", "WBAI2API_HOME"],
-  debugDumpEnv: "WORKBUDDY_DEBUG_DUMP",
-  legacyDebugDumpEnv: ["WBAI_DEBUG_DUMP"],
+  debugDumpEnv: "WORKBUDDYAI_DEBUG_DUMP",
+  legacyDebugDumpEnv: ["WORKBUDDY_DEBUG_DUMP", "WBAI_DEBUG_DUMP"],
   fileMigrations: [
     // Python 版 GUI 层的空目录残留（非空时只记日志，不删）
     { from: "webview", action: "delete" },

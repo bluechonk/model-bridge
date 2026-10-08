@@ -6,7 +6,10 @@
  */
 
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import {
@@ -243,8 +246,15 @@ describe("1. 多渠道路由（两张池子）", () => {
 
 describe("2. 仓库级命令在多渠道路由下可用", () => {
   let solo: Awaited<ReturnType<typeof fakeUpstream>>;
+  let root = "";
+  let savedRoot: string | undefined;
 
   before(async () => {
+    // 隔离存储根：这些命令会解析根级路径（rootDir/rootPidPath/rootLogPath），
+    // 不能碰真实主目录
+    root = mkdtempSync(join(tmpdir(), "mb-repocmd-"));
+    savedRoot = process.env["MODEL_BRIDGE_HOME"];
+    process.env["MODEL_BRIDGE_HOME"] = root;
     solo = await fakeUpstream("x");
     clearChannels();
     setChannel(makeChannel("alpha", "alpha", solo.url));
@@ -254,6 +264,9 @@ describe("2. 仓库级命令在多渠道路由下可用", () => {
   after(async () => {
     await new Promise<void>((r) => solo.server.close(() => r()));
     clearChannels();
+    if (savedRoot === undefined) delete process.env["MODEL_BRIDGE_HOME"];
+    else process.env["MODEL_BRIDGE_HOME"] = savedRoot;
+    rmSync(root, { recursive: true, force: true });
   });
 
   it("daemon.status 不抛错（根级路径解析不再要求「唯一渠道」）", async () => {
@@ -262,10 +275,12 @@ describe("2. 仓库级命令在多渠道路由下可用", () => {
     assert.equal(code, 0);
   });
 
-  it("daemon.logs / paths 同样不抛错", () => {
-    assert.equal(daemon.logs(1, true), 1, "没有日志文件 → 返回 1（不是抛错）");
-    assert.ok(paths.rootDir().length > 0);
+  it("daemon.logs / paths 同样不抛错（有无日志文件都不是异常）", () => {
+    const code = daemon.logs(1, true);
+    assert.ok(code === 0 || code === 1, `logs 返回 ${code}（只该是 0/1）`);
+    assert.equal(paths.rootDir(), root);
     assert.ok(paths.rootPidPath().endsWith("gateway.pid"));
+    assert.ok(paths.rootLogPath().endsWith("gateway.log"));
   });
 });
 

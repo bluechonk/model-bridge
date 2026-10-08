@@ -34,7 +34,7 @@ describe("仓库级模型池", () => {
     const cids = gw.channels().map((c) => c.config.cid).sort();
     assert.equal(cids.length, 11, `实际: ${cids.join(", ")}`);
     assert.ok(!cids.includes("zcode"), "zcode 渠道已移除");
-    for (const cid of ["workbuddy", "catpaw", "trae", "codearts", "loomy", "qoder"]) {
+    for (const cid of ["workbuddyai", "catpaw", "trae", "codearts", "loomy", "qoder"]) {
       assert.ok(cids.includes(cid), `缺少渠道 ${cid}`);
     }
   });
@@ -55,8 +55,8 @@ describe("仓库级模型池", () => {
     assert.ok(ids.length >= 8, `池子里应有多个渠道的模型，实际 ${ids.length} 条`);
     assert.ok(ids.every((id) => id.includes("/")), "多渠道路由下每个 id 都带渠道前缀");
     assert.ok(
-      ids.includes("workbuddy/deepseek-flash"),
-      `应含 workbuddy 的短名；实际样例: ${ids.slice(0, 5).join(", ")}`,
+      ids.includes("workbuddyai/deepseek-flash"),
+      `应含 workbuddyai 的短名；实际样例: ${ids.slice(0, 5).join(", ")}`,
     );
     // 渠道前缀都必须是已注册的 cid
     const cids = new Set(gw.channels().map((c) => c.config.cid));
@@ -75,7 +75,7 @@ describe("仓库级模型池", () => {
   });
 
   it("按前缀路由到对应渠道；前缀未知 → 400", async () => {
-    assert.equal(gw.resolveTarget("workbuddy/deepseek-flash").channel.config.cid, "workbuddy");
+    assert.equal(gw.resolveTarget("workbuddyai/deepseek-flash").channel.config.cid, "workbuddyai");
     assert.equal(gw.resolveTarget("cline/cline-free/mimo-v2.6-flash").upstreamModel, "cline-free/mimo-v2.6-flash");
 
     const resp = await fetch(`http://${running.addr}/v1/chat/completions`, {
@@ -101,8 +101,8 @@ describe("仓库级模型池", () => {
     });
     assert.equal(rows.length, 11);
     assert.ok(
-      rows.find((r) => r.cid === "workbuddy")!.models.includes("deepseek-flash"),
-      "workbuddy 池子里应有 deepseek-flash",
+      rows.find((r) => r.cid === "workbuddyai")!.models.includes("deepseek-flash"),
+      "workbuddyai 池子里应有 deepseek-flash",
     );
     assert.deepEqual(rows.find((r) => r.cid === "qoder")!.models, [], "qoder 是桩 → 空池");
     assert.ok(
