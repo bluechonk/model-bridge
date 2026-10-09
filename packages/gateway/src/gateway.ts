@@ -47,7 +47,7 @@ import {
 import { runInChannel } from "./channel-context.js";
 import { activateAccount, markActiveHealth, pickAccount, readIndex } from "./account-pool.js";
 import { resolvePoolModel } from "./model-pool.js";
-import { asPoolModel, poolCandidates, POOL_MODELS } from "./pool-targets.js";
+import { asPoolModel, poolCandidates, POOL_MODELS, POOL_MODEL_META } from "./pool-targets.js";
 import { maybeRefreshBilling, noteFailure, noteSuccess, scoreOf } from "./pool-usage.js";
 import * as sseStream from "./sse-stream.js";
 import { baseUrlOf, bindFreeServer, displayBase } from "./portfree.js";
@@ -619,17 +619,28 @@ async function relayUpstream(
  * （模型可见性与登录状态解耦），请求时才报 503。
  */
 function handleModels(res: ServerResponse): void {
-  const now = Math.floor(Date.now() / 1000);
   const owner = serviceName();
   writeJson(res, {
     object: "list",
-    data: POOL_MODELS.map((id) => ({
-      id,
-      object: "model",
-      created: now,
-      owned_by: owner,
-      name: id,
-    })),
+    // 字段结构对齐 DeepSeek 官方 `GET /models`（见 pool-targets.ts 的 PoolModelMeta）：
+    // **没有 `created`**，`name` 是展示名，并带上上下文 / 最大输出 / 模态 / 档位。
+    data: POOL_MODELS.map((id) => {
+      const meta = POOL_MODEL_META[id];
+      return {
+        id,
+        object: "model",
+        owned_by: owner,
+        name: meta.name,
+        context_window: meta.contextWindow,
+        max_output_tokens: meta.maxOutputTokens,
+        input_modalities: meta.inputModalities,
+        output_modalities: meta.outputModalities,
+        effort: {
+          supported_levels: meta.effort.supportedLevels,
+          default_level: meta.effort.defaultLevel,
+        },
+      };
+    }),
   });
 }
 
