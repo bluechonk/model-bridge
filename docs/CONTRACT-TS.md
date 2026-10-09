@@ -33,7 +33,7 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 │       └── index.ts              ← 对外的统一出口
 ├── plugins/model-bridge/         ← **唯一的 ZCode 插件**（命令/技能/hook）
 ├── marketplace.json              ← ZCode 市场清单（单条目 → ./plugins/model-bridge）
-├── channels/                     ← 10 个渠道（每个 = 一个模型池 + 账号池）
+├── channels/                     ← 11 个渠道（每个 = 一个模型池 + 账号池）
 │   └── <cid>/                    ← 结构见下
 ├── packages/cli/                 ← **仓库级入口**（bin `model-bridge`）
 │   └── src/

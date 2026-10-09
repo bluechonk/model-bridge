@@ -1,5 +1,5 @@
 /**
- * qoder-bridge 自检（**完全离线**，不出网）。
+ * qodercn-bridge 自检（**完全离线**，不出网）。
  *
  * 覆盖四块实现里最容易悄悄写错、又最难在真机上定位的部分：
  *
@@ -367,13 +367,13 @@ describe("8. 设备授权 URL 与 PKCE", () => {
   });
 
   it("区域锁定：无论传什么参数，都返回本渠道的区域", () => {
-    assert.equal(cred.CHANNEL_REALM, "intl", "国际版渠道固定 intl");
-    assert.equal(cred.normalizeRealm("cn"), "intl", "--realm cn 不该让本渠道串到国内区");
-    assert.equal(cred.normalizeRealm("auto"), "intl");
-    assert.equal(cred.normalizeRealm(undefined), "intl");
-    assert.equal(cred.productOf("cn").domain, "qoder.com", "productOf 也只认本区");
-    assert.equal(cred.DEFAULT_BASE_URL, "https://openapi.qoder.sh");
-    assert.equal(cred.resolveBaseUrl("cn"), "https://openapi.qoder.sh");
+    assert.equal(cred.CHANNEL_REALM, "cn", "国内版渠道固定 cn");
+    assert.equal(cred.normalizeRealm("intl"), "cn", "--realm intl 不该让本渠道串到国际区");
+    assert.equal(cred.normalizeRealm("auto"), "cn");
+    assert.equal(cred.normalizeRealm(undefined), "cn");
+    assert.equal(cred.productOf("intl").domain, "qoder.com.cn", "productOf 也只认本区");
+    assert.equal(cred.DEFAULT_BASE_URL, "https://openapi.qoder.com.cn");
+    assert.equal(cred.resolveBaseUrl("intl"), "https://openapi.qoder.com.cn");
   });
 
   it("两区端点互不相同", () => {
@@ -389,12 +389,12 @@ describe("9. 渠道装配", () => {
   it("注册进共享层，静态配置就位", () => {
     clearChannels();
     setChannel(channelModule.channel);
-    const channel = getChannel("qoder");
-    assert.equal(channel.config.cid, "qoder");
-    assert.equal(channel.config.display, "Qoder");
-    assert.equal(channel.upstream.DISPLAY_NAME, "Qoder");
+    const channel = getChannel("qodercn");
+    assert.equal(channel.config.cid, "qodercn");
+    assert.equal(channel.config.display, "Qoder 国内版");
+    assert.equal(channel.upstream.DISPLAY_NAME, "Qoder 国内版");
     assert.equal(channel.upstream.WIRE, "custom", "响应是信封，必须走翻译层");
-    assert.ok(paths.channelDir("qoder").startsWith(root));
+    assert.ok(paths.channelDir("qodercn").startsWith(root));
   });
 
   it("凭据未登录时抛 NotLoggedInError", () => {
@@ -402,6 +402,6 @@ describe("9. 渠道装配", () => {
   });
 
   it("模型目录缓存落在渠道层内", () => {
-    assert.ok(paths.cacheDir("qoder").includes(join("qoder", "cache")));
+    assert.ok(paths.cacheDir("qodercn").includes(join("qodercn", "cache")));
   });
 });

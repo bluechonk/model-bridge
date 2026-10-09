@@ -100,7 +100,7 @@ export const PRODUCTS: Record<Realm, ProductConfig> = {
  * 代价是两个渠道的源码高度相似（重复代码）—— 这是有意的：两区的端点、模型目录、
  * 账单口径都可能各自演进，共享抽象会把「一个改了两边都变」变成默认行为。
  */
-export const CHANNEL_REALM: Realm = "intl";
+export const CHANNEL_REALM: Realm = "cn";
 
 /** 默认区域 = 本渠道的区域（`DEFAULT_REALM` 这个名字是给调用方读的）。 */
 export const DEFAULT_REALM: Realm = CHANNEL_REALM;

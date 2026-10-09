@@ -54,7 +54,7 @@ import {
 export const DEFAULT_BASE_URL = productOf("cn").gateway[0]!;
 
 /** 展示名。 */
-export const DISPLAY_NAME = "Qoder";
+export const DISPLAY_NAME = "Qoder 国内版";
 
 /** 上游线型是**自定义**的：响应是 `{headers,body,statusCodeValue}` 信封，需翻译层。 */
 export const WIRE = "custom" as const;

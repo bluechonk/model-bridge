@@ -30,11 +30,11 @@ describe("仓库级模型池", () => {
     rmSync(HOME, { recursive: true, force: true });
   });
 
-  it("注册了全部 10 个渠道", () => {
+  it("注册了全部 11 个渠道", () => {
     const cids = gw.channels().map((c) => c.config.cid).sort();
-    assert.equal(cids.length, 10, `实际: ${cids.join(", ")}`);
+    assert.equal(cids.length, 11, `实际: ${cids.join(", ")}`);
     assert.ok(!cids.includes("zcode"), "zcode 渠道已移除");
-    for (const cid of ["workbuddy", "workbuddyai", "catpaw", "trae", "codearts", "loomy", "qoder"]) {
+    for (const cid of ["workbuddy", "workbuddyai", "catpaw", "trae", "codearts", "loomy", "qoder", "qodercn"]) {
       assert.ok(cids.includes(cid), `缺少渠道 ${cid}`);
     }
   });
@@ -44,7 +44,7 @@ describe("仓库级模型池", () => {
     assert.equal(health["ok"], true);
     assert.equal(health["service"], "model-bridge");
     const per = health["channels"] as Array<{ cid: string }>;
-    assert.equal(per.length, 10, "逐渠道报告");
+    assert.equal(per.length, 11, "逐渠道报告");
   });
 
   it("/v1/models 恒返回三个池模型，不带渠道前缀", async () => {
@@ -108,7 +108,7 @@ describe("仓库级模型池", () => {
       }
       return { cid: c.config.cid, exposed };
     });
-    assert.equal(rows.length, 10);
+    assert.equal(rows.length, 11);
 
     const contributed = (cid: string) =>
       gw.POOL_MODELS.filter((model) => gw.poolCandidates(model).some((c) => c.cid === cid));
@@ -117,7 +117,12 @@ describe("仓库级模型池", () => {
       contributed("workbuddyai").includes("deepseek-v4.1-flash"),
       "workbuddyai 应贡献 deepseek-v4.1-flash",
     );
-    assert.deepEqual(contributed("qoder"), [], "qoder 是桩 → 不贡献任何池模型");
+    // qoder 的上游 key 是短名（dfmodel / gfmodel），由渠道自己映射成池内名
+    assert.deepEqual(
+      [...contributed("qoder")].sort(),
+      ["deepseek-v4-flash", "glm-5.3-flash"],
+      "qoder 用 dfmodel / gfmodel 贡献两个池模型",
+    );
     // 裸 HOME 无缓存：cline 拉不到远端目录，兜底表里没有池内模型
     assert.deepEqual(contributed("cline"), [], "（裸 HOME 下）cline 兜底表不含池内模型");
 

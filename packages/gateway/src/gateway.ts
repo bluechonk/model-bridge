@@ -482,9 +482,11 @@ async function handleChat(
       continue;
     }
 
-    let body: Record<string, unknown>;
+    // `buildChatBody` 通常返回 JSON 对象；个别渠道的上游要求**编码后的字符串**
+    // 作为请求体（qoder 的 COSY 自定义 Base64 变体就是这么发的），此时按字符串直发。
+    let built: Record<string, unknown> | string;
     try {
-      body = inChannel(channel, () => upstream.buildChatBody(payload, resolvedModel));
+      built = inChannel(channel, () => upstream.buildChatBody(payload, resolvedModel));
     } catch (err) {
       // 渠道层抛的是**用户输入问题**（上下文超限、system 超长、缺必填字段…）——
       // 换一家渠道同样会失败，直接 400，不浪费尝试次数。
@@ -492,11 +494,14 @@ async function handleChat(
       writeJsonError(res, 400, "invalid_request", String(err));
       return;
     }
+    const body = typeof built === "string" ? null : built;
+    const encodedBody = typeof built === "string" ? built : null;
 
     // 可选的异步前置（渠道声明了才有）：必须在发上游**之前完成**。
     // 例如 catpaw 要求 round → event（置 running）→ turn 的顺序，错一步上游就拒。
     // ⚠ 传入**同一个 body**：渠道不能再调一次 buildChatBody（会生成新会话 id）。
-    if (upstream.prepareChat) {
+    // 返回字符串（自编码请求体）的渠道不走这个钩子。
+    if (upstream.prepareChat && body) {
       try {
         await inChannel(channel, () => upstream.prepareChat!(body));
       } catch (err) {
@@ -511,7 +516,10 @@ async function handleChat(
       }
     }
 
-    const sendBody = Buffer.from(JSON.stringify(body), "utf8");
+    const sendBody =
+      encodedBody !== null
+        ? Buffer.from(encodedBody, "utf8")
+        : Buffer.from(JSON.stringify(body), "utf8");
 
     // ⚠ 只有**上游响应头到达之前**的失败才能转移 —— 一旦进入 relayUpstream，
     //    响应头已发给客户端，换渠道会变成两个响应。

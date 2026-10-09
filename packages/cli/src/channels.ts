@@ -13,6 +13,7 @@ import "codearts-bridge";
 import "lobsterai-bridge";
 import "loomy-bridge";
 import "qoder-bridge";
+import "qodercn-bridge";
 import "raccoon-bridge";
 import "trae-bridge";
 import "workbuddy-bridge";

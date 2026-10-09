@@ -40,7 +40,8 @@
 | `codearts` | CodeArts（华为云） | [PROTOCOL.md](./protocols/codearts/PROTOCOL.md) |
 | `lobsterai` | LobsterAI（有道） | [PROTOCOL.md](./protocols/lobsterai/PROTOCOL.md) |
 | `loomy` | Loomy（讯飞） | [PROTOCOL.md](./protocols/loomy/PROTOCOL.md) |
-| `qoder` | Qoder | [PROTOCOL.md](./protocols/qoder/PROTOCOL.md)（**桩**：模块尚未实现） |
+| `qoder` | Qoder（国际版 `qoder.com`） | [PROTOCOL.md](./protocols/qoder/PROTOCOL.md) |
+| `qodercn` | Qoder 国内版（`qoder.com.cn`） | 与 `qoder` **同一套协议**（仅域名/身份/模型目录不同），见 [PROTOCOL.md](./protocols/qoder/PROTOCOL.md) |
 | `raccoon` | Raccoon（商汤） | [PROTOCOL.md](./protocols/raccoon/PROTOCOL.md) |
 | `trae` | TRAE（字节） | [PROTOCOL.md](./protocols/trae/PROTOCOL.md) |
 | `workbuddy` | WorkBuddy（国内版 CodeBuddy） | 与 `workbuddyai` **同一套插件端点协议**（无独立 PROTOCOL.md）；差异与用法见 [bridges/workbuddy.md](./bridges/workbuddy.md) |

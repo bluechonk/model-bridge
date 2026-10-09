@@ -104,10 +104,19 @@ export interface UpstreamModule {
   chatUrl(cfg?: any): string;
   modelsUrl(cfg?: any): string;
   buildHeaders(credential: any, cfg?: any): Record<string, string>;
+  /**
+   * 构造上游请求体。
+   *
+   * 返回**对象**时，网关会 `JSON.stringify` 后发出（绝大多数渠道）。
+   * 返回**字符串**时，网关**按字符串直发**（一个字节都不再包装）—— 供「请求体本身
+   * 要经过渠道自己的编码」的上游使用（如 qoder 的 COSY 自定义 Base64 变体）。
+   *
+   * ⚠ 返回字符串的渠道不能用 `prepareChat` 钩子（那个钩子接的是对象形态的 body）。
+   */
   buildChatBody(
     req: Record<string, unknown>,
     upstreamModel: string,
-  ): Record<string, unknown>;
+  ): Record<string, unknown> | string;
   /**
    * 可选：发上游请求**之前**要完成的异步前置动作（网关会 `await` 它）。
    *
