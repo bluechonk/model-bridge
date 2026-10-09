@@ -103,6 +103,16 @@ export interface UpstreamModule {
   modelsUrl(cfg?: any): string;
   buildHeaders(credential: any, cfg?: any): Record<string, string>;
   /**
+   * 可选：判定「非 401/403 的响应」是否也算**鉴权失败**（触发 token 刷新 + 换账号）。
+   *
+   * 有些上游不用标准状态码表达凭据失效 —— 如 codearts 的 APIG 网关对过期 token
+   * 回 `HTTP 400 + {"error_code":"APIG.0602"}`。共享层默认只认 401/403，这类渠道
+   * 声明本钩子后，其「body 里的鉴权措辞」也能走完整的刷新/转移链路。
+   *
+   * ⚠ 只对 **4xx 且非 401/403** 的响应调用；返回 true 时网关按 401/403 同路径处理。
+   */
+  isAuthFailure?(status: number, body: string): boolean;
+  /**
    * 构造上游请求体。
    *
    * 返回**对象**时，网关会 `JSON.stringify` 后发出（绝大多数渠道）。

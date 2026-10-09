@@ -29,6 +29,12 @@ export const config: BridgeConfig = {
   debugDumpEnv: "CODEARTS_DEBUG_DUMP",
 };
 
-export const channel: Channel = { config, cred, upstream, catalog, billing };
+export const channel: Channel = {
+  config,
+  cred,
+  upstream: { ...upstream, isAuthFailure: (status: number, body: string) => upstream.isAuthError(status, body) },
+  catalog,
+  billing,
+};
 
 setChannel(channel);

@@ -216,6 +216,11 @@ async function openStream(channel: Channel, c: Credential, body: Buffer): Promis
   }
   if (resp.status !== 200) {
     const snippet = await resp.text().catch(() => "");
+    // 渠道可声明「非标准状态码的鉴权失败」（如 codearts 的 400 + APIG.0602）：
+    // 归一成 401，让调用方走刷新/换账号链路
+    if (upstream.isAuthFailure && upstream.isAuthFailure(resp.status, snippet)) {
+      return { ok: false, status: 401, headers: resp.headers, body: null };
+    }
     return {
       ok: false,
       status: resp.status,

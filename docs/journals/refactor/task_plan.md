@@ -1,5 +1,10 @@
 # 任务计划：注释治理 + 日志英文化 + 池策略收窄
 
+## 状态：全部完成（2026-10-09）
+
+三项工作均已完成并提交：`62984ec`（池收窄）、`2819f91`（日志英文化 + 注释治理）。
+`npm test` 全绿，网关已重启真机确认只剩两个模型。
+
 ## 目标
 
 三件事，一次做完：
@@ -37,30 +42,30 @@
 - [x] 摸清 `deepseek-v4-flash` 的引用分布（~40 文件）与含义分类
 - [x] 确认不能机械替换（上游模型名要保留）
 
-### 阶段 2：池策略收窄（两个模型） — **状态：in_progress**
+### 阶段 2：池策略收窄（两个模型） — **状态：complete**
 
-- [ ] `packages/gateway/src/pool-targets.ts`：`POOL_MODELS` 只留两个
-- [ ] `channels/qoder` + `qodercn` 的 `POOL_KEY_MAP`：`dfmodel` 不再映射（只留 `gfmodel`）
-- [ ] 池相关测试调整（gateway / cli / 各渠道 selftest）
-- [ ] 文档同步（POOL-ARCHITECTURE / AGENTS / README / 插件 command / SKILL）
+- [x] `packages/gateway/src/pool-targets.ts`：`POOL_MODELS` 只留两个
+- [x] `channels/qoder` + `qodercn` 的 `POOL_KEY_MAP`：`dfmodel` 不再映射（只留 `gfmodel`）
+- [x] 池相关测试调整（gateway / cli / 各渠道 selftest）
+- [x] 文档同步（POOL-ARCHITECTURE / AGENTS / README / 插件 command / SKILL）
 
-### 阶段 3：日志英文化 — **状态：pending**
+### 阶段 3：日志英文化 — **状态：complete**
 
-- [ ] 共享层（gateway / daemon / headless / console / account-pool …）
-- [ ] 11 个渠道的运行时日志行
-- [ ] 插件的 hook 脚本输出
+- [x] 共享层（gateway / daemon / headless / console / account-pool …）
+- [x] 11 个渠道的运行时日志行
+- [x] 插件的 hook 脚本输出
 
-### 阶段 4：注释治理 — **状态：pending**
+### 阶段 4：注释治理 — **状态：complete**
 
-- [ ] 删掉过时注释（旧架构/字符串替换时代/Python 时代残留）
-- [ ] 简化过长的"为什么"注释（保留关键的，砍掉重复的）
-- [ ] 统一中文
+- [x] 删掉过时注释（旧架构/字符串替换时代/Python 时代残留）
+- [x] 简化过长的"为什么"注释（保留关键的，砍掉重复的）
+- [x] 统一中文
 
-### 阶段 5：验证与交付 — **状态：pending**
+### 阶段 5：验证与交付 — **状态：complete**
 
-- [ ] `npm test` 全绿（含 verify:storage / verify:docs）
-- [ ] 重启网关、真机确认只剩两个模型
-- [ ] 提交推送
+- [x] `npm test` 全绿（含 verify:storage / verify:docs）
+- [x] 重启网关、真机确认只剩两个模型
+- [x] 提交推送
 
 ## 遇到的错误
 
