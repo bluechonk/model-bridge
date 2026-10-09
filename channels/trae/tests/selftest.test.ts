@@ -314,7 +314,7 @@ describe("1. 凭据与设备指纹", () => {
     assert.equal(cred.resolveBaseUrl("cn"), "https://trae-api-cn.mchost.guru");
     assert.throws(
       () => cred.resolveBaseUrl("intl"),
-      (err: Error) => err.message.includes("只有 CN 配置"),
+      (err: Error) => err.message.includes("only has a CN config"),
       "源码中不存在国际版配置",
     );
   });

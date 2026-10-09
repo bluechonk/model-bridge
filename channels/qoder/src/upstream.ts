@@ -1,10 +1,7 @@
 /**
  * Qoder 上游：**COSY 签名** + 自定义请求体编码 + SSE 信封解包。
  *
- * ## COSY 签名（纯 `node:crypto`，不需要 WASM）
- *
- * `PROTOCOL.md` 原先写「签名只能靠 wasmtime 加载官方 .wasm」，但社区已有至少三个独立项目
- * 用纯代码复刻出同一套算法（见 `docs/journals/qoder/findings.md`）：
+ * ## COSY 签名（纯 `node:crypto` 复刻）
  *
  * ```
  * temp_key  = 16 个 hex 字符      → 同时当 AES-128 的 key 与 IV
@@ -523,7 +520,7 @@ export function modelsHeaders(credential: Credentials): Record<string, string> {
  * Qoder 的模型目录端点是 `GET`，但签名覆盖请求体，所以**必须真的把 body 发出去**
  * （裸 GET 会 403 —— 服务端校验签名与 body 一致）。而 WHATWG fetch 规范**禁止**
  * GET/HEAD 带 body，undici 直接抛 `Request with GET/HEAD method cannot have body`。
- * 参考实现（Python/Go）都没这个限制，所以只有 Node 这边要绕：走 `node:https`。
+ * 其它语言实现没有这个限制，所以只有 Node 这边要绕：走 `node:https`。
  */
 function getWithBody(
   url: string,
@@ -551,7 +548,7 @@ function getWithBody(
         );
       },
     );
-    req.setTimeout(timeoutMs, () => req.destroy(new Error("模型目录请求超时")));
+    req.setTimeout(timeoutMs, () => req.destroy(new Error("model list request timed out")));
     req.on("error", reject);
     req.write(body, "utf8");
     req.end();
@@ -581,22 +578,22 @@ export async function fetchModels(credential: Credentials): Promise<Record<strin
           rememberGatewayHost(host);
           return parsed;
         } catch {
-          lastError = new Error(`模型列表返回的不是 JSON（${host}）`);
+          lastError = new Error(`model list response is not JSON (${host})`);
           continue;
         }
       }
       if (resp.status === 401 || resp.status === 403) {
         lastError = new UpstreamUnauthorized(
-          `Qoder 拒绝签名（HTTP ${resp.status}，主机 ${host}），请重新登录`,
+          `Qoder rejected the signature (HTTP ${resp.status}, host ${host}), please log in again`,
         );
         continue; // 换下一个主机再试
       }
-      lastError = new Error(`模型列表请求失败：HTTP ${resp.status}（${host}）`);
+      lastError = new Error(`model list request failed: HTTP ${resp.status} (${host})`);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
-  throw lastError ?? new Error("模型列表请求失败（没有可用的推理主机）");
+  throw lastError ?? new Error("model list request failed (no usable inference host)");
 }
 
 // ── SSE 信封解包（增量） ──────────────────────────────────────────────────────
@@ -657,7 +654,7 @@ export function newTranslator(): StreamTranslator {
       const bareErr = innerError(bare);
       if (bareErr && bare["choices"] === undefined) {
         return [
-          `data: ${JSON.stringify({ error: { code: bareErr.code ?? "upstream_error", message: bareErr.message ?? "上游错误" } })}\n\n`,
+          `data: ${JSON.stringify({ error: { code: bareErr.code ?? "upstream_error", message: bareErr.message ?? "upstream error" } })}\n\n`,
         ];
       }
       const bareChunk = Array.isArray(bare["choices"]) || bare["usage"] !== undefined;
@@ -667,7 +664,7 @@ export function newTranslator(): StreamTranslator {
     const status = Number(envelope.statusCodeValue ?? 200);
     if (Number.isFinite(status) && status !== 200) {
       return [
-        `data: ${JSON.stringify({ error: { code: String(status), message: `Qoder 上游返回 ${status}` } })}\n\n`,
+        `data: ${JSON.stringify({ error: { code: String(status), message: `Qoder upstream returned ${status}` } })}\n\n`,
       ];
     }
 
@@ -695,7 +692,7 @@ export function newTranslator(): StreamTranslator {
     const err = innerError(payload);
     if (err && payload["choices"] === undefined) {
       return [
-        `data: ${JSON.stringify({ error: { code: err.code ?? "upstream_error", message: err.message ?? "上游错误" } })}\n\n`,
+        `data: ${JSON.stringify({ error: { code: err.code ?? "upstream_error", message: err.message ?? "upstream error" } })}\n\n`,
       ];
     }
     // ⚠ **只透传真正的 chunk**：判据 = 有 `choices` 数组或 `usage`（含 `choices: []`）。

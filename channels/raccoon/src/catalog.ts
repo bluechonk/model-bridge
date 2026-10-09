@@ -326,7 +326,7 @@ export async function refresh(): Promise<void> {
   const payload = await upstream.fetchModels(c, cfg);
   const data = isRecord(payload["data"]) ? payload["data"] : {};
   const entries = parseRemoteModels(data);
-  if (entries.length === 0) throw new Error("上游返回的模型目录为空");
+  if (entries.length === 0) throw new Error("Upstream returned an empty model catalog");
   remoteCache = { entries, at: Date.now() };
   writeCatalogCache(entries);
   snapshot = entries;

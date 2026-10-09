@@ -158,8 +158,8 @@ export function hmacSha256Hex(key: string | Buffer, data: string | Buffer): stri
 /**
  * 构造 canonical request（**注意 `headerLines` 与 `signedHeaders` 之间的空行**）。
  *
- * `headers` 的键必须已统一为小写；函数内部按 key 排序（与 Go / Python 侧的
- * 普通字典序一致，不要用 localeCompare）。
+ * `headers` 的键必须已统一为小写；函数内部按 key 排序（普通字典序，
+ * 不要用 localeCompare —— 后者受 locale 影响）。
  */
 export function buildCanonicalRequest(
   method: string,
@@ -252,7 +252,7 @@ export function withoutHost(headers: Record<string, string>): Record<string, str
 function credentialParts(credential: AuthLike): { ak: string; sk: string; st: string } {
   const ak = credential?.accessKeyId ?? "";
   const sk = credential?.secretAccessKey ?? "";
-  if (!ak || !sk) throw new Error("凭据缺少 AK/SK");
+  if (!ak || !sk) throw new Error("credentials lack AK/SK");
   return { ak, sk, st: credential.securityToken ?? "" };
 }
 

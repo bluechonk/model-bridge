@@ -121,7 +121,7 @@ async function confirmKill(port: number): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     const answer = await new Promise<string>((resolve) => {
-      rl.question(`是否结束该进程以释放端口 ${port}？[y/N] `, resolve);
+      rl.question(`Kill this process to free port ${port}? [y/N] `, resolve);
     });
     return ["y", "yes"].includes(answer.trim().toLowerCase());
   } finally {
@@ -154,27 +154,27 @@ export async function bindFreeServer(
 
   const pids = excludeSelf(findPortPids(port));
   if (pids.length === 0) {
-    throw new PortBusyError(`端口 ${port} 被占用，未能识别占用进程，请手动释放后重试`);
+    throw new PortBusyError(`port ${port} is in use; could not identify the owning process; free it manually and retry`);
   }
   const selfName = exeName();
   for (const pid of pids) {
     const name = procName(pid);
     // 只有确认为自身同名进程才自动结束；进程名未知时按第三方处理（需确认）
     if (name && name === selfName) {
-      printf(`端口 ${port} 被自身的残留实例占用（${name}, PID ${pid}），正在结束它...`);
+      printf(`port ${port} is held by our own leftover instance (${name}, PID ${pid}); killing it...`);
     } else {
-      printf(`端口 ${port} 被其他进程占用：${name || "未知进程"} (PID ${pid})`);
+      printf(`port ${port} is held by another process: ${name || "unknown"} (PID ${pid})`);
       if (!(await confirmKill(port))) {
         throw new PortBusyError(
-          `端口 ${port} 被进程 ${name || "未知进程"} (PID ${pid}) 占用，已取消；` +
-            `请更换 --addr 或手动释放端口`,
+          `port ${port} is held by ${name || "unknown process"} (PID ${pid}); cancelled; ` +
+            `change --addr or free the port manually`,
         );
       }
     }
     try {
       killPid(pid);
     } catch (err) {
-      throw new PortBusyError(`结束占用进程 ${pid} 失败: ${String(err)}`);
+      throw new PortBusyError(`failed to kill the process holding port ${port} (PID ${pid}): ${String(err)}`);
     }
   }
 
@@ -186,7 +186,7 @@ export async function bindFreeServer(
     if (server) return server;
     lastErr = "listen failed";
   }
-  throw new PortBusyError(`端口 ${port} 在结束占用进程后仍未释放，请稍后重试（${lastErr}）`);
+  throw new PortBusyError(`port ${port} was still not free after killing the holder; retry later (${lastErr})`);
 }
 
 /** 把监听地址转成可展示的 host:port（空/通配 host 回显为 127.0.0.1）。 */

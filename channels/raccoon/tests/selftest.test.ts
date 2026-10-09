@@ -357,7 +357,7 @@ describe("2. 手机号 AES-128-CFB（协议 §2.3）", () => {
     const encrypted = String(body["phone"]);
     assert.notEqual(encrypted, PHONE, "明文手机号不得出现在请求体里");
     assert.equal(cred.decryptPhone(encrypted), PHONE, "服务端能解出明文");
-    await assert.rejects(() => cred.sendSms("123", "", fakeBase()), /手机号格式/);
+    await assert.rejects(() => cred.sendSms("123", "", fakeBase()), /phone number/i);
   });
 });
 
@@ -444,7 +444,7 @@ describe("3. 凭据：过期判定与落盘", () => {
     writeFileSync(paths.credentialsPath(), "{not json", "utf8");
     assert.throws(() => cred.load(), (err: unknown) => {
       assert.ok(err instanceof cred.NotLoggedInError);
-      assert.match(String(err), /损坏/, "损坏提示可读");
+      assert.match(String(err), /corrupted/i, "损坏提示可读");
       return true;
     });
     writeFileSync(paths.credentialsPath(), JSON.stringify({ refresh_token: "r" }), "utf8");
@@ -494,7 +494,7 @@ describe("4. 扫码登录（code 本地生成 / canceled 换码 / 异常降级�
     assert.ok(first.startsWith("https://xiaohuanxiong.com/login/mp?code="));
     assert.ok(first.includes("appname=%E5%95%86%E6%B1%A4%E5%B0%8F%E6%B5%A3%E7%86%8A%E5%AE%98%E7%BD%91"));
     assert.equal(new Set(seenUrls).size >= 2, true, "canceled 后换了新 code");
-    assert.ok(statuses.some((s) => s.includes("已扫码")), "logging 阶段有进度输出");
+    assert.ok(statuses.some((s) => s.includes("scanned")), "logging 阶段有进度输出");
   });
 });
 
@@ -516,13 +516,13 @@ describe("5. 续期", () => {
     for (const token of ["rt-expired", "rt-unauthorized"]) {
       const c = await saveFakeCreds({ refreshToken: token });
       await assert.rejects(() => cred.refresh(c, fakeBase()), (err: unknown) => {
-        assert.match(String(err), /重新登录/);
+        assert.match(String(err), /log in again/);
         return true;
       });
     }
     await assert.rejects(
       () => cred.refresh({ ...cred.EMPTY_CREDENTIALS, accessToken: "a", refreshToken: "" }, fakeBase()),
-      /没有 refresh_token/,
+      /refresh_token/,
     );
   });
 });

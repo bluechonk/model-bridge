@@ -47,7 +47,7 @@ const MAX_CONSECUTIVE_FAILURES = 5;
 /** 设备码默认有效期（服务端通常下发 expires_in）。 */
 const DEVICE_CODE_TTL_SECONDS = 300;
 
-const NOT_LOGGED_IN_MSG = "未找到可用凭据，请先运行 cline login";
+const NOT_LOGGED_IN_MSG = "no usable credentials found; run `cline login` first";
 
 /** 磁盘上没有可用凭据。 */
 export class NotLoggedInError extends Error {
@@ -191,10 +191,10 @@ export function load(): Credentials {
   try {
     data = JSON.parse(raw);
   } catch {
-    throw new NotLoggedInError(`凭据文件损坏（${credentialsPath()}），请重新登录`);
+    throw new NotLoggedInError(`credentials file is corrupt (${credentialsPath()}); please log in again`);
   }
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new NotLoggedInError("凭据文件结构不对，请重新登录");
+    throw new NotLoggedInError("credentials file has an unexpected structure; please log in again");
   }
   const rec = data as Record<string, unknown>;
 
@@ -257,12 +257,12 @@ export interface TokenEnvelope {
  */
 export function parseTokenEnvelope(payload: unknown): TokenEnvelope {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    throw new Error("令牌响应不是 JSON 对象");
+    throw new Error("token response is not a JSON object");
   }
   const rec = payload as Record<string, unknown>;
   // 失败信封：明确声明 success 为 false 即失败（文案带上游原因）
   if (rec["success"] === false) {
-    throw new Error(`Cline 返回失败: ${str(rec["error"]) || str(rec["message"]) || "未知原因"}`);
+    throw new Error(`Cline returned failure: ${str(rec["error"]) || str(rec["message"]) || "unknown reason"}`);
   }
   const data = rec["data"];
   const env =
@@ -271,7 +271,7 @@ export function parseTokenEnvelope(payload: unknown): TokenEnvelope {
       : rec; // 兼容裸响应（无 data 信封）
 
   const accessToken = ensureTokenPrefix(str(env["accessToken"]));
-  if (!accessToken) throw new Error("令牌响应里没有 accessToken（success 信封也不完整）");
+  if (!accessToken) throw new Error("token response has no accessToken (success envelope is incomplete)");
 
   const userInfo = env["userInfo"];
   const info =
@@ -334,20 +334,20 @@ export async function requestDeviceCode(baseOverride?: string): Promise<DeviceCo
       body: new URLSearchParams({ client_id: WORKOS_CLIENT_ID }).toString(),
     });
   } catch (err) {
-    throw new Error(`申请设备码失败: ${String(err)}`);
+    throw new Error(`device code request failed: ${String(err)}`);
   }
-  if (!resp.ok) throw new Error(`申请设备码失败: HTTP ${resp.status}`);
+  if (!resp.ok) throw new Error(`device code request failed: HTTP ${resp.status}`);
   let payload: Record<string, unknown>;
   try {
     payload = (await resp.json()) as Record<string, unknown>;
   } catch (err) {
-    throw new Error(`设备码响应不是合法 JSON: ${String(err)}`);
+    throw new Error(`device code response is not valid JSON: ${String(err)}`);
   }
   const deviceCode = str(payload["device_code"]);
   const userCode = str(payload["user_code"]);
   const verificationUri = str(payload["verification_uri"]);
   if (!deviceCode || !userCode || !verificationUri) {
-    throw new Error("设备码响应缺少 device_code / user_code / verification_uri");
+    throw new Error("device code response is missing device_code / user_code / verification_uri");
   }
   return {
     deviceCode,
@@ -398,7 +398,7 @@ export async function pollDeviceToken(
   let failures = 0;
 
   for (;;) {
-    if (Date.now() >= deadline) throw new Error("设备码授权超时，请重新运行 cline login");
+    if (Date.now() >= deadline) throw new Error("device code authorization timed out; re-run cline login");
 
     let resp: Response;
     try {
@@ -415,7 +415,7 @@ export async function pollDeviceToken(
     } catch (err) {
       failures += 1;
       if (failures >= MAX_CONSECUTIVE_FAILURES) {
-        throw new Error(`轮询设备码连续 ${failures} 次网络失败: ${String(err)}`);
+        throw new Error(`device code polling had ${failures} consecutive network failures: ${String(err)}`);
       }
       await sleep(intervalMs);
       continue;
@@ -437,21 +437,21 @@ export async function pollDeviceToken(
     }
     if (error === "slow_down") {
       intervalMs += 1000; // 必须真的累积：每次都加，不重置
-      onStatus?.(`服务端要求放慢轮询，间隔调整为 ${intervalMs / 1000}s`);
+      onStatus?.(`server asked to slow down polling; interval set to ${intervalMs / 1000}s`);
       await sleep(intervalMs);
       continue;
     }
     if (error) {
-      throw new Error(`设备码授权失败: ${error}${desc ? ` (${desc})` : ""}`);
+      throw new Error(`device code authorization failed: ${error}${desc ? ` (${desc})` : ""}`);
     }
     if (resp.status >= 200 && resp.status < 300) {
       if (typeof payload["access_token"] === "string" && payload["access_token"]) {
         return payload;
       }
       // 2xx 但没有 token：服务端异常，继续等只会死循环到超时
-      throw new Error("设备码授权返回 2xx 但没有 access_token（服务端异常）");
+      throw new Error("device authorization returned 2xx but no access_token (server anomaly)");
     }
-    throw new Error(`设备码授权失败: HTTP ${resp.status}`);
+    throw new Error(`device code authorization failed: HTTP ${resp.status}`);
   }
 }
 
@@ -479,12 +479,12 @@ export async function registerToken(
       }),
     });
   } catch (err) {
-    throw new Error(`注册 Cline 令牌失败: ${String(err)}`);
+    throw new Error(`registering Cline token failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new RefreshTokenExpiredError("注册时 Cline 拒绝了 WorkOS 令牌，请重新登录");
+    throw new RefreshTokenExpiredError("Cline rejected the WorkOS token during registration; please log in again");
   }
-  if (resp.status !== 200) throw new Error(`注册 Cline 令牌失败: HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new Error(`registering Cline token failed: HTTP ${resp.status}`);
   const env = parseTokenEnvelope(await resp.json().catch(() => null));
   const c: Credentials = {
     ...EMPTY_CREDENTIALS,
@@ -532,14 +532,14 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   const device = await requestDeviceCode(options.workosBaseUrl);
   const url = device.verificationUriComplete || device.verificationUri;
   onUrl?.(url);
-  onStatus?.(`请在浏览器打开 ${url} 完成授权（user_code: ${device.userCode}）`);
+  onStatus?.(`Open ${url} in your browser to authorize (user_code: ${device.userCode})`);
   if (process.env["CLINE_NO_BROWSER"] !== "1") openBrowser(url);
 
   const pollOptions: PollOptions = {};
   if (sleep) pollOptions.sleep = sleep;
   if (onStatus) pollOptions.onStatus = onStatus;
   const tokens = await pollDeviceToken(device, options.workosBaseUrl, pollOptions);
-  onStatus?.("授权成功，正在换取 Cline 令牌…");
+  onStatus?.("Authorization succeeded, exchanging for a Cline token...");
   return registerToken(str(tokens["access_token"]), str(tokens["refresh_token"]), apiBaseUrl);
 }
 
@@ -554,7 +554,7 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
  * 续期后**保留** `account_id` / `email` / `nickname`。
  */
 export async function refresh(c: Credentials, baseOverride?: string): Promise<Credentials> {
-  if (!c.refreshToken) throw new Error("凭据里没有 refresh_token，无法静默续期");
+  if (!c.refreshToken) throw new Error("credentials have no refresh_token; cannot refresh silently");
   const base = apiBase(baseOverride);
 
   let resp: Response;
@@ -569,20 +569,20 @@ export async function refresh(c: Credentials, baseOverride?: string): Promise<Cr
       body: JSON.stringify({ refreshToken: c.refreshToken, grantType: "refresh_token" }),
     });
   } catch (err) {
-    throw new Error(`续期请求失败（可重试）: ${String(err)}`);
+    throw new Error(`refresh request failed (retryable): ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new RefreshTokenExpiredError("刷新令牌已失效，请重新登录");
+    throw new RefreshTokenExpiredError("refresh token is invalid; please log in again");
   }
   if (resp.status !== 200) {
-    throw new Error(`续期失败（可重试）: HTTP ${resp.status}`);
+    throw new Error(`refresh failed (retryable): HTTP ${resp.status}`);
   }
 
   let payload: Record<string, unknown>;
   try {
     payload = (await resp.json()) as Record<string, unknown>;
   } catch (err) {
-    throw new RefreshTokenExpiredError(`续期响应不是合法 JSON: ${String(err)}`);
+    throw new RefreshTokenExpiredError(`refresh response is not valid JSON: ${String(err)}`);
   }
 
   let env: TokenEnvelope;

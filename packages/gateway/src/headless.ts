@@ -39,7 +39,7 @@ class StdoutLoginUi implements authFlow.LoginUi {
       if (url) event["auth_url"] = url;
       emit(event);
     } else {
-      const suffix = url ? `（授权链接: ${url}）` : "";
+      const suffix = url ? ` (auth url: ${url})` : "";
       console.log(`[login] ${tag}${state}: ${message}${suffix}`);
     }
   }
@@ -147,7 +147,7 @@ export async function runLogin(options: {
     }
     emit(done);
   } else if (ok) {
-    console.log("[login] 完成。");
+    console.log("[login] done.");
   }
   return ok ? 0 : 1;
 }
@@ -230,7 +230,7 @@ export async function runServe(options: ServeOptions): Promise<number> {
         );
         if (ok) anyOk = true;
         if (multi && !json) {
-          console.log(`${prefix} [${channel.config.cid}] ${ok ? "已登录" : "未登录"}`);
+          console.log(`${prefix} [${channel.config.cid}] ${ok ? "logged in" : "not logged in"}`);
         }
         if (state.quitting) return;
       }
@@ -251,8 +251,8 @@ export async function runServe(options: ServeOptions): Promise<number> {
       });
     } catch (err) {
       state.setGatewayError(String(err));
-      state.setState("error", `网关启动失败：${String(err)}`);
-      if (json) emit({ event: "error", message: `网关启动失败：${String(err)}` });
+      state.setState("error", `gateway start failed: ${String(err)}`);
+      if (json) emit({ event: "error", message: `gateway start failed: ${String(err)}` });
       return;
     }
     state.setState("running");
@@ -283,7 +283,7 @@ export async function runServe(options: ServeOptions): Promise<number> {
   };
 
   void worker().catch((err) => {
-    console.error(`${prefix} worker 异常: ${String(err)}`);
+    console.error(`${prefix} worker error: ${String(err)}`);
   });
 
   // 主线程阻塞直到信号

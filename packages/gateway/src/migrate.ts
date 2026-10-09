@@ -82,7 +82,7 @@ function mergeMissing(
   mkdirSync(target, { recursive: true });
   for (const name of entries) {
     if (root && skip.includes(name)) {
-      log(`跳过搬运 ${name}（渠道层内已知的废弃物）`);
+      log(`skipping ${name} (known junk inside the channel dir)`);
       continue;
     }
     const from = join(source, name);
@@ -105,9 +105,9 @@ function mergeMissing(
       } catch {
         /* Windows 上 chmod 意义有限 */
       }
-      log(`补齐 ${to}`);
+      log(`filled in ${to}`);
     } catch (err) {
-      log(`补齐失败（保留原文件）: ${from} → ${to}（${String(err)}）`);
+      log(`fill-in failed (kept original): ${from} -> ${to} (${String(err)})`);
     }
   }
 }
@@ -135,13 +135,13 @@ export function collectLegacyDirs(options: CollectOptions): string {
         try {
           mkdirSync(root, { recursive: true });
           renameSync(source, target);
-          log(`已收拢历史目录: ${source} → ${target}`);
+          log(`collected legacy dir: ${source} -> ${target}`);
           return target;
         } catch (err) {
-          log(`整体搬移失败，改为逐文件补齐: ${source}（${String(err)}）`);
+          log(`whole-dir move failed, merging file by file: ${source} (${String(err)})`);
           mergeMissing(source, target, log, skipMerge);
           if (!isEmptyDir(source)) {
-            log(`旧目录仍有内容（可能有进程占用），保留原地: ${source}`);
+            log(`legacy dir still has content (maybe in use), left in place: ${source}`);
             return target; // 目标已补出一份可用的
           }
           rmdirSync(source);
@@ -154,12 +154,12 @@ export function collectLegacyDirs(options: CollectOptions): string {
       if (isEmptyDir(source)) {
         try {
           rmdirSync(source);
-          log(`已清理空的旧目录: ${source}`);
+          log(`removed empty legacy dir: ${source}`);
         } catch {
           /* 留着也无害 */
         }
       } else {
-        log(`新旧目录并存，已补齐缺失文件；旧目录保留: ${source}`);
+        log(`both old and new dirs exist; filled in missing files, kept legacy: ${source}`);
       }
       return target;
     }
@@ -186,14 +186,14 @@ export function migrateChannelFiles(
         continue;
       }
       if (isDir && !isEmptyDir(from)) {
-        log(`跳过删除 ${from}：目录非空，需人工确认`);
+        log(`skipping delete of ${from}: dir not empty, needs manual review`);
         continue;
       }
       try {
         rmSync(from, { recursive: true, force: true });
-        log(`已清理历史遗留: ${from}`);
+        log(`removed legacy artifact: ${from}`);
       } catch (err) {
-        log(`清理失败: ${from}（${String(err)}）`);
+        log(`cleanup failed: ${from} (${String(err)})`);
       }
       continue;
     }
@@ -203,9 +203,9 @@ export function migrateChannelFiles(
     if (existsSync(to)) continue; // 新名已存在 → 不覆盖
     try {
       renameSync(from, to);
-      log(`已改名: ${from} → ${to}`);
+      log(`renamed: ${from} -> ${to}`);
     } catch (err) {
-      log(`改名失败: ${from} → ${to}（${String(err)}）`);
+      log(`rename failed: ${from} -> ${to} (${String(err)})`);
     }
   }
 }

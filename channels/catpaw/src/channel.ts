@@ -24,7 +24,7 @@ export const config: BridgeConfig = {
   legacyEnvVars: ["CATPAW_HOME", "ZCC_HOME"],
   debugDumpEnv: "CATPAW_DEBUG_DUMP",
   fileMigrations: [
-    // Python 版守护进程写的是 daemon.pid（现规范名 gateway.pid）
+    // 旧版守护进程写的是 daemon.pid（现规范名 gateway.pid）
     { from: "daemon.pid", to: "gateway.pid" },
   ],
 };

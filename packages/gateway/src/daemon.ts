@@ -112,8 +112,7 @@ export function autoStartEnabled(cid?: string): boolean {
  *
  * ⚠ 必须核对 `service` 字段：同一端口上可能跑着**别的**网关（它们同样返回
  * `{"ok":true}`）。只按 `ok` 判定会把别人的进程报成自己的「OK」，
- * 而请求实际发去了另一个程序（实测踩过：旧 Python 实现与本实现同占 8787）。
- * 缺失 `service` 字段的历史实现也按「他人占用」处理。
+ * 而请求实际发去了另一个程序。缺失 `service` 字段的历史实现也按「他人占用」处理。
  */
 async function probe(addr: string): Promise<Record<string, unknown> | null> {
   try {
@@ -406,7 +405,7 @@ export async function status(
   const stale = gatewayUp ? detectStaleBuild(scope.pidPath()) : { stale: false, buildMs: null, pidMs: null };
 
   // 签到（**只看本地台账，不发网络请求**）：status 也能一眼看到"今天签了几个"。
-  // 为什么不查上游：status 是高频诊断命令，让它去打 11 个上游端点不合适。
+  // 为什么不查上游：status 是高频诊断命令，让它去打所有渠道的上游端点不合适。
   const withLedger = list
     .map((channel) => ({
       cid: channel.config.cid,

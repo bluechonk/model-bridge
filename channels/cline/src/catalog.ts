@@ -24,8 +24,8 @@
  * ## 为什么目录是「快照 + 异步刷新」
  *
  * 契约要求 `exposedIds()` 是**同步**函数（网关的 `/v1/models` 处理器是同步的），
- * 而零依赖约束下 Node 没有同步 HTTP（Python 版的 `requests` 是阻塞的）。
- * 故本模块维护一份内存快照：同步访问返回当前快照，首次访问触发**后台刷新**；
+ * 而零依赖约束下 Node 没有同步 HTTP。故本模块维护一份内存快照：
+ * 同步访问返回当前快照，首次访问触发**后台刷新**；
  * 未登录/未刷新完成时返回兜底表（否则渠道会在选择器里凭空消失）。
  */
 
@@ -460,11 +460,11 @@ export async function refresh(): Promise<void> {
   const cfg = upstream.loadConfig()[0];
   const catalog = await fetchRemoteCatalog(cfg);
   if (!remoteUsable(catalog)) {
-    throw new Error("上游没有返回可用的模型目录（free / recommended / clinePass 全空）");
+    throw new Error("upstream returned no usable model catalog (free / recommended / clinePass all empty)");
   }
   const dev = await fetchModelsDev();
   const entries = mergeCatalog(catalog, dev);
-  if (entries.length === 0) throw new Error("合并后的模型目录为空");
+  if (entries.length === 0) throw new Error("merged model catalog is empty");
   remoteCache = { catalog, at: Date.now() };
   snapshot = { entries, freeIds: new Set(catalog.free.map((f) => f.id)), modelsDev: dev };
   writeCatalogCache(entries);

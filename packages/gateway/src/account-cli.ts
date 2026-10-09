@@ -81,10 +81,10 @@ function render(pool: ChannelPool): string {
 /** 跨渠道找 key 所属的池子；命中多于一个时报错要求 `--channel`。 */
 function locator(collected: ChannelPool[], key: string): ChannelPool {
   const hits = collected.filter((p) => p.index.accounts.some((a) => a.key === key));
-  if (hits.length === 0) throw new Error(`没有渠道的池子里有账号 ${key}`);
+  if (hits.length === 0) throw new Error(`no channel pool contains account ${key}`);
   if (hits.length > 1) {
     throw new Error(
-      `账号 ${key} 在多个渠道里都存在（${hits.map((h) => h.cid).join(", ")}）—— 请加 --channel 指定`,
+      `account ${key} exists in multiple channels (${hits.map((h) => h.cid).join(", ")}); use --channel to pick one`,
     );
   }
   return hits[0]!;

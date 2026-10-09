@@ -1,7 +1,7 @@
 /**
  * 本地 OpenAI Chat Completion 透明代理网关。
  *
- * ## 结构：本文件在**所有 `<渠道>-bridge` 项目里是同一份**
+ * ## 结构
  *
  * 渠道差异全部由注册的 `Channel`（`upstream` / `cred` / `catalog`）提供，
  * 本文件不含任何渠道知识：
@@ -121,7 +121,7 @@ async function readBody(req: IncomingMessage): Promise<Buffer> {
   for await (const chunk of req) {
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
     total += buf.length;
-    if (total > MAX_BODY) throw new Error("请求体过大");
+    if (total > MAX_BODY) throw new Error("request body too large");
     chunks.push(buf);
   }
   return Buffer.concat(chunks);
@@ -140,7 +140,7 @@ function isCustomWire(channel: Channel): boolean {
 /**
  * 池路由一次请求最多尝试几个候选渠道。
  *
- * 为什么要有上限：候选可能有一大片（三个模型各有 4~5 家），逐个串行尝试会让
+ * 为什么要有上限：候选可能有一大片（某个模型有 4~5 家候选），逐个串行尝试会让
  * 最坏情况的延迟成倍增长。默认 3 与账号池的转移上限一致。
  * `BRIDGE_POOL_MAX_TRIES` 可覆盖。
  */
@@ -206,7 +206,7 @@ async function openStream(channel: Channel, c: Credential, body: Buffer): Promis
       status: 0,
       headers: new Headers(),
       body: null,
-      error: new Error(`上游请求失败: ${String(err)}`),
+      error: new Error(`upstream request failed: ${String(err)}`),
       connectFailed,
     };
   }
@@ -221,7 +221,7 @@ async function openStream(channel: Channel, c: Credential, body: Buffer): Promis
       status: resp.status,
       headers: resp.headers,
       body: null,
-      error: new Error(`上游返回 HTTP ${resp.status}: ${snippet.slice(0, 2048)}`),
+      error: new Error(`upstream returned HTTP ${resp.status}: ${snippet.slice(0, 2048)}`),
     };
   }
   return { ok: true, status: resp.status, headers: resp.headers, body: resp.body };
@@ -271,9 +271,9 @@ async function relayStream(
     const code = (err as { code?: string } | null)?.code;
     if (code === "ECONNRESET" || code === "EPIPE" || code === "ERR_STREAM_PREMATURE_CLOSE") {
       // 客户端提前断开（如主动取消请求）属正常情况
-      logger("客户端连接已断开，停止转发");
+      logger("client disconnected, stopping relay");
     } else {
-      logger(`上游流处理失败: ${String(err)}`);
+      logger(`upstream stream failed: ${String(err)}`);
       if (!res.writableEnded) {
         res.write(
           `data: ${JSON.stringify({ error: { message: `upstream stream failed: ${String(err)}` } })}\n\n`,
@@ -352,18 +352,18 @@ async function callUpstream(
     let call = await inChannel(channel, () => openStream(channel, credential, sendBody));
     if (!call.ok && call.connectFailed) {
       // 连接从未建立（请求没发出去），重试一次即可自愈网络抖动
-      logger(`上游连接失败，重试一次: ${String(call.error)}`);
+      logger(`upstream connect failed, retrying once: ${String(call.error)}`);
       call = await inChannel(channel, () => openStream(channel, credential, sendBody));
     }
     if (call.ok || (call.status !== 401 && call.status !== 403)) return { kind: "ok", call };
 
     // 401/403：先刷新当前账号的 token
-    logger("token 被拒绝，尝试刷新...");
+    logger("token rejected, trying refresh...");
     let refreshed: Credential | null = null;
     try {
       refreshed = await inChannel(channel, () => cred.refresh(credential));
     } catch (err) {
-      logger(`刷新失败: ${String(err)}`);
+      logger(`refresh failed: ${String(err)}`);
     }
     if (refreshed) {
       const retry = await inChannel(channel, () => openStream(channel, refreshed, sendBody));
@@ -378,10 +378,10 @@ async function callUpstream(
     if (!next) {
       return {
         kind: "auth_exhausted",
-        error: `${upstream.DISPLAY_NAME} 拒绝了 token，账号池内也没有其它可用账号，请重新登录`,
+        error: `${upstream.DISPLAY_NAME} rejected the token and no other account in the pool is available; please log in again`,
       };
     }
-    logger(`账号 ${activeKey ?? "(未知)"} 不可用，改用池内账号 ${next.key}（${next.label}）`);
+    logger(`account ${activeKey ?? "(unknown)"} unavailable, using pool account ${next.key} (${next.label})`);
     activateAccount(next.key, cid);
     credential = inChannel(channel, () => cred.load());
   }
@@ -389,7 +389,7 @@ async function callUpstream(
   // 循环能走到这里，说明每一轮都栽在鉴权上
   return {
     kind: "auth_exhausted",
-    error: `${upstream.DISPLAY_NAME} 拒绝了 token（已试 ${tried.length} 个账号），请重新登录`,
+    error: `${upstream.DISPLAY_NAME} rejected the token (tried ${tried.length} accounts); please log in again`,
   };
 }
 
@@ -419,18 +419,18 @@ async function handleChat(
     return;
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    writeJsonError(res, 400, "invalid_json", "请求体必须是 JSON 对象");
+    writeJsonError(res, 400, "invalid_json", "request body must be a JSON object");
     return;
   }
   const payload = parsed as Record<string, unknown>;
   const model = payload["model"];
   const messages = payload["messages"];
   if (typeof model !== "string" || !model || !Array.isArray(messages) || messages.length === 0) {
-    writeJsonError(res, 400, "invalid_request", "model 和 messages 必填");
+    writeJsonError(res, 400, "invalid_request", "model and messages are required");
     return;
   }
 
-  // 公共模型池：对外只认三个模型，请求落到哪家渠道由账本决定
+  // 公共模型池：对外只认池内模型，请求落到哪家渠道由账本决定
   // （匹配见 pool-targets.ts，排序见 pool-usage.ts）。
   maybeRefreshBilling(opts.logger); // 账单额度到期就在后台刷，不阻塞本次请求
 
@@ -440,7 +440,7 @@ async function handleChat(
       res,
       400,
       "unknown_model",
-      `未知模型 ${model}；可用模型：${POOL_MODELS.join("、")}`,
+      `unknown model ${model}; available models: ${POOL_MODELS.join(", ")}`,
     );
     return;
   }
@@ -450,7 +450,7 @@ async function handleChat(
       res,
       503,
       "not_authenticated",
-      `没有任何渠道提供 ${target}（渠道未登录或目录未就绪）`,
+      `no channel provides ${target} (channel not logged in or catalog not ready)`,
     );
     return;
   }
@@ -472,12 +472,12 @@ async function handleChat(
     try {
       resolvedModel = inChannel(channel, () => resolvePoolModel(channel, candidate.exposedId));
     } catch (err) {
-      opts.logger(`模型名无法解析（渠道 ${cid}）: ${String(err)}`);
+      opts.logger(`model name unresolved (channel ${cid}): ${String(err)}`);
       noteFailure(cid);
       lastError = {
         status: 400,
         code: "unknown_model",
-        message: `渠道 ${cid} 没有模型 ${candidate.exposedId}`,
+        message: `channel ${cid} has no model ${candidate.exposedId}`,
       };
       continue;
     }
@@ -490,7 +490,7 @@ async function handleChat(
     } catch (err) {
       // 渠道层抛的是**用户输入问题**（上下文超限、system 超长、缺必填字段…）——
       // 换一家渠道同样会失败，直接 400，不浪费尝试次数。
-      opts.logger(`请求构造失败: ${String(err)}`);
+      opts.logger(`request build failed: ${String(err)}`);
       writeJsonError(res, 400, "invalid_request", String(err));
       return;
     }
@@ -505,12 +505,12 @@ async function handleChat(
       try {
         await inChannel(channel, () => upstream.prepareChat!(body));
       } catch (err) {
-        opts.logger(`上游前置失败（渠道 ${cid}）: ${String(err)}`);
+        opts.logger(`upstream prepare failed (channel ${cid}): ${String(err)}`);
         noteFailure(cid);
         lastError = {
           status: 502,
           code: "upstream_error",
-          message: "上游前置请求失败，请查看网关日志",
+          message: "upstream prepare request failed; see gateway logs",
         };
         continue;
       }
@@ -525,9 +525,9 @@ async function handleChat(
     //    响应头已发给客户端，换渠道会变成两个响应。
     const outcome = await callUpstream(channel, sendBody, opts.logger);
     if (outcome.kind === "not_authenticated") {
-      opts.logger(`渠道 ${cid} 未登录: ${outcome.error}`);
+      opts.logger(`channel ${cid} not logged in: ${outcome.error}`);
       noteFailure(cid);
-      lastError = { status: 503, code: "not_authenticated", message: `未登录: ${outcome.error}` };
+      lastError = { status: 503, code: "not_authenticated", message: `not logged in: ${outcome.error}` };
       continue;
     }
     if (outcome.kind === "auth_exhausted") {
@@ -539,10 +539,10 @@ async function handleChat(
 
     if (!call.ok) {
       // 上游错误体只进本地日志，不回传客户端（可能含内部信息）
-      if (call.connectFailed) opts.logger(`上游请求失败（渠道 ${cid}）: ${String(call.error)}`);
-      else opts.logger(`上游返回非 200（渠道 ${cid}）: ${String(call.error?.message ?? "")}`);
+      if (call.connectFailed) opts.logger(`upstream request failed (channel ${cid}): ${String(call.error)}`);
+      else opts.logger(`upstream returned non-200 (channel ${cid}): ${String(call.error?.message ?? "")}`);
       noteFailure(cid);
-      lastError = { status: 502, code: "upstream_error", message: "上游请求失败，请查看网关日志" };
+      lastError = { status: 502, code: "upstream_error", message: "upstream request failed; see gateway logs" };
       continue;
     }
 
@@ -553,11 +553,11 @@ async function handleChat(
     return;
   }
 
-  opts.logger(`池内候选都失败了（${target}，试过 ${tried.join("、")}）`);
+  opts.logger(`all pool candidates failed (${target}, tried ${tried.join(", ")})`);
   const final = lastError ?? {
     status: 502,
     code: "upstream_error",
-    message: "上游请求失败，请查看网关日志",
+    message: "upstream request failed; see gateway logs",
   };
   writeJsonError(res, final.status, final.code, final.message);
 }
@@ -578,7 +578,7 @@ async function relayUpstream(
 ): Promise<void> {
   const streamBody = call.body;
   if (!streamBody) {
-    writeJsonError(res, 502, "upstream_error", "上游返回空响应体");
+    writeJsonError(res, 502, "upstream_error", "upstream returned an empty response body");
     return;
   }
 
@@ -588,8 +588,8 @@ async function relayUpstream(
       const buf = await inChannel(channel, () => collectAsOpenAiSse(streamBody, channel, cid));
       writeJson(res, sseStream.aggregateChatSse(buf));
     } catch (err) {
-      logger(`读取上游响应中断: ${String(err)}`);
-      writeJsonError(res, 502, "upstream_error", "上游请求失败，请查看网关日志");
+      logger(`reading upstream response interrupted: ${String(err)}`);
+      writeJsonError(res, 502, "upstream_error", "upstream request failed; see gateway logs");
     }
     return;
   }
@@ -612,7 +612,7 @@ async function relayUpstream(
 }
 
 /**
- * 公共模型池：`/v1/models` **恒返回三个模型**。
+ * 公共模型池：`/v1/models` **恒返回池内模型**。
  *
  * 客户端只看到池内 id（`POOL_MODELS`），**不带渠道前缀** —— 请求落到哪家由网关
  * 按账本决定，客户端不参与也无法指定。某个模型暂时没有可用渠道时照样列出
@@ -717,9 +717,9 @@ export function createHandler(opts: GatewayOptions = {}) {
       }
       handleRoot(res, path);
     } catch (err) {
-      options.logger(`请求处理异常: ${String(err)}`);
+      options.logger(`request handler error: ${String(err)}`);
       if (!res.headersSent) {
-        writeJsonError(res, 500, "internal_error", "网关内部错误，请查看日志");
+        writeJsonError(res, 500, "internal_error", "gateway internal error; see logs");
       } else if (!res.writableEnded) {
         res.end();
       }

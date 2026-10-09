@@ -161,7 +161,7 @@ export async function start(
   });
 
   const url = `http://${host}:${bound}/`;
-  console.error(`[${serviceName(cid)}] 控制台 API: ${url}`);
+  console.error(`[${serviceName(cid)}] console API: ${url}`);
 
   return {
     server,

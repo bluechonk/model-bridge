@@ -707,8 +707,8 @@ describe("6b. 微信扫码（405 = 已确认，404 = 已扫码待确认）", () 
 
     const bytes = await cred.fetchWechatQr("AbC-123_xyz789");
     assert.ok(bytes.length > 200);
-    await assert.rejects(() => cred.fetchWechatQr("tiny"), /错误页/);
-    await assert.rejects(() => cred.fetchWechatQr("html"), /不是图片/);
+    await assert.rejects(() => cred.fetchWechatQr("tiny"), /error page/);
+    await assert.rejects(() => cred.fetchWechatQr("html"), /not an image/);
   });
 
   it("长轮询状态机：408/404/405/403/402/未知，网络异常降级为 error", async () => {
@@ -760,7 +760,7 @@ describe("6b. 微信扫码（405 = 已确认，404 = 已扫码待确认）", () 
     });
     assert.equal(code, "wx-code-1");
     assert.ok(urls[0]!.includes("/connect/qrconnect?"), "onUrl 立刻回调授权页");
-    assert.ok(statuses.some((s) => s.includes("已扫码")), "404 阶段报「已扫码」");
+    assert.ok(statuses.some((s) => s.includes("scanned")), "404 阶段报「已扫码」");
 
     st.firstLoginCalls = 0;
     st.wechatFrames = ["window.wx_errcode=405;window.wx_code='wx-code-1';"];
@@ -787,7 +787,7 @@ describe("6b. 微信扫码（405 = 已确认，404 = 已扫码待确认）", () 
 
     const bind = await cred.bindAuthThirdAccount("wxcode", fakeBase());
     assert.equal(bind.bind, 0, "bind 缺失/非 1 时归 0（走绑定流程，保守方向）");
-    await assert.rejects(() => cred.bindSkip("", fakeBase()), /rcode 缺失/);
+    await assert.rejects(() => cred.bindSkip("", fakeBase()), /rcode is missing/);
   });
 });
 
@@ -812,8 +812,8 @@ describe("7. refresh()：无续期端点 → 只做有效性探测", () => {
     await saveFakeCredentials();
     st.pointsMode = "auth";
     await assert.rejects(() => cred.refresh(cred.load()), (err: unknown) => {
-      assert.match(String(err), /续期/);
-      assert.match(String(err), /重新登录/);
+      assert.match(String(err), /refresh/);
+      assert.match(String(err), /log in again/);
       return true;
     });
     st.pointsMode = "ok";

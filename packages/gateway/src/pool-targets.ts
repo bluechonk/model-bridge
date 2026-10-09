@@ -33,7 +33,6 @@ import { runInChannel } from "./channel-context.js";
 /** 对外暴露的三个模型 id（恒小写，也是客户端应使用的写法）。 */
 export const POOL_MODELS = [
   "deepseek-v4.1-flash",
-  "deepseek-v4-flash",
   "glm-5.3-flash",
 ] as const;
 

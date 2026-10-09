@@ -284,13 +284,13 @@ export async function login(baseUrl: string, options: LoginOptions = {}): Promis
     }
     onUrl?.(authUrl);
     onStatus?.(
-      `第 ${round}/${MAX_LOGIN_ROUNDS} 轮：已打开浏览器授权页，` +
-        `等待授权中（最多 ${LOGIN_WINDOW_MS / 60000} 分钟）…`,
+      `Round ${round}/${MAX_LOGIN_ROUNDS}: opened the browser authorization page, ` +
+        `waiting for authorization (up to ${LOGIN_WINDOW_MS / 60000} min)…`,
     );
     openBrowser(authUrl);
     const token = await pollToken(base, str(state["state"]));
     if (!token) {
-      onStatus?.(`第 ${round} 轮等待超时，准备重试…`);
+      onStatus?.(`Round ${round} timed out, retrying…`);
       continue;
     }
     const c = fromToken(

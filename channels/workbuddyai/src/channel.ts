@@ -5,9 +5,6 @@
  * gateway / daemon / headless / auth-flow 都通过这里注册的 `Channel` 拿到
  * cred / upstream / catalog / billing。
  *
- * 旧实现里这些配置（目录名/端口/日志前缀…）靠 scaffold 的字符串替换注入到
- * 12 份共享模块副本里；现在集中在这里一处。
- *
  * ⚠ 国内版（腾讯 CodeBuddy，`codebuddy.ai`）是**独立渠道** `workbuddy`：
  * 域是渠道身份的一部分，一个渠道一个域，不再按 `--realm` 分流。
  */
@@ -39,7 +36,7 @@ export const config: BridgeConfig = {
   debugDumpEnv: "WORKBUDDYAI_DEBUG_DUMP",
   legacyDebugDumpEnv: ["WBAI_DEBUG_DUMP"],
   fileMigrations: [
-    // Python 版 GUI 层的空目录残留（非空时只记日志，不删）
+    // 迁移遗留的空目录残留（非空时只记日志，不删）
     { from: "webview", action: "delete" },
   ],
 };

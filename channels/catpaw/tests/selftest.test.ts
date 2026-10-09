@@ -368,7 +368,7 @@ describe("buildChatBody", () => {
           { model: "glm-5.3-flash", messages: [{ role: "system", content: long }, { role: "user", content: "hi" }] },
           "glm-5.3-flash",
         ),
-      /超过上游上限/,
+      /exceeding the upstream limit/,
     );
   });
 
@@ -379,7 +379,7 @@ describe("buildChatBody", () => {
           { model: "glm-5.3-flash", messages: [{ role: "assistant", content: "ok" }] },
           "glm-5.3-flash",
         ),
-      /最后一条消息必须是 user/,
+      /last message to have role "user"/,
     );
   });
 

@@ -13,6 +13,6 @@ main()
     process.exitCode = code;
   })
   .catch((err: unknown) => {
-    console.error(`[lobsterai] 未捕获异常: ${String(err)}`);
+    console.error(`[lobsterai] uncaught exception: ${String(err)}`);
     process.exitCode = 1;
   });

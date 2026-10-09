@@ -143,7 +143,7 @@ export function modelsUrl(cfg?: Config): string {
 
 function requireString(credential: AuthLike): string {
   if (!credential || typeof credential.accessToken !== "string" || !credential.accessToken) {
-    throw new Error("凭据缺少 accessToken");
+    throw new Error("credentials lack accessToken");
   }
   return credential.accessToken;
 }
@@ -206,7 +206,7 @@ export function versionEndpoint(): string {
 /**
  * 校验并解析日期式版本号。
  *
- * 正则对齐 Go / Python 侧：`^(\d+(?:\.\d+)*)(?:-[0-9A-Za-z.-]+)?$`。
+ * 正则：`^(\d+(?:\.\d+)*)(?:-[0-9A-Za-z.-]+)?$`。
  * 之所以要**校验**而不是直接采信：版本号是签到接口的必填 query 参数，
  * 把 `null` / HTML 错误页拼进 URL 只会换来更费解的错误。
  */
@@ -448,7 +448,7 @@ export function normalizeMessages(
 
     if (role === "assistant") {
       if (supportsImage === false && hasImages(content)) {
-        throw new UnsupportedContentError("该模型不支持图片（上游声明），请换成支持的模型");
+        throw new UnsupportedContentError("this model does not support images (per upstream); pick a model that does");
       }
       const { text } = splitContent(content);
       const toolCalls: Array<Record<string, unknown>> = [];
@@ -491,7 +491,7 @@ export function normalizeMessages(
       const id = typeof message["tool_call_id"] === "string" ? message["tool_call_id"] : "";
       if (!id || !keepResultIds.has(id)) continue;
       if (supportsImage === false && hasImages(content)) {
-        throw new UnsupportedContentError("该模型不支持图片（上游声明），请换成支持的模型");
+        throw new UnsupportedContentError("this model does not support images (per upstream); pick a model that does");
       }
       const { text, images } = splitContent(content);
       wire.push({ role: "tool", tool_call_id: id, content: text || "(no output)" });
@@ -508,7 +508,7 @@ export function normalizeMessages(
 
     // user（及其它未知角色）：图片升级为多模态 parts，纯文本保持字符串。
     if (supportsImage === false && hasImages(content)) {
-      throw new UnsupportedContentError("该模型不支持图片（上游声明），请换成支持的模型");
+      throw new UnsupportedContentError("this model does not support images (per upstream); pick a model that does");
     }
     const { text, images } = splitContent(content);
     if (images.length > 0) {

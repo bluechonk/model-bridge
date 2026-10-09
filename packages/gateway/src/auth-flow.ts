@@ -42,28 +42,28 @@ export async function ensureLogin(
     if (err instanceof cred.NotLoggedInError) {
       c = null;
     } else {
-      ui.setState("login", `凭证读取失败（${String(err)}），需要重新登录。`);
+      ui.setState("login", `failed to read credentials (${String(err)}); re-login required.`);
       c = null;
     }
   }
 
   if (!c) {
     if (!interactive) {
-      ui.setState("login", "未登录：请运行 login 子命令完成浏览器授权后重试。");
+      ui.setState("login", "not logged in: run the login subcommand for browser authorization, then retry.");
       return false;
     }
-    ui.setState("login", "正在申请授权链接…");
+    ui.setState("login", "requesting authorization URL...");
     try {
       c = await cred.login(baseUrl ?? cred.DEFAULT_BASE_URL, {
         onUrl: (url) =>
-          ui.setState("login", "请在弹出的浏览器里完成授权，本窗口稍后自动继续。", url),
+          ui.setState("login", "complete authorization in the browser that just opened; this window will continue automatically.", url),
         onStatus: (msg) => ui.setState("login", msg),
       });
     } catch (err) {
-      ui.setState("error", `登录失败：${String(err)}`);
+      ui.setState("error", `login failed: ${String(err)}`);
       return false;
     }
-    ui.setState("login", "授权成功，正在初始化…");
+    ui.setState("login", "authorized; initializing...");
     try {
       // 拉一次模型载荷：既验证新凭据可用，也顺便把上游连接配置落盘
       const data = await upstream.fetchModels(c);
@@ -81,7 +81,7 @@ export async function ensureLogin(
   } catch (err) {
     if (!(err instanceof upstream.UpstreamUnauthorized)) {
       // 网络不通等临时问题：照常启动，运行期请求失败会自动刷新
-      ui.setState("error", `登录状态验证未通过（${String(err)}），仍将继续启动。`);
+      ui.setState("error", `login check failed (${String(err)}); continuing to start anyway.`);
       return true;
     }
     try {
@@ -98,7 +98,7 @@ export async function ensureLogin(
       }
       ui.setState(
         "error",
-        `凭据已失效且刷新失败（${String(err2)}），请点「重试登录」重新登录。`,
+        `credentials expired and refresh failed (${String(err2)}); click "retry login" to log in again.`,
       );
       return false;
     }

@@ -3,17 +3,15 @@
  *
  * ## 对外名 ≠ 上游 key
  *
- * Qoder 的模型 id 是**短 key**（`dfmodel` / `gfmodel`），不是模型名。而公共模型池认的是
- * 归一化后的名字（`deepseek-v4-flash` / `glm-5.3-flash`），所以本模块做一层映射：
+ * Qoder 的模型 id 是**短 key**（`gfmodel` 等），不是模型名；公共模型池认归一化后的名字，
+ * 所以本模块做一层映射：
  *
  * | 上游 key | 上游展示名 | 对外 id（池内名） |
  * |---|---|---|
- * | `dfmodel` | DeepSeek-Flash（1M 上下文） | `deepseek-v4-flash` |
  * | `gfmodel` | GLM-5.3-Flash | `glm-5.3-flash` |
  *
- * 其余条目（`dmodel` DeepSeek-V4-Pro、`gmodel` GLM-5.3、`qmodel*`、`kmodel*`…）**不进池** ——
- * 池策略是「`(deepseek|glm)` 的 **flash** 型号」，与共享层白名单同一条判据。
- * 它们仍在底层目录里（`details()` 可见），只是不出现在 `/v1/models`。
+ * `dfmodel`（DeepSeek-Flash）已随 `deepseek-v4-flash` 一起移出池，`dmodel` / `gmodel` /
+ * `qmodel*` / `kmodel*` 等其余条目同样不进池 —— 上游目录里它们仍在，只是不对外。
  *
  * ## 三源优先级（参考实现同款）
  *
@@ -45,24 +43,14 @@ export interface ModelEntry {
 /**
  * 上游 key → 池内 id。
  *
- * 只列**确定能进池**的两条。`dmodel`（DeepSeek-V4-Pro）与 `gmodel`（GLM-5.3）
- * 都是同家族的非 flash 型号，按池策略挡在池外。
+ * 只列**确定能进池**的条目；`dmodel`（DeepSeek-V4-Pro）等非 flash 型号按池策略挡在池外。
  */
 const POOL_KEY_MAP: Record<string, string> = {
-  dfmodel: "deepseek-v4-flash",
   gfmodel: "glm-5.3-flash",
 };
 
 /** 兜底表：连磁盘缓存都没有时用（元数据取自官方目录快照）。 */
 const FALLBACK: ModelEntry[] = [
-  {
-    key: "dfmodel",
-    id: "deepseek-v4-flash",
-    displayName: "DeepSeek-Flash",
-    isReasoning: true,
-    isVl: false,
-    maxInputTokens: 1_000_000,
-  },
   {
     key: "gfmodel",
     id: "glm-5.3-flash",
@@ -139,8 +127,8 @@ export function entryOf(name: string): ModelEntry | null {
 /**
  * 对外 id（或上游 key）→ 上游 key。
  *
- * 三种输入都认：池内名（`deepseek-v4-flash`）、上游 key（`dfmodel`）、
- * 上游展示名（`DeepSeek-Flash`）—— 排查时手写哪种都能通。未命中则原样返回。
+ * 三种输入都认：池内名（`glm-5.3-flash`）、上游 key（`gfmodel`）、
+ * 上游展示名（`GLM-5.3-Flash`）—— 排查时手写哪种都能通。未命中则原样返回。
  */
 export function resolveModel(name: string): string {
   const wanted = name.toLowerCase();
@@ -170,6 +158,6 @@ export async function refresh(): Promise<void> {
       return { ...item, id: key };
     })
     .filter((item) => str(item["id"]) !== "");
-  if (entries.length === 0) throw new Error("上游模型列表为空");
+  if (entries.length === 0) throw new Error("upstream model list is empty");
   writeCatalogCache(entries);
 }

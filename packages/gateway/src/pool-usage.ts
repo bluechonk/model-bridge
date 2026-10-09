@@ -256,7 +256,7 @@ async function runRefresh(logger: (m: string) => void): Promise<RefreshResult> {
       const error = String(item.reason);
       noteBillingAttempt(cid, false);
       result.failed.push({ cid, error });
-      logger(`账单查询失败（${cid}）: ${error}`);
+      logger(`billing query failed (${cid}): ${error}`);
     }
   });
   flushLedger();
@@ -284,7 +284,7 @@ export function refreshBilling(logger: (m: string) => void = () => {}): Promise<
 export function maybeRefreshBilling(logger: (m: string) => void = () => {}): void {
   if (inFlight) return;
   if (!needsBillingRefresh()) return;
-  void refreshBilling(logger).catch((err: unknown) => logger(`账单刷新异常: ${String(err)}`));
+  void refreshBilling(logger).catch((err: unknown) => logger(`billing refresh error: ${String(err)}`));
 }
 
 /** **仅供测试**：清空内存缓存（切存储根 / 隔离用例）。 */

@@ -224,7 +224,7 @@ describe("6. 骨架 A：本地回调服务器", () => {
   it("超时抛错", async () => {
     const srv = await flow.startCallbackServer();
     try {
-      await assert.rejects(() => srv.wait(50), /超时/);
+      await assert.rejects(() => srv.wait(50), /timed out waiting for the authorization callback/);
     } finally {
       srv.close();
     }
@@ -234,7 +234,7 @@ describe("6. 骨架 A：本地回调服务器", () => {
     const srv = await flow.startCallbackServer();
     const waiting = srv.wait(5000);
     srv.close();
-    await assert.rejects(() => waiting, /已关闭/);
+    await assert.rejects(() => waiting, /callback server closed/);
   });
 });
 
@@ -295,7 +295,7 @@ describe("7. 骨架 B：flow 轮询", () => {
           sleep: async (ms) => new Promise<void>((r) => setTimeout(r, ms)),
           attempt: async () => ({ kind: "pending" as const }),
         }),
-      /超时/,
+      /timed out waiting for authorization/,
     );
   });
 });
@@ -345,7 +345,7 @@ describe("8. 骨架 C：设备码 / 扫码轮询", () => {
             throw new Error("ECONNREFUSED");
           },
         }),
-      /连续 3 次网络失败/,
+      /device-code polling failed 3 consecutive times/,
     );
     assert.equal(calls, 3);
   });
@@ -372,7 +372,7 @@ describe("8. 骨架 C：设备码 / 扫码轮询", () => {
           sleep: async () => {},
           attempt: async () => ({ kind: "pending" as const }),
         }),
-      /超时/,
+      /device-code authorization timed out/,
     );
   });
 });

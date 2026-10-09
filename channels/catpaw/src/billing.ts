@@ -11,7 +11,7 @@
 /** 额度查询失败。 */
 export class CreditsError extends Error {
   override name = "CreditsError";
-  constructor(message = "该渠道没有公开的额度查询端点") {
+  constructor(message = "this channel has no public credits endpoint") {
     super(message);
   }
 }
@@ -25,7 +25,7 @@ export class CreditsError extends Error {
 export function fetchCredits(): Promise<never> {
   return Promise.reject(
     new CreditsError(
-      "CatPaw（美团妙手）网关没有公开的额度查询端点，无法查询余额",
+      "CatPaw (Meituan MiaoShou) gateway has no public credits endpoint; cannot query balance",
     ),
   );
 }

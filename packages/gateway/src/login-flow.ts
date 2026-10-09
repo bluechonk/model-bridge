@@ -89,7 +89,7 @@ export async function startCallbackServer(
         const timer = setTimeout(() => {
           if (!settled) {
             settled = true;
-            reject(new Error(`等待授权回调超时（${Math.round(timeoutMs / 1000)} 秒）`));
+            reject(new Error(`timed out waiting for the authorization callback (${Math.round(timeoutMs / 1000)}s)`));
           }
         }, timeoutMs);
         params.then(
@@ -113,7 +113,7 @@ export async function startCallbackServer(
       }
       if (!settled) {
         settled = true;
-        fail(new Error("回调服务器已关闭"));
+        fail(new Error("callback server closed"));
       }
     },
   };
@@ -173,7 +173,7 @@ export async function pollFlow<T>(options: PollFlowOptions<T>): Promise<T> {
     try {
       step = await attempt();
     } catch (err) {
-      onStatus?.(`轮询失败（${String(err)}），继续重试…`);
+      onStatus?.(`poll failed (${String(err)}), retrying...`);
       step = { kind: "retry" };
     }
     if (step.kind === "done") return step.value;
@@ -181,7 +181,7 @@ export async function pollFlow<T>(options: PollFlowOptions<T>): Promise<T> {
     if (step.kind === "retry" && step.message) onStatus?.(step.message);
     await sleep(intervalMs);
   }
-  throw new Error(`等待授权超时（${Math.round(windowMs / 60000)} 分钟）`);
+  throw new Error(`timed out waiting for authorization (${Math.round(windowMs / 60000)} min)`);
 }
 
 // ── C. 设备码 / 扫码轮询 ──────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ export async function pollDeviceCode<T>(options: PollDeviceOptions<T>): Promise<
   let failures = 0;
 
   for (;;) {
-    if (Date.now() >= deadline) throw new Error("设备码授权超时，请重新运行 login");
+    if (Date.now() >= deadline) throw new Error("device-code authorization timed out; run login again");
 
     let step: DevicePollStep<T>;
     try {
@@ -231,7 +231,7 @@ export async function pollDeviceCode<T>(options: PollDeviceOptions<T>): Promise<
     } catch (err) {
       failures += 1;
       if (failures >= maxConsecutiveFailures) {
-        throw new Error(`轮询设备码连续 ${failures} 次网络失败: ${String(err)}`);
+        throw new Error(`device-code polling failed ${failures} consecutive times: ${String(err)}`);
       }
       await sleep(intervalMs);
       continue;
@@ -241,7 +241,7 @@ export async function pollDeviceCode<T>(options: PollDeviceOptions<T>): Promise<
     if (step.kind === "fatal") throw step.error;
     if (step.kind === "slow_down") {
       intervalMs += slowDownStepMs; // 必须真的累积
-      onStatus?.(`服务端要求放慢轮询，间隔调整为 ${intervalMs / 1000}s`);
+      onStatus?.(`server asked to slow down; poll interval now ${intervalMs / 1000}s`);
     }
     await sleep(intervalMs);
   }

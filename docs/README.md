@@ -14,7 +14,7 @@
 > 包根指针 README、目录级 AGENTS.md 三类例外）。由 `tools/verify-docs.mjs` 在 `npm test` 里强制检查。
 
 > 各 `channels/<cid>/` 目录里只留一份**指针 README**（指向本目录），
-> 免得同一份说明散在 10 个子文件夹里各改一遍。
+> 免得同一份说明散在 11 个子文件夹里各改一遍。
 > 唯一例外：`channels/catpaw/AGENTS.md`（那是给工具读的目录级指令，必须留在原处）。
 
 ---
@@ -25,7 +25,7 @@
 | --- | --- |
 | [CONTRACT-TS.md](./CONTRACT-TS.md) | **工作区实现契约**：共享层 / 渠道层 7 文件 / 零运行依赖 / 测试要求 / 交付清单 |
 | [STORAGE-CONVENTION.md](./STORAGE-CONVENTION.md) | **存储落点与文件命名规范**：统一根 `~/.model-bridge/` + 按 cid 分层、迁移规则 |
-| [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) | **池化架构**：公共模型池（三个跨渠道模型 + 账单额度排序，§2）+ 账号池；仓库即插件 |
+| [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) | **池化架构**：公共模型池（两个跨渠道模型 + 账单额度排序，§2）+ 账号池；仓库即插件 |
 | [CONTRACT.md](./CONTRACT.md) | 早期契约（历史存档，描述字符串替换时代的约定） |
 
 ## 2. 渠道协议规格 `docs/protocols/<cid>/PROTOCOL.md`
@@ -99,8 +99,8 @@
 ## 7. 其它客户端怎么接（Hermes / 任意 OpenAI 客户端）
 
 网关是一个**普通 HTTP 端点**，不依赖 ZCode：任何能配 OpenAI 兼容 base url 的客户端直接指向
-`http://127.0.0.1:8787/v1` 就能用，模型 id 只有三个（`deepseek-v4.1-flash` /
-`deepseek-v4-flash` / `glm-5.3-flash`）—— 请求落到哪家渠道由网关按账单已用量自己决定，
+`http://127.0.0.1:8787/v1` 就能用，模型 id 只有两个（`deepseek-v4.1-flash` /
+`glm-5.3-flash`）—— 请求落到哪家渠道由网关按账单已用量自己决定，
 客户端不关心、也不能指定（旧的 `<cid>/<模型>` 形态已移除，见
 [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) §2）。
 

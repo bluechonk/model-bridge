@@ -341,7 +341,7 @@ export async function fetchModels(
     throw new Error(`models request failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new UpstreamUnauthorized("Cline 拒绝了访问令牌（HTTP 401/403）");
+    throw new UpstreamUnauthorized("Cline rejected the access token (HTTP 401/403)");
   }
   if (resp.status !== 200) throw new Error(`models request failed: HTTP ${resp.status}`);
 

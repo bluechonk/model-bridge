@@ -54,7 +54,7 @@ export const SMS_CODE_ENV = "LOOMY_SMS_CODE";
 
 const HTTP_TIMEOUT_MS = 60_000;
 
-const NOT_LOGGED_IN_MSG = "未找到可用凭据，请先运行 loomy login";
+const NOT_LOGGED_IN_MSG = "no usable credentials found; run `loomy login` first";
 
 /** 磁盘上没有可用凭据。 */
 export class NotLoggedInError extends Error {
@@ -189,7 +189,7 @@ export interface SignHeaderInput {
 
 /** 账号端点的签名请求头（前缀是 `account`，不是 `Bearer`）。 */
 export function signHeaders(method: string, path: string, input: SignHeaderInput = {}): Record<string, string> {
-  // UTC 字符串（等价 Python email.utils.formatdate(usegmt=True)）
+  // UTC 字符串（等价 email.utils.formatdate(usegmt=True)）
   const date = input.date ?? new Date().toUTCString();
   const nonce = input.nonce ?? randomUUID();
   const stringToSign = buildStringToSign(method, path, {
@@ -269,18 +269,18 @@ export async function accountPost(
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new Error(`账号端点 ${path} 请求失败: ${String(err)}`);
+    throw new Error(`account endpoint ${path} request failed: ${String(err)}`);
   }
-  if (!resp.ok) throw new Error(`账号端点 ${path} 返回 HTTP ${resp.status}`);
+  if (!resp.ok) throw new Error(`account endpoint ${path} returned HTTP ${resp.status}`);
   let payload: unknown;
   try {
     payload = await resp.json();
   } catch (err) {
-    throw new Error(`账号端点 ${path} 响应不是合法 JSON: ${String(err)}`);
+    throw new Error(`account endpoint ${path} response is not valid JSON: ${String(err)}`);
   }
   const env = parseEnvelope(payload);
   if (env.code !== upstream.OK_CODE) {
-    throw new Error(`账号端点 ${path} 失败: code=${env.code} ${env.desc}`);
+    throw new Error(`account endpoint ${path} failed: code=${env.code} ${env.desc}`);
   }
   return env.data;
 }
@@ -289,7 +289,7 @@ export async function accountPost(
 export async function sendSmsCode(phone: string, baseOverride?: string): Promise<string> {
   const data = await accountPost(SEND_MSG_PATH, { ccode: "86", phone, expire: 300 }, baseOverride);
   const msgid = str(data["msgid"]);
-  if (!msgid) throw new Error("发验证码响应里没有 msgid");
+  if (!msgid) throw new Error("send-code response has no msgid");
   return msgid;
 }
 
@@ -307,7 +307,7 @@ export async function verifySmsCode(
   );
   const session = str(data["session"]);
   const userid = str(data["userid"]);
-  if (!session) throw new Error("登录响应里没有 session");
+  if (!session) throw new Error("login response has no session");
   const c: Credentials = {
     ...EMPTY_CREDENTIALS,
     accessToken: session,
@@ -393,12 +393,12 @@ export async function fetchWechatQr(uuid: string): Promise<Buffer> {
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new Error(`获取二维码失败: ${String(err)}`);
+    throw new Error(`fetching QR code failed: ${String(err)}`);
   }
-  if (!resp.ok) throw new Error(`获取二维码失败: HTTP ${resp.status}`);
+  if (!resp.ok) throw new Error(`fetching QR code failed: HTTP ${resp.status}`);
   const bytes = Buffer.from(await resp.arrayBuffer());
-  if (bytes.length < 200) throw new Error(`二维码响应过小（${bytes.length} 字节），视为错误页`);
-  if (!looksLikeImage(bytes)) throw new Error("二维码响应不是图片（PNG/JPEG/GIF 魔数都不匹配）");
+  if (bytes.length < 200) throw new Error(`QR response too small (${bytes.length} bytes), treating as an error page`);
+  if (!looksLikeImage(bytes)) throw new Error("QR response is not an image (no PNG/JPEG/GIF magic)");
   return bytes;
 }
 
@@ -473,18 +473,18 @@ export async function wechatWaitForCode(options: WechatWaitOptions = {}): Promis
   const state = randomUUID().replace(/-/g, "");
   const url = wechatAuthorizeUrl(state);
   onUrl?.(url); // ⚠ 立刻回调（界面据此弹窗）
-  onStatus?.("请使用微信扫码并确认登录");
+  onStatus?.("Scan the QR code with WeChat and confirm login");
 
   let html: string;
   try {
     const resp = await fetch(url, { headers: wechatHeaders(), signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
     html = await resp.text();
   } catch (err) {
-    throw new Error(`打开微信授权页失败: ${String(err)}`);
+    throw new Error(`opening the WeChat authorize page failed: ${String(err)}`);
   }
   const uuid = extractWechatUuid(html);
-  if (!uuid) throw new Error("未能从授权页提取二维码 uuid（可能被风控/改版）");
-  onStatus?.(`二维码已生成（uuid=${uuid.slice(0, 8)}…），等待扫码`);
+  if (!uuid) throw new Error("could not extract the QR uuid from the authorize page (risk control or redesign?)");
+  onStatus?.(`QR code generated (uuid=${uuid.slice(0, 8)}...), waiting for scan`);
 
   const deadline = Date.now() + timeoutSec * 1000;
   let last = "";
@@ -492,25 +492,25 @@ export async function wechatWaitForCode(options: WechatWaitOptions = {}): Promis
   while (Date.now() < deadline) {
     const frame = await wechatPollOnce(uuid, last);
     if (frame.status === "error") {
-      onStatus?.("长轮询网络异常，继续重试");
+      onStatus?.("long-poll network error, retrying");
     } else if (frame.status === "waiting") {
       /* 待扫码是常态 */
     } else if (frame.status === "scanned") {
       if (!scannedReported) {
-        onStatus?.("已扫码，请在手机上确认");
+        onStatus?.("scanned, please confirm on your phone");
         scannedReported = true;
       }
     } else if (frame.status === "confirmed") {
-      onStatus?.("已确认，正在完成登录…");
+      onStatus?.("confirmed, finishing login...");
       return frame.code;
     } else if (frame.status === "cancelled") {
-      throw new Error("用户取消了微信登录");
+      throw new Error("user cancelled the WeChat login");
     } else if (frame.status === "expired") {
-      throw new Error("二维码已失效，请重新扫码");
+      throw new Error("QR code expired; please scan again");
     }
     if (intervalMs > 0) await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new Error("微信扫码超时，请重新运行 loomy login");
+  throw new Error("WeChat scan timed out; re-run loomy login");
 }
 
 /** 第 1 步：微信 code 换 `rcode`（code 只在这里用一次）。 */
@@ -533,14 +533,14 @@ export async function bindSendMsg(
   phone: string,
   baseOverride?: string,
 ): Promise<string> {
-  if (!rcode) throw new Error("rcode 缺失，无法继续微信绑定流程");
+  if (!rcode) throw new Error("rcode is missing; cannot continue the WeChat binding flow");
   const data = await accountPost(
     BIND_SEND_MSG_PATH,
     { rcode, phone, ccode: "86", expire: 300 },
     baseOverride,
   );
   const msgid = str(data["msgid"]);
-  if (!msgid) throw new Error("微信绑定发短信响应里没有 msgid");
+  if (!msgid) throw new Error("WeChat binding send-sms response has no msgid");
   return msgid;
 }
 
@@ -551,7 +551,7 @@ export async function bindCheckCode(
   msgid: string,
   baseOverride?: string,
 ): Promise<Credentials> {
-  if (!rcode) throw new Error("rcode 缺失，无法继续微信绑定流程");
+  if (!rcode) throw new Error("rcode is missing; cannot continue the WeChat binding flow");
   const data = await accountPost(
     BIND_CHECK_CODE_PATH,
     { rcode, mcode, msgid, expire: SESSION_TTL_SECONDS },
@@ -562,7 +562,7 @@ export async function bindCheckCode(
 
 /** 第 4 步（已绑手机号）：直接拿 session。 */
 export async function bindSkip(rcode: string, baseOverride?: string): Promise<Credentials> {
-  if (!rcode) throw new Error("rcode 缺失，无法直接登录（bind=1 必须带 rcode）");
+  if (!rcode) throw new Error("rcode is missing; cannot log in directly (bind=1 requires rcode)");
   const data = await accountPost(BIND_SKIP_PATH, { rcode, expire: SESSION_TTL_SECONDS }, baseOverride);
   return credentialsFromSession(data, "loomy-wechat");
 }
@@ -573,7 +573,7 @@ async function credentialsFromSession(
 ): Promise<Credentials> {
   const session = str(data["session"]);
   const userid = str(data["userid"]);
-  if (!session) throw new Error("登录响应里没有 session");
+  if (!session) throw new Error("login response has no session");
   const c: Credentials = {
     ...EMPTY_CREDENTIALS,
     accessToken: session,
@@ -599,24 +599,24 @@ export async function loginWechat(
 
   let c: Credentials;
   if (binding.bind === 1) {
-    if (!binding.rcode) throw new Error("bind=1 但响应里没有 rcode");
+    if (!binding.rcode) throw new Error("bind=1 but the response has no rcode");
     c = await bindSkip(binding.rcode, baseUrl);
   } else {
     const phone = process.env[PHONE_ENV] ?? "";
     const smsCode = process.env[SMS_CODE_ENV] ?? "";
     if (!phone || !smsCode) {
       throw new Error(
-        `未绑定手机号：请用环境变量 ${PHONE_ENV} / ${SMS_CODE_ENV} 提供手机号与验证码后重试`,
+        `phone not bound: provide phone and SMS code via env vars ${PHONE_ENV} / ${SMS_CODE_ENV} and retry`,
       );
     }
-    onStatus?.(`正在向 ${phone} 发送绑定验证码…`);
+    onStatus?.(`sending binding SMS to ${phone}...`);
     const msgid = await bindSendMsg(binding.rcode, phone, baseUrl);
     c = await bindCheckCode(binding.rcode, smsCode, msgid, baseUrl);
     // 绑定流程拿回的 phone 写在 param 里，服务端可能不回传
     if (!c.phone) c = { ...c, phone };
   }
   await upstream.triggerFirstLogin(c).catch((err: unknown) => {
-    onStatus?.(`每日额度初始化失败（不影响登录）: ${String(err)}`);
+    onStatus?.(`daily quota init failed (does not affect login): ${String(err)}`);
   });
   return c;
 }
@@ -635,9 +635,9 @@ export function load(): Credentials {
   try {
     data = JSON.parse(raw);
   } catch {
-    throw new NotLoggedInError(`凭据文件损坏（${credentialsPath()}），请重新登录`);
+    throw new NotLoggedInError(`credentials file is corrupt (${credentialsPath()}); please log in again`);
   }
-  if (!isRecord(data)) throw new NotLoggedInError("凭据文件结构不对，请重新登录");
+  if (!isRecord(data)) throw new NotLoggedInError("credentials file has an unexpected structure; please log in again");
   const accessToken = str(data["access_token"] ?? data["accessToken"]);
   if (!accessToken) throw new NotLoggedInError();
   const userid = str(data["userid"] ?? data["userId"] ?? data["uid"]);
@@ -698,15 +698,15 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   const smsCode = process.env[SMS_CODE_ENV] ?? "";
   if (!phone || !smsCode) {
     throw new Error(
-      `短信登录需要环境变量 ${PHONE_ENV}（11 位手机号）与 ${SMS_CODE_ENV}（6 位验证码）`,
+      `SMS login requires env vars ${PHONE_ENV} (11-digit phone) and ${SMS_CODE_ENV} (6-digit code)`,
     );
   }
-  onStatus?.(`正在向 ${phone} 发送验证码…`);
+  onStatus?.(`sending SMS code to ${phone}...`);
   const msgid = await sendSmsCode(phone, baseUrl);
-  onStatus?.("正在校验验证码…");
+  onStatus?.("verifying SMS code...");
   const c = await verifySmsCode(phone, smsCode, msgid, baseUrl);
   await upstream.triggerFirstLogin(c).catch((err: unknown) => {
-    onStatus?.(`每日额度初始化失败（不影响登录）: ${String(err)}`);
+    onStatus?.(`daily quota init failed (does not affect login): ${String(err)}`);
   });
   return c;
 }
@@ -723,9 +723,9 @@ export async function refresh(c: Credentials): Promise<Credentials> {
     await upstream.fetchPointsRecords(c);
   } catch (err) {
     if (err instanceof upstream.UpstreamUnauthorized) {
-      throw new Error(`Loomy 没有续期端点，登录态已失效，请重新登录（${String(err)}）`);
+      throw new Error(`Loomy has no refresh endpoint; session is invalid, please log in again (${String(err)})`);
     }
-    throw new Error(`续期探测失败: ${String(err)}`);
+    throw new Error(`refresh probe failed: ${String(err)}`);
   }
   if (!isExpired(c)) return c; // 仍有效 → 不改动时间戳
   const next: Credentials = { ...c, expiresAt: computeExpiresAt(), obtainedAt: nowIso() };

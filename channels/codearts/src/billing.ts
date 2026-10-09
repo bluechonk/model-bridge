@@ -179,7 +179,7 @@ export function describeHttpFailure(status: number, text: string): string {
   } catch {
     detail = text.trim().slice(0, 200);
   }
-  return detail ? `HTTP ${status}：${detail}` : `HTTP ${status}`;
+  return detail ? `HTTP ${status}: ${detail}` : `HTTP ${status}`;
 }
 
 /** 解包响应：`{code,message,data}` 信封，或**裸对象**（statistics/plugin）。 */
@@ -190,13 +190,13 @@ export function unwrapEnvelope(
   if (typeof code === "number") {
     if (code !== 0) {
       const message = str(raw["message"]) || str(raw["msg"]);
-      return { ok: false, code, message: message || `业务码 ${code}` };
+      return { ok: false, code, message: message || `business code ${code}` };
     }
     const data = raw["data"];
     if (data && typeof data === "object" && !Array.isArray(data)) {
       return { ok: true, data: data as Record<string, unknown> };
     }
-    return { ok: false, code, message: "响应缺少 data 字段" };
+    return { ok: false, code, message: "response is missing the data field" };
   }
   // 无 code 字段：裸对象形态（statistics/plugin）。
   return { ok: true, data: raw };
@@ -237,7 +237,7 @@ async function signedRequest(
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new CreditsError(`请求失败: ${String(err)}`);
+    throw new CreditsError(`request failed: ${String(err)}`);
   }
   const text = await resp.text().catch(() => "");
   if (resp.status === 401 || resp.status === 403) {
@@ -248,10 +248,10 @@ async function signedRequest(
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new CreditsError("响应不是合法 JSON");
+    throw new CreditsError("response is not valid JSON");
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new CreditsError("响应不是 JSON 对象");
+    throw new CreditsError("response is not a JSON object");
   }
   const rec = parsed as Record<string, unknown>;
   const unwrapped = unwrapEnvelope(rec);
@@ -435,8 +435,8 @@ export async function fetchCredits(
   if (!info.total) {
     throw new CreditsError(
       info.isTokenPackage
-        ? "该账号是 Token 计费账户，没有积分口径（查不到，不等于余额为 0）"
-        : "上游未返回任何积分 metric（查不到，不等于余额为 0）",
+        ? "this account is token-billed and has no credit metrics (not found ≠ zero balance)"
+        : "upstream returned no credit metrics (not found ≠ zero balance)",
     );
   }
 

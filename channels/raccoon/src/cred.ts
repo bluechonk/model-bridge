@@ -62,7 +62,7 @@ export const LOGIN_PAGE_BASE = "https://xiaohuanxiong.com/login/mp";
 export const LOGIN_PAGE_APPNAME = "商汤小浣熊官网";
 
 const HTTP_TIMEOUT_MS = 60_000;
-const NOT_LOGGED_IN_MSG = "未找到可用凭据，请先运行 raccoon login";
+const NOT_LOGGED_IN_MSG = "No usable credential found, run `raccoon login` first";
 
 /** 磁盘上没有可用凭据。 */
 export class NotLoggedInError extends Error {
@@ -251,7 +251,7 @@ async function apiCall(
       signal: AbortSignal.timeout(init.timeoutMs ?? HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new Error(`请求 ${url} 失败: ${String(err)}`);
+    throw new Error(`Request ${url} failed: ${String(err)}`);
   }
   let payload: unknown = null;
   try {
@@ -357,7 +357,7 @@ export async function login(baseUrlOverride?: string, options: LoginOptions = {}
 
   let code = randomHex32();
   onUrl?.(loginPageUrl(code));
-  onStatus?.("请使用微信扫码登录（二维码有效期约 5 分钟）");
+  onStatus?.("Scan with WeChat to log in (QR code valid for ~5 minutes)");
 
   const deadline = Date.now() + timeoutMs;
   let scanned = false;
@@ -386,22 +386,22 @@ export async function login(baseUrlOverride?: string, options: LoginOptions = {}
       return c;
     }
     if (frame.status === "logging" && !scanned) {
-      onStatus?.("已扫码，请在手机上确认");
+      onStatus?.("QR code scanned, confirm on your phone");
       scanned = true;
     } else if (frame.status === "canceled") {
       code = randomHex32();
       onUrl?.(loginPageUrl(code)); // 换新码：否则用户扫到死码
-      onStatus?.("二维码已取消，已刷新新码");
+      onStatus?.("QR code canceled, refreshed a new one");
       scanned = false;
     }
     await sleep(pollMs);
   }
-  throw new Error("扫码登录超时，请重新运行 raccoon login");
+  throw new Error("QR login timed out, please run raccoon login again");
 }
 
 /** 短信登录：`send_sms`（需阿里云滑块 captcha_param）→ `login_with_sms`。 */
 export async function sendSms(phone: string, captchaParam = "", baseOverride?: string): Promise<void> {
-  if (!isValidPhone(phone)) throw new Error(`手机号格式不对: ${phone}`);
+  if (!isValidPhone(phone)) throw new Error(`Invalid phone number: ${phone}`);
   const result = await apiCall(`${baseUrl(baseOverride)}${SEND_SMS_PATH}`, {
     method: "POST",
     headers: headers(EMPTY_CREDENTIALS, { jsonBody: true, platform: true }),
@@ -413,7 +413,7 @@ export async function sendSms(phone: string, captchaParam = "", baseOverride?: s
     }),
   });
   if (result.code !== 0) {
-    throw new Error(`发送短信失败: code=${result.code} ${envelopeMessage(result.payload)}`);
+    throw new Error(`Failed to send SMS: code=${result.code} ${envelopeMessage(result.payload)}`);
   }
 }
 
@@ -429,11 +429,11 @@ export async function loginWithSms(
     body: JSON.stringify({ nation_code: "86", phone: encryptPhone(phone), sms_code: smsCode }),
   });
   if (result.code !== 0) {
-    throw new Error(`短信登录失败: code=${result.code} ${envelopeMessage(result.payload)}`);
+    throw new Error(`SMS login failed: code=${result.code} ${envelopeMessage(result.payload)}`);
   }
   const accessToken = str(result.data["access_token"]);
   const refreshToken = str(result.data["refresh_token"]);
-  if (!accessToken) throw new Error("短信登录响应里没有 access_token");
+  if (!accessToken) throw new Error("SMS login response has no access_token");
   const c: Credentials = {
     ...credentialsFromLogin(accessToken, refreshToken, result.data, "raccoon-sms"),
     phone,
@@ -452,20 +452,20 @@ export async function loginWithSms(
  * - 服务端不返回的附加字段（昵称、身份、设备号）也要保留
  */
 export async function refresh(c: Credentials, baseOverride?: string): Promise<Credentials> {
-  if (!c.refreshToken) throw new RefreshTokenExpiredError("凭据里没有 refresh_token，无法续期");
+  if (!c.refreshToken) throw new RefreshTokenExpiredError("Credential has no refresh_token, cannot refresh");
   const result = await apiCall(`${baseUrl(baseOverride)}${REFRESH_PATH}`, {
     method: "POST",
     headers: headers(EMPTY_CREDENTIALS, { jsonBody: true }),
     body: JSON.stringify({ refresh_token: c.refreshToken }),
   });
   if (result.status === 401 || result.code === 200003) {
-    throw new RefreshTokenExpiredError("登录态已过期，请重新登录");
+    throw new RefreshTokenExpiredError("Login state expired, please log in again");
   }
   if (result.code !== 0) {
-    throw new Error(`续期失败: code=${result.code} ${envelopeMessage(result.payload)}`);
+    throw new Error(`Refresh failed: code=${result.code} ${envelopeMessage(result.payload)}`);
   }
   const accessToken = str(result.data["access_token"]);
-  if (!accessToken) throw new Error("续期响应里没有 access_token（可重试）");
+  if (!accessToken) throw new Error("Refresh response has no access_token (retryable)");
   const refreshToken = str(result.data["refresh_token"]) || c.refreshToken;
   const next: Credentials = {
     ...c, // 附加字段（昵称、身份、设备号）全部保留
@@ -547,9 +547,9 @@ export function load(): Credentials {
   try {
     data = JSON.parse(raw);
   } catch {
-    throw new NotLoggedInError(`凭据文件损坏（${credentialsPath()}），请重新登录`);
+    throw new NotLoggedInError(`Credential file is corrupted (${credentialsPath()}), please log in again`);
   }
-  if (!isRecord(data)) throw new NotLoggedInError("凭据文件结构不对，请重新登录");
+  if (!isRecord(data)) throw new NotLoggedInError("Credential file has an invalid structure, please log in again");
   const accessToken = str(data["access_token"] ?? data["accessToken"]);
   if (!accessToken) throw new NotLoggedInError();
 

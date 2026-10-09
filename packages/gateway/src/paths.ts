@@ -69,7 +69,7 @@ function resolveRoot(config?: BridgeConfig): { root: string; fromEnv: boolean } 
   for (const name of names) {
     const value = process.env[name];
     if (!value) continue;
-    noteOnce(`env:${name}`, `${name} 已弃用：现在只认 MODEL_BRIDGE_HOME（该变量仍按存储根处理）`);
+    noteOnce(`env:${name}`, `${name} is deprecated: only MODEL_BRIDGE_HOME is honored now (this var is still treated as the storage root)`);
     return { root: value, fromEnv: true };
   }
   return { root: join(homedir(), ROOT_DIR_NAME), fromEnv: false };
@@ -172,7 +172,7 @@ export function ensureDir(cid?: string): string {
 export function channelFile(name: string, cid?: string): string {
   if (!/^[a-z0-9][a-z0-9.-]*$/.test(name)) {
     throw new Error(
-      `非法文件名: ${name}（须全小写、仅 a-z0-9.-，见 docs/STORAGE-CONVENTION.md §4.7）`,
+      `invalid file name: ${name} (must be lowercase a-z0-9.- only; see docs/STORAGE-CONVENTION.md §4.7)`,
     );
   }
   return join(channelDir(cid), name);
@@ -239,7 +239,7 @@ export function rootPrefsPath(cid?: string): string {
  */
 export function rootFile(name: string): string {
   if (!/^[a-z0-9][a-z0-9.-]*$/.test(name)) {
-    throw new Error(`非法文件名: ${name}（见 docs/STORAGE-CONVENTION.md §4.7）`);
+    throw new Error(`invalid file name: ${name} (see docs/STORAGE-CONVENTION.md §4.7)`);
   }
   return join(rootDir(), name);
 }

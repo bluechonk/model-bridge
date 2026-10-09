@@ -154,13 +154,10 @@ export interface HeaderOptions {
 /**
  * 从凭据构建上游请求头。
  *
- * ⚠ **`Accept` 按端点区分，不能一刀切**（实测 2026-10-08 + 文档 `RUN-LOG.md:82`）：
- * - `turn`（流式对话）：**必须** `text/event-stream` —— 缺了被 406 拒绝
- * - `round` / `event` / 模型目录：**必须不能**是 `text/event-stream` —— 会被 500 拒绝
- *
- * 早期实现把 `text/event-stream` 当默认值发给所有端点，`round` 直接 500，
- * 网关日志只留一句没头没尾的「上游返回 HTTP 500」。参数化后由调用方声明形态
- * （照 raccoon 的 `HeaderOptions` 惯例）。
+ * ⚠ **`Accept` 按端点区分，不能一刀切**：`turn`（流式对话）必须 `text/event-stream`
+ * （缺了被 406 拒绝）；`round` / `event` / 模型目录必须 `application/json`
+ * （发 SSE 会被 500 拒绝）。早期一刀切发 SSE 导致 `round` 直接 500，故参数化
+ * 由调用方声明形态。
  */
 export function buildHeaders(
   credential: CredentialShape,
@@ -226,7 +223,7 @@ function toUpstreamMessages(messages: Array<Record<string, unknown>>): UpstreamM
   }
   // 确保最后一条是 user（上游硬要求）
   if (out.length === 0 || out[out.length - 1]!.type !== "user") {
-    throw new Error("上游要求最后一条消息必须是 user");
+    throw new Error('upstream requires the last message to have role "user"');
   }
   return out;
 }
@@ -288,7 +285,7 @@ export function buildChatBody(
 ): Record<string, unknown> {
   const messages = req["messages"] as Array<Record<string, unknown>> | undefined;
   if (!Array.isArray(messages) || messages.length === 0) {
-    throw new Error("messages 必填且不能为空");
+    throw new Error("messages is required and must not be empty");
   }
 
   const modelType = catalog.modelTypeOf(upstreamModel);
@@ -296,7 +293,7 @@ export function buildChatBody(
   const systemLen = JSON.stringify(system).length - 2; // JSON.stringify(text).length
   if (systemLen > SYSTEM_PROMPT_MAX_LEN) {
     throw new Error(
-      `system prompt 转义后 ${systemLen} 字符，超过上游上限 ${SYSTEM_PROMPT_MAX_LEN}`,
+      `system prompt is ${systemLen} chars after escaping, exceeding the upstream limit ${SYSTEM_PROMPT_MAX_LEN}`,
     );
   }
 
@@ -352,24 +349,15 @@ export function buildChatBody(
 /**
  * 前置 round + event：**顺序执行且必须都成功**，`turn` 才被上游接受。
  *
- * 实测矩阵（2026-10-08，真实账号）：
+ * 实测矩阵（真实账号）：只 round（缺 event）→ turn 报「会话未在执行中」；
+ * 只 turn → 500；两个都发、都用 JSON Accept、且在 turn 之前完成 → 200 出正文。
  *
- * | 序列 | round | event | turn |
- * |---|---|---|---|
- * | round(SSE) → event(SSE) → turn | 406 | 406 | 200 ✅（会话不存在时 turn 自建） |
- * | **round(JSON) → event(JSON) → turn** | 200 | 200 | **200 ✅ 出正文** |
- * | 只 round(JSON) → turn | 200 | — | 200 ❌「会话未在执行中」 |
- * | 只 turn | — | — | 500 |
+ * 由网关经 `UpstreamModule.prepareChat` 钩子 `await`（`buildChatBody` 是同步契约，
+ * 放不下这段异步顺序；fire-and-forget 又会与 turn 竞争）。
  *
- * 结论：**两个都要发、都要 JSON Accept、且都要在 turn 之前完成**。
- * 缺 event（只 round）→「会话未在执行中」；缺 round → 直接 500。
- *
- * 由网关经 `UpstreamModule.prepareChat` 钩子 `await` —— `buildChatBody` 是同步契约，
- * 放不下这段异步顺序；fire-and-forget 又会与 turn 竞争。
- *
- * ⚠ 参数是**网关已建好的 body**（同一个会话 id）。绝不能在这里再调一次
- * `buildChatBody` —— 那会生成新的 conversationId，前置指向会话 A、对话指向会话 B，
- * 上游照样回「会话未在执行中」（实测踩过）。
+ * ⚠ 参数必须是**网关建好的同一个 body**（同一 conversationId）。绝不能在这里再调一次
+ * `buildChatBody` —— 那会生成新 id，前置指向会话 A、对话指向 B，上游照样报
+ * 「会话未在执行中」（实测踩过）。
  */
 export async function prepareChat(body: Record<string, unknown>): Promise<void> {
   const conversationId = sharedLogin.str(body["__conversationId"]);
