@@ -65,8 +65,11 @@
 
 ```
 GEMINI_DEFAULT_CLIENT_ID     = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com'
-GEMINI_DEFAULT_CLIENT_SECRET = 'GOCSPX-REVOKED'
+GEMINI_DEFAULT_CLIENT_SECRET = <未记录：原默认值已在公开仓库中脱敏>
 ```
+
+`client_id` 会出现在每个授权 URL 里，本身不是机密。`client_secret` 原值随官方客户端分发、
+早已公开且不可信，故不再记录；需要时由下面的环境变量提供。
 
 可被环境变量 `CMDC_PAK_GOOGLE_CLIENT_ID` / `CMDC_PAK_GOOGLE_CLIENT_SECRET` 覆盖。
 
