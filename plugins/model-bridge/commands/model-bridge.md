@@ -14,3 +14,8 @@ baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型名填上面�
 
 其余命令：`model list` / `model usage` / `model show <cid>` / `channels` / `status` / `start` / `stop` /
 `restart` / `models` / `login` / `logs` / `credits` / `paths`。
+
+**每个渠道都有各自的速查命令**：`/model-bridge-<cid>`（如 `/model-bridge-qoder`、
+`/model-bridge-codearts`）—— 里面是该渠道的登录方式、模型映射、特有约束与排障提示。
+渠道清单：`catpaw` `cline` `codearts` `lobsterai` `loomy` `qoder` `qodercn` `raccoon` `trae`
+`workbuddy` `workbuddyai`。

@@ -59,6 +59,7 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `model-bridge accounts`（`--channel`） | **账号池**：列出账号 / `use <key>` / `add` / `remove <key>` |
 | `model-bridge model show <cid>` | 该渠道贡献了池内哪些模型 |
 | `model-bridge <cid> login` | 登录该渠道（等价 `login --channel <cid>`） |
+| `/model-bridge-<cid>` | **每个渠道一份速查 command**：该渠道的登录方式 / 模型映射 / 特有约束 / 排障提示（如 `/model-bridge-qoder`、`/model-bridge-codearts`） |
 | `model-bridge <cid> billing` | 该渠道额度 / 账单（别名 `credits`） |
 | `model-bridge <cid> checkin` | 该渠道签到 / 领奖励（`--status` 只查不领、`--daily-only` 跳过一次性） |
 | `model-bridge checkin --status` | **今天签没签**（上游 → 本地台账 → 未知；末尾给 N/M 摘要） |

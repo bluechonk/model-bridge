@@ -1,5 +1,23 @@
 # Qoder 协议规格（阿里系）
 
+> **⚠ 修订（2026-10-09，渠道已实现）**：本文件 §7.1「WASM 签名无纯代码替代，只能 wasmtime +
+> 重写 glue」的结论**已过时**。社区至少三个独立项目用纯代码复刻出了同一套算法
+> （RSA-PKCS1v15 包裹会话密钥 + AES-128-CBC 加密身份体 + MD5 签名 + 自定义 Base64 请求体编码），
+> **完全不需要 WASM** —— 渠道已按这条路线实现（`channels/qoder/src/upstream.ts`）。
+> 其余需要修订的点：
+>
+> | 项 | 本文件（旧） | 实际 |
+> | --- | --- | --- |
+> | 签名 | 只能靠 WASM | 纯 `node:crypto` 可复刻 |
+> | COSY 版本 | `1.1.49` | `1.1.64` |
+> | 请求体 | 未提编码 | 需经**自定义 Base64 变体**编码后才发 |
+> | 模型列表 | 「端点需 WASM 签名，不实现，恒用静态表」 | 可动态拉：`GET /algo/api/v2/model/list?Encode=1`，**GET 也要带 `qoder_encode("{}")` 作 body**（否则 403） |
+> | `chat_context.text` | 记作字符串 | 实际是**对象** `{type:"text",text}` |
+> | 旧签名 | 提到 `Appcode`/固定 SECRET | 那套已失效（无账号身份参与），现行是 COSY bearer |
+>
+> 完整依据、参考项目清单（含许可证）与「照抄不改」清单见
+> [`docs/journals/qoder/findings.md`](../../journals/qoder/findings.md)。下文保留作历史记录。
+
 提取自 `dsh-our-free-model/vendor/channel-pack/src/` 的 TypeScript 实现（下称 `<SRC>`）。
 行号对应提取时的源码。
 
