@@ -111,6 +111,8 @@ function makeChannel(cid: string): Channel {
       buildHeaders: (credential: { accessToken: string }) => ({
         Authorization: `Bearer ${credential.accessToken}`,
       }),
+      // 模拟 codearts：400 + APIG.0602 也是鉴权失败
+      isAuthFailure: (_status: number, body: string) => body.includes("APIG.0602"),
       buildChatBody: (req: Record<string, unknown>, upstreamModel: string) => ({ ...req, model: upstreamModel }),
       fetchModels: async () => ({}),
       resolveConfig: () => ({ baseUrl: "http://127.0.0.1:1" }),
@@ -176,7 +178,7 @@ describe("账号池失败转移", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("生效账号 A 被拒 → 自动切到池内账号 B，请求照样成功", async () => {
+  it("生效账号 A 被拒（400 + APIG.0602，非标准状态码）→ isAuthFailure 钩子触发换账号", async () => {
     upstream.captured.length = 0;
     const { status, text } = await chat(gw.addr);
     assert.equal(status, 200, "换账号后应当成功");
