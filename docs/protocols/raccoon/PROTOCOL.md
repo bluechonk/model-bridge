@@ -36,7 +36,7 @@ RACCOON_DESKTOP_PREFIX = '/api/web/desktop/v1'
 - `RACCOON_LOGIN_TIMEOUT_MS = 5 * 60 * 1000`
 - `RACCOON_TOKEN_REFRESH_WINDOW_SECONDS = 300`（access_token 寿命约 3 小时，实测 `exp - nbf = 10805s`）
 - `clientPlatform = 'desktop-windows'`、`clientVersion = 'v1.0.35'`、
-  `userAgent = 'Raccoon Work/1.0.35 (Windows)'`
+ `userAgent = 'Raccoon Work/1.0.35 (Windows)'`
 
 ---
 
@@ -46,26 +46,26 @@ RACCOON_DESKTOP_PREFIX = '/api/web/desktop/v1'
 
 ```python
 {
-  "Accept": "application/json",
-  "Content-Type": "application/json",
-  "Authorization": f"Bearer {access_token}",
-  "X-Org-Code": office_identity or "",        # 个人账号为空串；客户端总是发送该头
-  "X-Raccoon-Language": "zh",
-  # 可选：
-  "X-Client-Platform": platform,              # 必须是 desktop-windows / desktop-macos / desktop-linux
-  "X-Client-Version": version,
-  "X-Client-Device-ID": device_id,            # 32 位 hex 设备指纹
+ "Accept": "application/json",
+ "Content-Type": "application/json",
+ "Authorization": f"Bearer {access_token}",
+ "X-Org-Code": office_identity or "",        # 个人账号为空串；客户端总是发送该头
+ "X-Raccoon-Language": "zh",
+ # 可选：
+ "X-Client-Platform": platform,              # 必须是 desktop-windows / desktop-macos / desktop-linux
+ "X-Client-Version": version,
+ "X-Client-Device-ID": device_id,            # 32 位 hex 设备指纹
 }
 ```
 
-⚠️ `X-Client-Platform` 对 `desktop/v1/login/points/grant` **必需**
+`X-Client-Platform` 对 `desktop/v1/login/points/grant` **必需**
 （依据主进程 `desktopDeviceIdentity.js` 的 `resolveDesktopClientPlatform`，`win32` → `desktop-windows`）。猜错会被拒。
 
-⚠️ **对话请求的头是内联构造的**（raccoon-adapter.ts:425-432），只含
+**对话请求的头是内联构造的**（raccoon-adapter.ts:425-432），只含
 `Accept` / `Content-Type` / `Authorization` / `X-Org-Code` / `X-Raccoon-Language` / `X-Client-Platform`
 （**不含** `X-Client-Version` 与 `X-Client-Device-ID`）。
 
-⚠️ **模型目录请求也是内联的**（raccoon-auth.ts:484-489），只含
+**模型目录请求也是内联的**（raccoon-auth.ts:484-489），只含
 `Accept` / `Authorization` / `X-Org-Code` / `X-Raccoon-Language`（**不含** platform）。
 
 ### 2.2 凭据字段（raccoon.ts:78-106）
@@ -77,18 +77,18 @@ RACCOON_DESKTOP_PREFIX = '/api/web/desktop/v1'
 | `expires_at` | 否 | **毫秒时间戳字符串**，由 JWT 的 exp 推算 |
 | `office_identity` | 否 | `personal` 或组织码 |
 | `user_id` | 否 | 用户 id |
-| `nickname` | 否 | ⚠️ 服务端的 `name` 是**自动生成的默认名**（实测 `RaccoonAva`），微信扫码**不回传微信昵称** |
+| `nickname` | 否 |  服务端的 `name` 是**自动生成的默认名**（实测 `RaccoonAva`），微信扫码**不回传微信昵称** |
 | `phone` | 否 | 绑定/注册的手机号，用于**多账号消歧** |
 | `device_id` | 否 | 设备指纹（32 位 hex） |
 
 **过期时间取值优先级**（raccoon.ts:142-150）：
 `expires_at`（显式字段）→ **JWT 的 `exp`**（本地 base64url 解码 payload，**只解码不验签**）
 
-⚠️ **回退到 JWT 是必需的，不是锦上添花**：`expires_at` 是可选字段，
+**回退到 JWT 是必需的，不是锦上添花**：`expires_at` 是可选字段，
 老凭据或手工导入的凭据可能没有它。只读 `expires_at` 会让过期判定**恒为 false**，
 于是 `refreshAll` 永远跳过这些账号 —— 表现为「凭据悄悄过期、续期从不触发」（静默失效，无任何报错）。
 
-### 2.3 ⚠️ 手机号 AES-128-CFB 加密（raccoon.ts:174-201）
+### 2.3  手机号 AES-128-CFB 加密（raccoon.ts:174-201）
 
 算法照抄客户端（渲染层模块 68284 的 `yv()`）：
 
@@ -101,19 +101,19 @@ mode  = CFB, padding = NoPadding
 
 密钥常量：`RACCOON_PHONE_CIPHER_SECRET = 'senseraccoon2023'`
 
-- ⚠️ **公开常量**（客户端把它硬编码在前端 bundle 里），
-  只用于防止手机号明文出现在日志/代理里，**不是安全边界**
-- ⚠️ 必须**显式**写 `aes-128-cfb`：密钥是 16 字节，写成 `aes-256-cfb` 会因长度不足而抛错
-- ⚠️ 填充语义已实测：CFB 是流密码，`setAutoPadding(true/false)` 输出**完全一致**
+-  **公开常量**（客户端把它硬编码在前端 bundle 里），
+ 只用于防止手机号明文出现在日志/代理里，**不是安全边界**
+-  必须**显式**写 `aes-128-cfb`：密钥是 16 字节，写成 `aes-256-cfb` 会因长度不足而抛错
+-  填充语义已实测：CFB 是流密码，`setAutoPadding(true/false)` 输出**完全一致**
 - Python 等价：`cryptography.hazmat.primitives.ciphers` 的
-  `Cipher(algorithms.AES(key), modes.CFB(iv))`；或 `pycryptodome` 的
-  `AES.new(key, AES.MODE_CFB, iv, segment_size=128)`
+ `Cipher(algorithms.AES(key), modes.CFB(iv))`；或 `pycryptodome` 的
+ `AES.new(key, AES.MODE_CFB, iv, segment_size=128)`
 
-⚠️ **不加密的后果**：`send_sms` 回 `100003 params_encryted_error`。
+**不加密的后果**：`send_sms` 回 `100003 params_encryted_error`。
 
 ### 2.4 登录流程 A：微信扫码
 
-⚠️ **code 由客户端本地随机生成**（实测任意自造 code 都被接受并进入 `pending`），
+**code 由客户端本地随机生成**（实测任意自造 code 都被接受并进入 `pending`），
 完全绕开官方那条 `office-raccoon://auth/callback` 自定义协议回调
 —— 那是本插件（宿主侧 Node 进程）无法接收的。
 
@@ -131,10 +131,10 @@ body: { "qrcode_code": "<32位hex>" }
 **状态值**：`pending` / `logging` / `canceled` / `success`
 - `logging` → 带 `expired_at`（二维码有效期）
 - `success` → 带 `access_token` / `refresh_token`；
-  ⚠️ **缺 token 的 success 视为未完成**
-- ⚠️ **任何异常都降级为 `pending`**：轮询是 2 秒一次的循环，偶发失败不应中断整个登录流程；
-  而把未知状态误判成 `success` 会让流程拿到空 token 后卡死，
-  误判成 `canceled` 则会让用户正在扫码的二维码被无故刷新
+  **缺 token 的 success 视为未完成**
+-  **任何异常都降级为 `pending`**：轮询是 2 秒一次的循环，偶发失败不应中断整个登录流程；
+ 而把未知状态误判成 `success` 会让流程拿到空 token 后卡死，
+ 误判成 `canceled` 则会让用户正在扫码的二维码被无故刷新
 
 轮询间隔 2_000 ms。
 
@@ -144,12 +144,12 @@ body: { "qrcode_code": "<32位hex>" }
 ```
 POST https://xiaohuanxiong.com/api/web/auth/v1/send_sms
 body: {
-  "captcha_param": "<阿里云滑块产物>",
-  "nation_code": "86",
-  "phone": "<AES-128-CFB 加密后 base64>"
+ "captcha_param": "<阿里云滑块产物>",
+ "nation_code": "86",
+ "phone": "<AES-128-CFB 加密后 base64>"
 }
 ```
-⚠️ `captcha_param` **必需**（否则 `100006 captcha_verify_error`）。
+`captcha_param` **必需**（否则 `100006 captcha_verify_error`）。
 
 **第 2 步** 登录：
 ```
@@ -158,7 +158,7 @@ body: { "nation_code": "86", "phone": "<加密后>", "sms_code": "<6位>" }
 → { code: 0, data: { access_token, refresh_token, office_identity } }
 ```
 
-### 2.6 ⚠️ 阿里云验证码（raccoon-login-page.ts）
+### 2.6  阿里云验证码（raccoon-login-page.ts）
 
 本地登录页**真实加载官方脚本**，SceneId / prefix 来自客户端配置：
 
@@ -171,7 +171,7 @@ slideStyle= { width: 320, height: 40 }
 language  = 'cn'
 ```
 
-⚠️ 脚本未加载（离线/被拦截）时**退化为直接提交**（`captchaParam: ''`），
+脚本未加载（离线/被拦截）时**退化为直接提交**（`captchaParam: ''`），
 让服务端报明确原因。
 
 ### 2.7 续期流程
@@ -184,9 +184,9 @@ body: { "refresh_token": "<refresh_token>" }
 
 **终态判定**：HTTP 401 **或** `envelope.code === 200003` → 抛「登录态已过期，请重新登录」（**不重试**）
 
-⚠️ 服务端可能**只返回新的 access_token**（不带新 refresh_token），此时必须**保留旧值**
+服务端可能**只返回新的 access_token**（不带新 refresh_token），此时必须**保留旧值**
 —— 否则续期一次就把账号变成不可续期。
-⚠️ 服务端不返回的附加字段（昵称、身份、设备号）也要保留。
+服务端不返回的附加字段（昵称、身份、设备号）也要保留。
 
 ### 2.8 用户信息
 
@@ -195,8 +195,8 @@ GET https://xiaohuanxiong.com/api/web/auth/v1/user_info
 → { code: 0, data: { id, name, office_identity, phone } }
 ```
 
-⚠️ 失败时返回**空对象**而不是抛错：用户信息只用于昵称展示。
-⚠️ `nickname` 取的是远端的 `name`，而**它是服务端自动生成的默认名**，
+失败时返回**空对象**而不是抛错：用户信息只用于昵称展示。
+`nickname` 取的是远端的 `name`，而**它是服务端自动生成的默认名**，
 故多账号消歧要靠 `phone`。
 
 ### 2.9 本地登录页（raccoon-login-page.ts）
@@ -210,9 +210,9 @@ POST /raccoon/sms/verify  → 提交验证码完成登录
 
 - 绑 `127.0.0.1` 随机端口，超时 5 分钟
 - **职责边界（安全约束）**：宿主侧持有全部敏感状态（`qrcode_code`、手机号、凭据）；
-  页面侧只做展示与表单提交，**不知道** `phoneCipherSecret`、token 等秘密
+ 页面侧只做展示与表单提交，**不知道** `phoneCipherSecret`、token 等秘密
 - 二维码由**宿主侧**生成 SVG 内联进 HTML（零依赖 QR 实现：byte 模式 + 纠错等级 M + 版本 1–10，
-  上限 213 字节）
+ 上限 213 字节）
 - `canceled` 时换一个新 code
 - 手机号本地校验：`/^1[3-9]\d{9}$/`
 
@@ -224,21 +224,21 @@ POST /raccoon/sms/verify  → 提交验证码完成登录
 
 ```json
 {
-  "model": "<模型 id，如 sn-glm-5-3>",
-  "messages": [ ... ],
-  "stream": true,
-  "max_tokens": <number>,
-  "temperature": <number>,
-  "stop": [ ... ],
-  "tools": [ { "type": "function", "function": { "name", "description", "parameters" } } ],
-  "extra_body": { "thinking": { "type": "enabled" | "disabled" } }
+ "model": "<模型 id，如 sn-glm-5-3>",
+ "messages": [ ... ],
+ "stream": true,
+ "max_tokens": <number>,
+ "temperature": <number>,
+ "stop": [ ... ],
+ "tools": [ { "type": "function", "function": { "name", "description", "parameters" } } ],
+ "extra_body": { "thinking": { "type": "enabled" | "disabled" } }
 }
 ```
 
 - `system` 提示词拼为 `messages[0]` 的 `{role:'system', content}`
-- ⚠️ **`tools` 必须真的下发到请求体顶层** —— Qoder 与 TRAE 都因漏发而让模型在正文里臆造
-  XML 工具调用，harness 认不出 → 任务终止
-- ⚠️ **`thinking` 必须在 `extra_body` 内** —— 实测放顶层会被忽略（连非法值都不报错）
+-  **`tools` 必须真的下发到请求体顶层** —— Qoder 与 TRAE 都因漏发而让模型在正文里臆造
+ XML 工具调用，harness 认不出 → 任务终止
+-  **`thinking` 必须在 `extra_body` 内** —— 实测放顶层会被忽略（连非法值都不报错）
 
 ### 3.2 必需请求头
 
@@ -251,7 +251,7 @@ X-Raccoon-Language: zh
 X-Client-Platform: desktop-windows
 ```
 
-### 3.3 ⚠️⚠️ 思考控制的完整实测结论（raccoon-product.ts:25-71）
+### 3.3  思考控制的完整实测结论（raccoon-product.ts:25-71）
 
 **唯一有效通道是 `extra_body.thinking.type`**（Anthropic 风格对象），
 服务端报错原文确认其枚举：
@@ -264,8 +264,8 @@ thinking.type: expected one of `adaptive`, `enabled`, `disabled`
 | 请求 | 结果 |
 |---|---|
 | 基线（不发参数） | 均值 **222**，6/6 有思考 |
-| `extra_body.thinking={type:'disabled'}` | **6/6、8/8 全为 0** → ✅ 真关闭 |
-| `extra_body.thinking={type:'enabled'}` | 均值 **218** → ✅ 与默认等价 |
+| `extra_body.thinking={type:'disabled'}` | **6/6、8/8 全为 0** →  真关闭 |
+| `extra_body.thinking={type:'enabled'}` | 均值 **218** →  与默认等价 |
 
 **`reasoning_effort` 虽然被服务端接受，但实测无效果**：8 轮配对实验（`temperature=0`）
 
@@ -277,17 +277,17 @@ thinking.type: expected one of `adaptive`, `enabled`, `disabled`
 逐轮配对差值 `max - minimal`：**正差 4 次 / 负差 4 次**（纯随机）。
 且 `none` 均值 301 ≠ `disabled` 的 0，说明**它也不控制思考开关**。
 
-**⚠️ 无效的写法（都实测过，别照着试）**：
+** 无效的写法（都实测过，别照着试）**：
 
 | 写法 | 结果 |
 |---|---|
-| `extra_body.enable_thinking=false` | ❌ 无效 |
-| `extra_body.extra_body.enable_thinking=false`（双层） | ❌ 无效 |
-| `reasoning_effort`（单层/双层/顶层） | ❌ 被接受但**无效果** |
-| `thinking` 放**顶层**（不在 `extra_body` 内） | ❌ 被忽略（非法值也不报错） |
-| `thinking.budget_tokens` | ⚠️ 仅被**格式校验**（`max_tokens < budget_tokens` 回 400），1~4096 全接受但思考量无规律 |
+| `extra_body.enable_thinking=false` |  无效 |
+| `extra_body.extra_body.enable_thinking=false`（双层） |  无效 |
+| `reasoning_effort`（单层/双层/顶层） |  被接受但**无效果** |
+| `thinking` 放**顶层**（不在 `extra_body` 内） |  被忽略（非法值也不报错） |
+| `thinking.budget_tokens` |  仅被**格式校验**（`max_tokens < budget_tokens` 回 400），1~4096 全接受但思考量无规律 |
 
-⚠️ 客户端注释说 `extra_body` 双层嵌套是 **LiteLLM SDK 的调用约定**
+客户端注释说 `extra_body` 双层嵌套是 **LiteLLM SDK 的调用约定**
 —— 但实测**单层才生效**，故以实测为准。
 
 **故本插件只暴露两态**：
@@ -298,20 +298,20 @@ RACCOON_EFFORT_OFF = 'off'   → extra_body.thinking = { type: 'disabled' }
 默认档位 = 'on'
 ```
 
-- ⚠️ id 用 `on` 而不是 `high`：服务端虽接受 `high` 字样，
-  但它走的是 `reasoning_effort` 通道、**实测无效果**
-- ⚠️ 展示名用「开启 / 关闭」而非「深度思考 / 关闭思考」—— 理由是**如实**：
-  我们能表达的只有「思考开 / 关」这一个布尔维度
-- ⚠️ **所有 6 个可见模型都返回这两档** —— 实测 `extra_body.thinking` 是 **provider 级方言**，
-  与模型无关。故不做 per-model 分派（那会是凭空猜测）
+-  id 用 `on` 而不是 `high`：服务端虽接受 `high` 字样，
+ 但它走的是 `reasoning_effort` 通道、**实测无效果**
+-  展示名用「开启 / 关闭」而非「深度思考 / 关闭思考」—— 理由是**如实**：
+ 我们能表达的只有「思考开 / 关」这一个布尔维度
+-  **所有 6 个可见模型都返回这两档** —— 实测 `extra_body.thinking` 是 **provider 级方言**，
+ 与模型无关。故不做 per-model 分派（那会是凭空猜测）
 - 默认档位 = `on` 的依据：实测「不发参数」与「显式 `{type:'enabled'}`」的思考量**等价**
-- ⚠️ **不传档位时返回 `undefined`**（不发该字段）
-- ⚠️ 只有明确的「关闭」才关；未知档位一律按开启处理
+-  **不传档位时返回 `undefined`**（不发该字段）
+-  只有明确的「关闭」才关；未知档位一律按开启处理
 
 ### 3.4 特殊约束
 
 **① `max_tokens` 只放行安全正整数**
-⚠️ 远端是外部输入：`0` / 负数 / `NaN` 会让 DSH 在 `defaultMaxTokens` 的硬校验上抛
+远端是外部输入：`0` / 负数 / `NaN` 会让 DSH 在 `defaultMaxTokens` 的硬校验上抛
 `INVALID_MODEL_MAX_TOKENS`，**整轮对话起不来**（不是降级，是崩）。
 
 **② 图片约束按请求体字节卡（不是 token 预算）**
@@ -321,7 +321,7 @@ RACCOON_EFFORT_OFF = 'off'   → extra_body.thinking = { type: 'disabled' }
 
 - `imageMaxBytes = 512 * 1024`（base64 膨胀 4/3 → 每张约占 683 KB，10 MB 的配额可放约 **14 张**）
 - `imagePixelBudget = 640_000`
-- ⚠️ 这是「每张固定预算」路线的固有上限
+-  这是「每张固定预算」路线的固有上限
 
 **③ 401 / 403 时续期一次并重试**
 
@@ -333,7 +333,7 @@ RACCOON_EFFORT_OFF = 'off'   → extra_body.thinking = { type: 'disabled' }
 
 思考字段名：标准 `delta.reasoning_content`。
 
-⚠️ **业务失败也可能以 HTTP 200 + SSE 内嵌错误帧返回**。
+**业务失败也可能以 HTTP 200 + SSE 内嵌错误帧返回**。
 
 空闲超时：首 token / chunk 间隔各 120_000 ms。
 
@@ -353,7 +353,7 @@ X-Raccoon-Language: zh
 → { code: 0, data: { categories: [ { type, models: [ ... ] } ] } }
 ```
 
-⚠️ 失败时返回**空数组**：适配器据此回退兜底表。
+失败时返回**空数组**：适配器据此回退兜底表。
 
 ### 5.2 响应字段名
 
@@ -361,7 +361,7 @@ X-Raccoon-Language: zh
 
 | 远端字段 | 用途 |
 |---|---|
-| `name` | **模型 id**（⚠️ 是 `name` 不是 `id`！） |
+| `name` | **模型 id**（ 是 `name` 不是 `id`！） |
 | `visible` | `false` 则过滤；**缺省视为可见** |
 | `description` | 展示名主体 |
 | `billing_effective_multiplier` | **当前生效**倍率 |
@@ -372,17 +372,17 @@ X-Raccoon-Language: zh
 | `params.max_tokens` | 单次输出上限 |
 | `tags` | 小写化后判图片能力（见下） |
 
-⚠️ 实测已穷举 9 个条目的**键并集**：顶层 14 个键、`params` **只有** `context_window`
+实测已穷举 9 个条目的**键并集**：顶层 14 个键、`params` **只有** `context_window`
 与 `max_tokens`。用模态相关词扫描，**命中 0 个**。⇒ 远端**从未下发**模态字段。
 
-### 5.3 ⚠️⚠️ 图片能力：`tags` 不是能力契约（真实缺陷，2026-10-03 报障）
+### 5.3  图片能力：`tags` 不是能力契约（真实缺陷，2026-10-03 报障）
 
 **症状**：给 `sn-deepseek-v4-1-flash` 发图，模型回「无法读取图片 / 不支持图片」。
 
 **根因链**：
 1. 我们把「远端 `tags` 含 `vision`」当成了服务端能力声明
 2. `sn-deepseek-v4-1-flash` 的 `tags` 是 `["general","code","html","analysis","reasoning","auto"]`
-   —— **没有** `vision`
+  —— **没有** `vision`
 3. ⇒ `inputModalities` 播报 `['text']`
 4. ⇒ **DSH 在 `LlmRuntime` 里把图片替换成文本占位符** —— **图片根本没发出去**
 5. ⇒ 用户看到模型说「读不到图片」，而端点其实完全正常
@@ -391,12 +391,12 @@ X-Raccoon-Language: zh
 
 | 模型 | 远端 tags 含 vision | 实测读图 |
 |---|---|---|
-| `sn-deepseek-v4-1-flash` | ❌ | ✅ **5/5** |
-| `sn-glm-5-3-flash` | ❌ | ✅ 1/1 |
-| `sn-sensenova-6-8-flash` | ✅ | ✅ 2/2 |
-| `sn-sensenova-6-8-flash-lite` | ✅ | ✅ 1/1 |
-| `sn-kimi-k3` | ✅ | ✅ 1/1 |
-| `sn-glm-5-3` | ✅ | ⚠️ 1/3（provider 侧节点不一致） |
+| `sn-deepseek-v4-1-flash` |  |  **5/5** |
+| `sn-glm-5-3-flash` |  |  1/1 |
+| `sn-sensenova-6-8-flash` |  |  2/2 |
+| `sn-sensenova-6-8-flash-lite` |  |  1/1 |
+| `sn-kimi-k3` |  |  1/1 |
+| `sn-glm-5-3` |  |  1/3（provider 侧节点不一致） |
 
 `tags` 的真实用途是**客户端「Raccoon-Auto 选模」的偏好标签** —— 它回答的是
 「该模型适不适合处理这类任务」，**不是**「能不能吃图」。
@@ -404,21 +404,21 @@ X-Raccoon-Language: zh
 **判定函数**：
 ```python
 def raccoon_supports_image(model_id, tags):
-    if model_id in RACCOON_IMAGE_CAPABILITY_OVERRIDES:   # {'sn-deepseek-v4-1-flash', 'sn-glm-5-3-flash'}
-        return True
-    return any(t in tags for t in ('vision', 'image', 'image-understanding'))
+   if model_id in RACCOON_IMAGE_CAPABILITY_OVERRIDES:   # {'sn-deepseek-v4-1-flash', 'sn-glm-5-3-flash'}
+       return True
+   return any(t in tags for t in ('vision', 'image', 'image-understanding'))
 ```
 
-⚠️ 用显式白名单而不是「恒 true」：只覆盖**实测确认**的个案。
-⚠️ 兜底表路径**不走本函数**：它的真相源是 `RACCOON_FALLBACK_MODELS[].supportsImage`。
+用显式白名单而不是「恒 true」：只覆盖**实测确认**的个案。
+兜底表路径**不走本函数**：它的真相源是 `RACCOON_FALLBACK_MODELS[].supportsImage`。
 
-⚠️ **顺带发现：`sn-glm-5-3` 节点不一致（provider 侧缺陷）**
+**顺带发现：`sn-glm-5-3` 节点不一致（provider 侧缺陷）**
 它 3 次里只对 1 次。错误体暴露网关有 3 个 fallback 组
 （`raccoon-4eb26a` / `raccoon-0c119c` / `raccoon-ecc5fd`），**部分节点是纯文本的**。
 
 ### 5.4 展示名规则（raccoon.ts:243-262）
 
-⚠️ **1 倍也要显示**（真实缺陷，用户报障：「为什么 Kimi-K3 没有倍率，ide 是 1 倍，
+**1 倍也要显示**（真实缺陷，用户报障：「为什么 Kimi-K3 没有倍率，ide 是 1 倍，
 1 倍也要显示倍率」）。早期按「1 倍是默认，显示属噪声」省略它，
 结果该模型在列表里**看起来没有计费信息**。
 
@@ -426,7 +426,7 @@ def raccoon_supports_image(model_id, tags):
 - 生效价为 **0** → 显示「免费」（**不是** `x0`）
 - 生效价**严格小于**原价 → 显示 `x原价→x折后价`
 - 其余（**含 1 倍**）→ 显示 `x生效价`
-- ⚠️ 非有限数 / 负数：不追加后缀
+-  非有限数 / 负数：不追加后缀
 - 倍率格式化：最多 4 位小数并去掉尾随 0
 
 ### 5.5 兜底静态模型表（6 个 `visible:true` 模型）
@@ -442,9 +442,9 @@ def raccoon_supports_image(model_id, tags):
 | `sn-glm-5-3-flash` | GLM-5-3-Flash · x0.2→x0.1 | 1_000_000 | 100_000 | true | 0.2→0.1 |
 | `sn-deepseek-v4-1-flash` | DeepSeek-V4.1-Flash · x0.25 | 1_000_000 | 100_000 | true | 0.25→0.25 |
 
-⚠️ **不含** `Raccoon-Auto`：它是客户端 i18n 条目渲染的「自动选模」入口，
+**不含** `Raccoon-Auto`：它是客户端 i18n 条目渲染的「自动选模」入口，
 不是远端模型 —— 直接发给 `chat/completions` 会 404。
-⚠️ 也不含 3 个 `visible:false` 的 `raccoon-*` 内部模型。
+也不含 3 个 `visible:false` 的 `raccoon-*` 内部模型。
 
 ### 5.6 缓存策略
 
@@ -460,10 +460,10 @@ def raccoon_supports_image(model_id, tags):
 | 来源 | 金额 | 触发方式 | 本模块 |
 |---|---|---|---|
 | 新人注册礼包 | 3000 | 注册时服务端自动发放 | 不涉及 |
-| 桌面端登录奖励 | 3000 | `POST …/login/points/grant` | ✅ 实现 |
-| 每日积分发放 | 300 | **服务端按日自动发放，无端点** | ❌ 不实现 |
+| 桌面端登录奖励 | 3000 | `POST …/login/points/grant` |  实现 |
+| 每日积分发放 | 300 | **服务端按日自动发放，无端点** |  不实现 |
 
-⚠️ **每日 300 没有签到端点** —— 实测该账号 13:30 注册、13:31 就收到 `daily_grant` 账单
+**每日 300 没有签到端点** —— 实测该账号 13:30 注册、13:31 就收到 `daily_grant` 账单
 （`biz_type: 'daily_grant'`）。故**不能**把它实现成签到按钮。
 
 ### 6.2 查余额（**只读**）
@@ -471,13 +471,13 @@ def raccoon_supports_image(model_id, tags):
 ```
 GET https://xiaohuanxiong.com/api/web/points/v1/balance
 → { code: 0, message, data: { available_points, reward_points, daily_points,
-                              topup_points, monthly_points } }
+                             topup_points, monthly_points } }
 ```
 
 - `available_points` 是**核心字段**：没有它就说明响应形状不对，不编造数字，返回 `null`
 - 各池**分开作 package**：`奖励积分`（`reward_points`）/ `每日积分`（`daily_points`）/
-  `会员积分`（`monthly_points`，**仅 > 0 时才加**）/ `充值积分`（`topup_points`）
-- ⚠️ 在「打开面板」这类高频路径上**绝不**触碰写端点
+ `会员积分`（`monthly_points`，**仅 > 0 时才加**）/ `充值积分`（`topup_points`）
+-  在「打开面板」这类高频路径上**绝不**触碰写端点
 
 ### 6.3 登录奖励（一次性，幂等）
 
@@ -487,9 +487,9 @@ POST https://xiaohuanxiong.com/api/web/desktop/v1/login/points/grant
 → { code: 0, data: { granted: bool, popup: { points } } }
 ```
 
-- ⚠️ **需要 `X-Client-Platform` 头**
-- ⚠️ **不是每日签到**：实测该端点是幂等一次性的
-- ⚠️ **幂等判据是 `granted`**，故映射成 `already-claimed` 而**不是** `claimed`
+-  **需要 `X-Client-Platform` 头**
+-  **不是每日签到**：实测该端点是幂等一次性的
+-  **幂等判据是 `granted`**，故映射成 `already-claimed` 而**不是** `claimed`
 - 默认额度 `RACCOON_LOGIN_REWARD_POINTS = 3000`
 - 本函数**不抛错**
 
@@ -502,10 +502,10 @@ GET https://xiaohuanxiong.com/api/web/points/v1/bills?paging.limit=50&paging.off
 
 判据：存在 `biz_type === 'reward_grant'` **且** `event_name === '桌面端登录奖励'` 的记录。
 
-⚠️ **不能靠 `balance` 推断** —— 余额是多个来源的合计。
-⚠️ **不能只按 `biz_type === 'reward_grant'` 判定** —— 「新人注册礼包」也是 `reward_grant`。
-⚠️ **服务端没有单独的奖励状态端点**，故只能查账单明细。
-⚠️ 查询失败时保守返回 `claimed: false`。
+**不能靠 `balance` 推断** —— 余额是多个来源的合计。
+**不能只按 `biz_type === 'reward_grant'` 判定** —— 「新人注册礼包」也是 `reward_grant`。
+**服务端没有单独的奖励状态端点**，故只能查账单明细。
+查询失败时保守返回 `claimed: false`。
 
 ### 6.5 业务信封（raccoon-oauth.ts:62-73）
 
@@ -514,27 +514,27 @@ code = record.code if isinstance(record.code, int) else (status if status >= 400
 # code === 0 为成功
 ```
 
-⚠️ 失败可能带 HTTP 400/401，也可能 HTTP 200 + 非 0 code。
-⚠️ 错误消息拼接：`message` 与 `details` 用 `: ` 连接。
+失败可能带 HTTP 400/401，也可能 HTTP 200 + 非 0 code。
+错误消息拼接：`message` 与 `details` 用 `: ` 连接。
 
 ---
 
 ## 7. 特殊机制
 
 - **登录链路不可复用官方桌面端**（raccoon.ts:11-20）：它靠
-  `office-raccoon://auth/callback` 自定义协议回调，而本插件是宿主侧 Node 进程，收不到；
-  且 `/code/authorize` 页面的回调地址是**写死的**。故改为「客户端本地生成 code + 自行轮询」
+ `office-raccoon://auth/callback` 自定义协议回调，而本插件是宿主侧 Node 进程，收不到；
+ 且 `/code/authorize` 页面的回调地址是**写死的**。故改为「客户端本地生成 code + 自行轮询」
 - **凭据不读客户端任何文件**：凭据存插件自有的 `ctx.credentials`
 - **账号昵称修复（raccoon-auth.ts:560-618）**：启动时主动补一次：
-  读凭据 → 缺 `phone` 就拉一次 `user_info` 补上 → 重算昵称并写回账号池。
-  语义约束：**幂等**、**失败不阻塞启动**、**不发写请求**
+ 读凭据 → 缺 `phone` 就拉一次 `user_info` 补上 → 重算昵称并写回账号池。
+ 语义约束：**幂等**、**失败不阻塞启动**、**不发写请求**
 - **账号池有效期回写（本 provider 是这套逻辑的原产地）**：
-  早期它是唯一漏掉回写的实现（用户报障后修好）。实测该账号的 JWT `exp` 已是 15:09（有效），
-  账号池却是 12:02（已过期），**相差 3.1 小时**，UI 显示「已过期」但发消息完全正常。
-  现 `refreshAll` 在凭据仍有效时也主动比对：**不一致**时以凭据为准回写
+ 早期它是唯一漏掉回写的实现（用户报障后修好）。实测该账号的 JWT `exp` 已是 15:09（有效），
+ 账号池却是 12:02（已过期），**相差 3.1 小时**，UI 显示「已过期」但发消息完全正常。
+ 现 `refreshAll` 在凭据仍有效时也主动比对：**不一致**时以凭据为准回写
 - **lead-time 过滤**：raccoon 沿用「**已过期**才刷」（不是共享的 1 小时 lead）
-  —— raccoon 的 access_token 寿命约 3 小时
+ —— raccoon 的 access_token 寿命约 3 小时
 - **`refreshAll` 只按 `refreshable` 过滤，绝不看 `enabled`**
 - **`refreshAccountCredential(refName)` 只读写传入的 ref**
 - **本地二维码实现**：自实现 byte 模式 + 纠错等级 M + 版本 1–10
-  （内容上限 213 字节），超出容量时**抛错**，渲染成内联 SVG
+ （内容上限 213 字节），超出容量时**抛错**，渲染成内联 SVG

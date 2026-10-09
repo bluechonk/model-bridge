@@ -23,6 +23,7 @@ const workspaceRoot = dirname(import.meta.dirname);
 const ALLOWED = [
   /^docs\//,
   /^AGENTS\.md$/, // 规则文件本身：工具从仓库根读，不能搬
+  /^README\.md$/, // 仓库门面：GitHub 只渲染根 README，必须留在原处
   /^plugins\/model-bridge\//, // 插件：ZCode / 技能加载器按固定路径读
   /^channels\/[a-z0-9-]+\/README\.md$/, // 包根指针 README
   /^channels\/[a-z0-9-]+\/AGENTS\.md$/, // 目录级工具指令

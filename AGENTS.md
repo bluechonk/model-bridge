@@ -31,6 +31,7 @@ docs/                全部文档
 
 **唯一允许留在 `docs/` 之外的 `.md`**（工具或生态按固定路径加载，搬走即失效）：
 
+0. `README.md`（**仓库根**）—— 仓库门面，GitHub 只渲染根 README
 1. `plugins/model-bridge/**` —— 插件命令 / 技能 / 说明，ZCode 与技能加载器按固定路径读
 2. `channels/<cid>/README.md` —— **包根指针 README**：只许写指向 `docs/` 的链接，不写正文
 3. `channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
@@ -45,14 +46,14 @@ docs/                全部文档
 ## 3. 代码约定（摘要；详见 `docs/CONTRACT-TS.md`）
 
 - 渠道包 `src/` **只能有 7 个文件**（`channel` / `cli` / `index` + `cred` / `upstream` / `catalog` / `billing`）；
-  多出来的共享模块副本一律删除。
+ 多出来的共享模块副本一律删除。
 - 零第三方运行依赖：`dependencies` 只允许 `@model-bridge/gateway`。
 - **落点由共享层按 `cid` 推导**：渠道不许自己拼路径（见 `docs/STORAGE-CONVENTION.md`）。
 - 调用渠道模块前必须包 `runInChannel(cid, …)`（`AsyncLocalStorage` 上下文；否则渠道内部的
-  `paths.*` 在多渠道路由下不知道为谁解析）。
+ `paths.*` 在多渠道路由下不知道为谁解析）。
 - 对外模型 id **只有两个、恒小写、不带渠道前缀**：`deepseek-v4.1-flash` /
-  `glm-5.3-flash`；客户端请求名不剥路径段（`<cid>/<模型>` 旧形态一律 400）。
-  匹配与排序见 `docs/POOL-ARCHITECTURE.md` §2。
+ `glm-5.3-flash`；客户端请求名不剥路径段（`<cid>/<模型>` 旧形态一律 400）。
+ 匹配与排序见 `docs/POOL-ARCHITECTURE.md` §2。
 - 每个改动都要有测试兜底；测试必须**完全离线**、不碰真实主目录（存储根指向 `mkdtemp`）。
 
 ## 4. 命令
@@ -102,5 +103,20 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 1. 改完共享层或渠道代码并 `npm run build` 后，**主动 `restart`**，别只 build。
 2. 涉及登录链路/上游协议的改动，必须走一次真机验证（`<cid> login` → `status` → 一次真实对话）。
 3. 判断当前进程是不是旧代码：`node packages/cli/dist/cli.js status`
-   —— 它会主动报 `⚠ 网关在跑旧代码：构建产物 … 比进程启动 … 新`；
-   `status --json` 里是 `stale_build: true`。实现见 `packages/gateway/src/stale-build.ts`。
+  —— 它会主动报 ` 网关在跑旧代码：构建产物 … 比进程启动 … 新`；
+  `status --json` 里是 `stale_build: true`。实现见 `packages/gateway/src/stale-build.ts`。
+
+## 7. 开发规范（与全局 `~/.zcode/AGENTS.md` 一致，落到本仓库）
+
+| 项 | 要求 |
+| --- | --- |
+| 换行 | 一律 **LF**；根 `.gitattributes` 强制（`* text=auto eol=lf`），**禁止 CRLF 混入提交** |
+| 敏感信息 | 严禁提交 apikey / accesskey / secret / token / 密码 / 私钥 / 证书 / 含真实凭据的 `.env`。敏感内容进 `.gitignore`，改用环境变量；提交前自查 `git status` 与 `git diff` |
+| 注释 | **中文**、简洁、不复述代码；随代码同步更新，**禁止留过时或误导性注释** |
+| 日志 | 运行时日志一律**英文**（避免 Git Bash / PowerShell 下的编码问题）；CLI 报表属**产品界面**，保持中文 |
+| 文档 | 全部**中文**、**不使用 emoji**；根 `README.md` 是仓库门面，必须全中文 |
+| 依赖与环境 | Python 一律走 `uv`（`uv add` / `uv run` / `uv sync` / `uv venv`）；命令行只用 PowerShell 7 与 Git Bash |
+| 复用优先 | 开发前先检索现成方案（GitHub 优先），优先复用而非自建；借鉴重构前先检查许可证 |
+
+> 这一节是全局偏好的**项目内落点**：全局规则在 `~/.zcode/AGENTS.md`，本仓库要遵守的具体形态写在这里
+> （例如"日志英文"在本项目的边界是——运行时日志英文、CLI 报表中文）。

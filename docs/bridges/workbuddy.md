@@ -13,7 +13,7 @@ WorkBuddy **国内版**（腾讯 CodeBuddy，`codebuddy.ai`）的本地 OpenAI C
 早期只有一个 `workbuddyai` 渠道，用 `--realm intl|cn` 在同一渠道内切换国际/国内域。这带来三个问题：
 
 1. **登录链路随参数漂移**：同一个 cid 下，`login --realm cn` 与 `--realm intl` 写同一份
-   `credentials.json`，凭证与域的关系只存在于「用户当时传了什么」里。
+  `credentials.json`，凭证与域的关系只存在于「用户当时传了什么」里。
 2. **模型池混装**：两条产品线的模型目录被并进一个池子，`/v1/models` 里分不清来源。
 3. **口径不清**：账单/额度是**按域**查的，池子却只有一个。
 
@@ -50,7 +50,7 @@ node packages/cli/dist/cli.js workbuddy checkin # 签到（本渠道无签到端
 `credentials.json`（0600）、`upstream.json`、`prefs.json`、`gateway.pid`、`gateway.log`，
 外加 `cache/`、`state/`、`debug/`。
 
-⚠ 本渠道是拆分后**新建**的，**没有历史目录**：`legacyDirs` / `legacyEnvVars` /
+本渠道是拆分后**新建**的，**没有历史目录**：`legacyDirs` / `legacyEnvVars` /
 `legacyDebugDumpEnv` 全为空。特别地**不认领** `~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
 `WORKBUDDY_DEBUG_DUMP` —— 那些是国际版（`workbuddyai`）的旧名字，认领会把国际凭证
 迁进国内渠道。详见 [`workbuddyai.md`](workbuddyai.md) 与
@@ -69,7 +69,7 @@ node packages/cli/dist/cli.js workbuddy checkin # 签到（本渠道无签到端
 
 1. **首条消息必须是 system** —— 否则 400 `first message is not system prompt`
 2. **只支持流式** —— 否则 400 `Non-stream chat request is currently not supported`；
-   客户端要非流式时也向上游要流式，由网关层聚合成普通 JSON
+  客户端要非流式时也向上游要流式，由网关层聚合成普通 JSON
 3. **系统提示词指纹拦截** —— 命中时整条会话被 400 `code=11128` 拒绝，需改写样板文本
 
 另：chat 路径**不用** `prefixPath`（`/v2/chat/completions` 才是 200）；SSE 里空的

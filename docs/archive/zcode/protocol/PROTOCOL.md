@@ -18,10 +18,10 @@
 | 登录页 | GET（浏览器） | `https://bigmodel.cn/login?appId=zcode&redirect=` | zcode-login.ts |
 | 授权页 | GET（浏览器） | `https://zcode.z.ai/` | zcode-captcha.ts |
 
-⚠️ **通道与域名的对应关系（实测 2026-10-03 复核）**：
+**通道与域名的对应关系（实测 2026-10-03 复核）**：
 - **积分制（`start-plan`）无论账号是 bigmodel 还是 zai，都走 `zcode.z.ai`**
-  —— 官方分派表（`resources/config/provider/zcode-builtin.json`）规则 2/5 明确如此。
-  **不要**因为账号是国际版就改域名。
+ —— 官方分派表（`resources/config/provider/zcode-builtin.json`）规则 2/5 明确如此。
+ **不要**因为账号是国际版就改域名。
 - 订阅制（`coding-plan`）才走 `api.z.ai`。
 
 ---
@@ -57,7 +57,7 @@ x-aliyun-captcha-verify-region: <region>  （captcha 时）
 | `POST /zcode-plan/billing/claim` | **是** | 是（另需 captcha 头） |
 | `GET /api/v1/client/configs` | **是** | 是 |
 
-⚠️ 这两条都踩过：不带 `Authorization` 查额度得 **401**；
+这两条都踩过：不带 `Authorization` 查额度得 **401**；
 不带 `X-Device-Mid` 得 **400 `{"code":3001,"msg":"parameter error"}`**。
 
 ### 2.3 凭据结构（zcode.ts:48-77）
@@ -70,11 +70,11 @@ x-aliyun-captcha-verify-region: <region>  （captcha 时）
 | `bigmodel_access_token?` | 大模型 access token，备用身份 |
 | `app_version?` | 客户端版本（用于 `X-ZCode-App-Version`） |
 
-⚠️ **`device_mid` 由插件自己随机生成**（`generateDeviceMid()`，zcode-login.ts），
+**`device_mid` 由插件自己随机生成**（`generateDeviceMid()`，zcode-login.ts），
 **不是**读官方客户端的。实测依据：同一 JWT 换任意随机 UUID，`billing/balance` 都回 200
 ⇒ 它的**值**不被服务端绑定校验，只需**稳定**（生成后持久化在凭据里）。
 
-⚠️⚠️ **它不是账号标识，别拿它去重 / 认账号**：同一账号**每次重新登录都会得到一个新值**。
+**它不是账号标识，别拿它去重 / 认账号**：同一账号**每次重新登录都会得到一个新值**。
 账号去重必须用 `user_id`。
 
 ### 2.4 登录流程（纯 HTTP，见 zcode-login.ts）
@@ -85,7 +85,7 @@ x-aliyun-captcha-verify-region: <region>  （captcha 时）
 
 ## 3. 对话请求（Anthropic Messages 形状）
 
-### 3.1 ⚠️⚠️ 3012 风控与官方身份块（**本渠道最大的坑**）
+### 3.1  3012 风控与官方身份块（**本渠道最大的坑**）
 
 上游对 `/zcode-plan/anthropic` 通道做**请求体内容检查**：`system` 字段缺少官方的身份块结构时，
 直接返回 `{"code":3012,"msg":"request has been blocked due to unusual activity."}`。
@@ -105,44 +105,44 @@ x-aliyun-captcha-verify-region: <region>  （captcha 时）
 **2026-10-03 复测修正的两条旧说法**（issue IKJI0Y 驱动，三个账号、17 次请求）：
 1. **HTTP 状态码是 `405`**，不是 `403`。排查时别按 403 找。
 2. **日期块在这个窗口不是判据**（`withContextPrefix` 去掉照样 200）。
-   它仍照发（官方如此、零成本），但它与身份块是**必要非充分**的关系。
+  它仍照发（官方如此、零成本），但它与身份块是**必要非充分**的关系。
 
 本次逐项排除的**非判据**还有：HTTP 头、版本头（`3.14.3`/`3.14.4`/`4.0.0`）、
 请求频率（单账号无间隔连发 6 发）、多轮历史（`tool_use`/`tool_result`）、
 `tools` 声明、账号池中的其它账号。
 
-⚠️ **3012 有账号冷却惩罚**（30 分钟；24h 内第 3 次起 24h；**5 次停用**）。
+**3012 有账号冷却惩罚**（30 分钟；24h 内第 3 次起 24h；**5 次停用**）。
 **不要为了调试反复触发。**
 
 **身份块内容**（本项目用 `tools/extract-zcode-identity.mjs` 程序化提取，避免手抄偏差）：
 
 - **第一块 cliPrefix（42 字符）**：`You are ZCode, an interactive coding agent`
 - **第二至四块 stable（三段，合计约 2852 字符）**：
-  1. `# Harness` 段（1211 字符）—— 含 ZCode 的 agent 行为指令
-  2. `# ZCode Desktop Context` 段（1100 字符）—— 含 Files & URLs / Inline Code Comments 说明
-  3. `# Working style` 段（541 字符）
+ 1. `# Harness` 段（1211 字符）—— 含 ZCode 的 agent 行为指令
+ 2. `# ZCode Desktop Context` 段（1100 字符）—— 含 Files & URLs / Inline Code Comments 说明
+ 3. `# Working style` 段（541 字符）
 
-⚠️ 只发**准入必需**的部分。官方完整身份块还含约 5KB 的 dynamic 段
+只发**准入必需**的部分。官方完整身份块还含约 5KB 的 dynamic 段
 （`# Communicating with the user` / `# Context management`），那些是**给 ZCode 内
 coding agent 的行为指令**，与准入无关 —— 且它们会被放在 system 开头，
 **压过调用方自己的 prompt**，表现为「啰嗦、慢」。故**不含** dynamic 段。
 
-⚠️ **维护警告**：上游策略与此结构**强耦合**。官方客户端升级后若改变身份块结构，
+**维护警告**：上游策略与此结构**强耦合**。官方客户端升级后若改变身份块结构，
 需要同步更新，否则会重新出现 3012。
 
 ### 3.2 请求体（Anthropic Messages）
 
 ```
 {
-  model: "<模型 id>",
-  system: [ {type:"text", text:<cliPrefix>}, {type:"text", text:<stable1>}, ... ],
-  messages: [ {role:"user"|"assistant", content:[{type:"text", text:...}]} ],
-  max_tokens: <number>,
-  stream: true,
-  temperature?: <number>,
-  stop_sequences?: [...],
-  tools?: [{name, description, input_schema}],
-  output_config?: { effort: <档位> }
+ model: "<模型 id>",
+ system: [ {type:"text", text:<cliPrefix>}, {type:"text", text:<stable1>}, ... ],
+ messages: [ {role:"user"|"assistant", content:[{type:"text", text:...}]} ],
+ max_tokens: <number>,
+ stream: true,
+ temperature?: <number>,
+ stop_sequences?: [...],
+ tools?: [{name, description, input_schema}],
+ output_config?: { effort: <档位> }
 }
 ```
 
@@ -171,10 +171,10 @@ coding agent 的行为指令**，与准入无关 —— 且它们会被放在 sy
 | `message_stop` | 结束 |
 | `error` | **必须抛错** |
 
-⚠️ **`error` 事件必须抛错**（AGENTS.md 记过 Qoder 的同型缺陷：
+**`error` 事件必须抛错**（AGENTS.md 记过 Qoder 的同型缺陷：
 错误被静默当成「正常结束、无内容」，UI 表现为「干净地停止、无任何报错」）。
 
-⚠️ `signature_delta` 必须忽略（当成文本会往回答里注入一串十六进制）。
+`signature_delta` 必须忽略（当成文本会往回答里注入一串十六进制）。
 
 `stop_reason` 映射：`end_turn` → stop、`max_tokens` → length、`tool_use` → tool_calls。
 
@@ -191,7 +191,7 @@ coding agent 的行为指令**，与准入无关 —— 且它们会被放在 sy
 - `startPlanPreview.entitlements`
 - `builtinModels[].reasoning.levels`（档位，**键序即展示顺序**）
 
-⚠️ 上游清单里有 4 个（`GLM-5-Turbo` / `GLM-5.2` / `GLM-5.3` / `GLM-5.3-Flash`），
+上游清单里有 4 个（`GLM-5-Turbo` / `GLM-5.2` / `GLM-5.3` / `GLM-5.3-Flash`），
 但**前两个在 Start Plan 下返回空响应**（实测 0/3 正确，而 GLM-5.3 是 3/3），
 故**只暴露后两个** —— 列一个用不了的模型比不列更糟。
 
@@ -201,7 +201,7 @@ coding agent 的行为指令**，与准入无关 —— 且它们会被放在 sy
 
 ### 6.1 余额（`billing/balance`）
 
-⚠️ **计量单位**：上游明确下发 `unit_type: "token"`（实测），
+**计量单位**：上游明确下发 `unit_type: "token"`（实测），
 桶字段为 `{meter:"model_usage", unit_type:"token", total_units, used_units, remaining_units}`。
 
 真实缺陷记录：早期把它当泛化的「积分」渲染，于是界面显示 `94539275`（无单位、量级像积分），
@@ -213,9 +213,9 @@ coding agent 的行为指令**，与准入无关 —— 且它们会被放在 sy
 
 ```
 补 POST /api/v1/event/report {app_launch, app_daily_active} 之前：
-  preview → {"code":0,"data":{"plans":[]}}          ← 空
+ preview → {"code":0,"data":{"plans":[]}}          ← 空
 补之后：
-  preview → {"code":0,"data":{"plans":[{plan_id:"zcode-v3-start-plan-trust-…"}]}}
+ preview → {"code":0,"data":{"plans":[{plan_id:"zcode-v3-start-plan-trust-…"}]}}
 ```
 
 **⇒ 「每日随机派发」不是随机推送，而是「服务端按活跃信号决定要不要给」。**
@@ -223,7 +223,7 @@ coding agent 的行为指令**，与准入无关 —— 且它们会被放在 sy
 
 ### 6.3 captcha（阿里云）
 
-⚠️ **谁还要 captcha**（2026-10-01 直连上游实测）：
+**谁还要 captcha**（2026-10-01 直连上游实测）：
 
 | 端点 | 不带验证头 | 结论 |
 |---|---|---|
@@ -233,28 +233,28 @@ coding agent 的行为指令**，与准入无关 —— 且它们会被放在 sy
 ⇒ 模型请求这条路现在**恒不产** param；仍在产的是**领取**（每日一次 / 手动点「一键领取」，
 **每个 plan 独立一个**，一次性，复用必 `3007`）。
 
-⚠️ 模型请求侧的 `3007` 防御分支**故意保留**：万一上游回滚再开校验，推理请求仍能自愈。
+模型请求侧的 `3007` 防御分支**故意保留**：万一上游回滚再开校验，推理请求仍能自愈。
 
 **captcha 载体**：
 - captcha 是**网页 SDK**（`https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js`），
-  不是 Electron 专有 API
+ 不是 Electron 专有 API
 - 配置：`window.AliyunCaptchaConfig = { region, prefix }`
 - 调用：`initAliyunCaptcha({ SceneId, mode, element, button, getInstance, success, … })`
 - 取参：`getInstance` 里调 `instance.startTracelessVerification()`（无感验证）→ `success(param)` 回调给出 param
 
-⚠️ **两个实测约束**：
+**两个实测约束**：
 1. ~~同一个页面不能重复 mint~~ → **已推翻**（当时页面停在 `about:blank`，
-   origin 为字符串 `"null"`）。换到真实 `https://zcode.z.ai/` 后同一页面可**连续 mint 5/5**，
-   中位 426ms。现行实现**复用常驻页面 + 每次重置 DOM**。
+  origin 为字符串 `"null"`）。换到真实 `https://zcode.z.ai/` 后同一页面可**连续 mint 5/5**，
+  中位 426ms。现行实现**复用常驻页面 + 每次重置 DOM**。
 2. **`--headless=new` 过不了，必须 headful**（阿里云风控看这个差异）。
-   headful 在 Windows 上可以**不打扰用户**（`--window-position=-32000,-32000` 移出屏幕）。
+  headful 在 Windows 上可以**不打扰用户**（`--window-position=-32000,-32000` 移出屏幕）。
 
 **captcha 有效期**（captcha-pool.ts:1-20，吸收自 `dsh-free-glm`）：
 
 | 生成后经过 | 使用结果 |
 |---|---|
-| 0 / 10 / 30 / 60 秒 | ✅ 可用 |
-| 120 秒 | ❌ 3007 |
+| 0 / 10 / 30 / 60 秒 |  可用 |
+| 120 秒 |  3007 |
 
 ⇒ **有效期在 60-120 秒之间**；「一次性」只指「用一次就作废」，**不指「必须立刻用」**。
 故可以提前产好、放在池里等下一次请求（本项目取 TTL 30 秒，双倍余量）。

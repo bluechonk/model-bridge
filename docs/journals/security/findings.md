@@ -64,18 +64,18 @@ docs/archive/gemini/protocol/PROTOCOL.md  (现行)
 **后果（务必知晓）**：
 
 - **全部 34 个提交的 hash 已改变**。旧 HEAD `34b4d7d` → 新 `851d565`；根
-  `.gitattributes` 补齐后为 `7cb929d`。
+ `.gitattributes` 补齐后为 `7cb929d`。
 - 任何基于旧历史的本地提交，推送时会因 non-fast-forward 被拒，需 `git pull --rebase`。
 - 备份（含旧历史与原 secret）留在仓库外：`../model-bridge-backup.bundle`。
 
 **验证**：全历史 `git log --all -S` 无命中；对象库全量 `cat-file` 复查无命中
 （含不可达对象）；新旧 HEAD 树逐字节比对仅差该 1 行。
 
-**⚠ 两个未闭合的局限**：
+** 两个未闭合的局限**：
 
 1. **GitHub 上旧提交仍可按 SHA 读取**（实测 `34b4d7d` 仍返回含原值的文件）。
-   改写只让 commit 不可达，GitHub 不立即回收对象 —— 需向 GitHub Support 提工单
-   申请回收不可达数据；已 clone 的人与 fork 也各自留有一份。
+  改写只让 commit 不可达，GitHub 不立即回收对象 —— 需向 GitHub Support 提工单
+  申请回收不可达数据；已 clone 的人与 fork 也各自留有一份。
 2. **必须轮换该 client secret**（在 Google 侧重置）。这是唯一彻底的处置。
 
 ## 未提交但本地存在
@@ -84,18 +84,18 @@ docs/archive/gemini/protocol/PROTOCOL.md  (现行)
 是 clone 的第三方实现（catpaw2api、thief-neko、qoder2api 等 7 个）。
 
 - 被逐渠道 `.gitignore` 的 `reference/` 规则拦住，全历史 `--diff-filter=A` 命中 0 次，
-  **确认从未提交**，公开仓库内没有。
+ **确认从未提交**，公开仓库内没有。
 - 但其中含第三方代码自带的密钥：**不要备份或同步该目录到别处**。
 
 ## 【开发规范】符合性
 
 | 规范 | 状态 |
 | --- | --- |
-| 1 文本一律 LF 入库 | ✅ 索引内 CRLF = 0 |
-| 2 项目必须有 `.gitattributes` | ✅ 已补根 `.gitattributes`（`7cb929d`） |
-| 3 严禁提交 accesskey / secret key 等 | ⚠️ 见上表，待处置 |
-| 4 敏感内容改环境变量 / 密钥服务 | ⚠️ 待处置 |
-| 5 提交前自查 + 误提交要撤销 / 轮换 / 清理历史 | ✅ 清理与重写已完成；**轮换待办** |
-| 6 注释中文 | ✅ |
-| 9 日志英文 | 🔄 并行改造中 |
-| 流程 4 开发进程落档 docs | ✅ 本文 |
+| 1 文本一律 LF 入库 |  索引内 CRLF = 0 |
+| 2 项目必须有 `.gitattributes` |  已补根 `.gitattributes`（`7cb929d`） |
+| 3 严禁提交 accesskey / secret key 等 |  见上表，待处置 |
+| 4 敏感内容改环境变量 / 密钥服务 |  待处置 |
+| 5 提交前自查 + 误提交要撤销 / 轮换 / 清理历史 |  清理与重写已完成；**轮换待办** |
+| 6 注释中文 |  |
+| 9 日志英文 |  并行改造中 |
+| 流程 4 开发进程落档 docs |  本文 |

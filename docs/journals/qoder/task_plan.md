@@ -16,7 +16,7 @@
 
 实现 `src/upstream.ts` 的 COSY 签名会话与请求体编码，并用固定向量写离线单测。
 
-> ⚠ 渠道包 `src/` **只能有 7 个文件**（契约），所以签名/编码/指纹不单独建模块：
+>  渠道包 `src/` **只能有 7 个文件**（契约），所以签名/编码/指纹不单独建模块：
 > 设备指纹派生放 `cred.ts`（身份相关），COSY 签名 + 自定义 Base64 + 信封放 `upstream.ts`，
 > 两者同包内互相 import。
 
@@ -76,7 +76,7 @@
 - [x] `qoder billing` → 剩余 589/800 credits（已用 211，加油包合并正确）
 - [x] `qoder checkin --status` → 「今天未签到（依据：上游）」
 - [x] 仓库级网关重启后，账本里 qoder `used=211 credits` / `ok=3`，成为
-      `deepseek-v4-flash` 与 `glm-5.3-flash` 的**首选**渠道
+     `deepseek-v4-flash` 与 `glm-5.3-flash` 的**首选**渠道
 
 **真机踩到的坑（离线测不出来，已修）**：Node 的 `fetch` 禁止 GET 带 body
 （`Request with GET/HEAD method cannot have body`），而 Qoder 的模型目录端点正是
