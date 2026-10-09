@@ -649,9 +649,19 @@ export function newTranslator(): StreamTranslator {
     }
 
     const envelope = parsed as Envelope;
-    // 不是信封（没有 body / statusCodeValue）→ 直发的标准 chunk，原样透传
+    // 不是信封 → 可能是直发的标准 chunk，**也可能是裸的统计帧**（实测 Qoder 会发
+    // `data:{"firstTokenDuration":…}` 这种没套信封的帧）。所以同样按 chunk/error 判据过滤：
+    // 有 `choices` / `usage` 才透传，有 `code` / `message` 转 error，其余丢弃。
     if (!("body" in envelope) && !("statusCodeValue" in envelope) && !("statusCode" in envelope)) {
-      return [`data: ${data}\n\n`];
+      const bare = parsed as Record<string, unknown>;
+      const bareErr = innerError(bare);
+      if (bareErr && bare["choices"] === undefined) {
+        return [
+          `data: ${JSON.stringify({ error: { code: bareErr.code ?? "upstream_error", message: bareErr.message ?? "上游错误" } })}\n\n`,
+        ];
+      }
+      const bareChunk = Array.isArray(bare["choices"]) || bare["usage"] !== undefined;
+      return bareChunk ? [`data: ${data}\n\n`] : [];
     }
 
     const status = Number(envelope.statusCodeValue ?? 200);
@@ -688,6 +698,14 @@ export function newTranslator(): StreamTranslator {
         `data: ${JSON.stringify({ error: { code: err.code ?? "upstream_error", message: err.message ?? "上游错误" } })}\n\n`,
       ];
     }
+    // ⚠ **只透传真正的 chunk**：判据 = 有 `choices` 数组或 `usage`（含 `choices: []`）。
+    //
+    // Qoder 的流里还会混进**统计帧**（实测 `{"firstTokenDuration":185,"totalDuration":926,
+    // "serverDuration":296}`）—— 它既没有 choices 也没有 error，原样透传会让 OpenAI 客户端
+    // 校验失败（ZCode 报 `Type validation failed: expected array, received undefined`，
+    // 表现为「内容已经正常出完了，最后却报模型请求失败」）。这类帧直接跳过。
+    const isChunk = Array.isArray(payload["choices"]) || payload["usage"] !== undefined;
+    if (!isChunk) return [];
     return [`data: ${JSON.stringify(payload)}\n\n`];
   };
 
