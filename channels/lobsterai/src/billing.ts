@@ -34,7 +34,7 @@ export const PROFILE_SUMMARY_PATH = "/api/user/profile-summary";
 /** 活动槽位端点。 */
 export const ACTIVITY_SLOT_PATH = "/api/client-activities/slot";
 
-/** 三个固定 query 常量（对齐 Go / Python 实现，逐字不可改）。 */
+/** 三个固定 query 常量（逐字不可改）。 */
 export const SLOT_PLACEMENT = "desktop_sidebar";
 export const SLOT_CONTAINER_API_VERSION = "2";
 export const SLOT_PLATFORM = "win32";
@@ -138,25 +138,25 @@ async function getJson(
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new CreditsError(`请求失败: ${String(err)}`);
+    throw new CreditsError(`request failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new cred.NotLoggedInError("上游拒绝了访问令牌（401/403）");
+    throw new cred.NotLoggedInError("upstream rejected the access token (401/403)");
   }
-  if (resp.status !== 200) throw new CreditsError(`上游返回 HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new CreditsError(`upstream returned HTTP ${resp.status}`);
   let env: unknown;
   try {
     env = await resp.json();
   } catch (err) {
-    throw new CreditsError(`响应不是合法 JSON: ${String(err)}`);
+    throw new CreditsError(`response is not valid JSON: ${String(err)}`);
   }
-  if (!env || typeof env !== "object") throw new CreditsError("响应不是 JSON 对象");
+  if (!env || typeof env !== "object") throw new CreditsError("response is not a JSON object");
   const rec = env as Record<string, unknown>;
   // 统一信封：code !== 0 即失败（`data` 为空是**独立的失败信号**：
   // 上游在凭据失效时倾向返回 code:0 但 data:null）。
   if (rec["code"] !== undefined && rec["code"] !== 0) {
     throw new CreditsError(
-      `上游返回 code=${String(rec["code"])} msg=${String(rec["msg"] ?? rec["message"] ?? "")}`,
+      `upstream returned code=${String(rec["code"])} msg=${String(rec["msg"] ?? rec["message"] ?? "")}`,
     );
   }
   return rec;
@@ -166,7 +166,7 @@ async function getJson(
 function dataOf(env: Record<string, unknown>): Record<string, unknown> {
   const data = env["data"];
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new CreditsError("响应缺少 data（accessToken 可能已失效）");
+    throw new CreditsError("response is missing data (accessToken may be invalid)");
   }
   return data as Record<string, unknown>;
 }
@@ -193,7 +193,7 @@ export async function activitySlot(
       ? (data["activity"] as Record<string, unknown>)
       : {};
   const activityCode = str(activity["activityCode"]);
-  if (!activityCode) throw new CreditsError("活动槽位里没有 activityCode");
+  if (!activityCode) throw new CreditsError("activity slot has no activityCode");
   return { activityCode, configRevision: str(activity["configRevision"]) };
 }
 
@@ -308,7 +308,7 @@ export async function fetchCredits(
   const result = summarize(data, { uid: c.uid, domain: c.domain });
   if (result.total.remain === 0 && result.packages.length === 0) {
     // 「查不到」与「余额为 0」是两件事：前者不该显示成 0。
-    throw new CreditsError("上游未返回任何额度信息（查不到，不等于余额为 0）");
+    throw new CreditsError("upstream returned no credits info (not found != zero balance)");
   }
 
   // 签到预检是**尽力而为**：活动服务不可用时不该让余额查询整体失败。
@@ -374,18 +374,18 @@ export async function claimCheckin(): Promise<ClaimResult> {
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new CreditsError(`签到请求失败: ${String(err)}`);
+    throw new CreditsError(`check-in request failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new cred.NotLoggedInError("签到端点拒绝了访问令牌（401/403）");
+    throw new cred.NotLoggedInError("check-in endpoint rejected the access token (401/403)");
   }
-  if (resp.status !== 200) throw new CreditsError(`签到返回 HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new CreditsError(`check-in returned HTTP ${resp.status}`);
 
   let env: Record<string, unknown>;
   try {
     env = (await resp.json()) as Record<string, unknown>;
   } catch (err) {
-    throw new CreditsError(`签到响应不是合法 JSON: ${String(err)}`);
+    throw new CreditsError(`check-in response is not valid JSON: ${String(err)}`);
   }
   if (env["code"] !== undefined && env["code"] !== 0) {
     return {

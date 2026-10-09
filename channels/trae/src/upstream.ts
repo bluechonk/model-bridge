@@ -460,26 +460,26 @@ export async function fetchModels(
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
-    throw new Error(`模型列表请求失败: ${String(err)}`);
+    throw new Error(`Model list request failed: ${String(err)}`);
   }
   const text = await resp.text();
   if (resp.status === 401 || resp.status === 403) {
-    throw new UpstreamUnauthorized("上游拒绝了访问令牌（HTTP 401/403）");
+    throw new UpstreamUnauthorized("Upstream rejected the access token (HTTP 401/403)");
   }
   if (resp.status !== 200) {
     const kind = classifyError(resp.status, text);
-    throw new Error(`模型列表请求失败: HTTP ${resp.status}（${kind}）`);
+    throw new Error(`Model list request failed: HTTP ${resp.status} (${kind})`);
   }
   let env: unknown;
   try {
     env = JSON.parse(text);
   } catch (err) {
-    throw new Error(`模型列表响应不是合法 JSON: ${String(err)}`);
+    throw new Error(`Model list response is not valid JSON: ${String(err)}`);
   }
-  if (!isRecord(env)) throw new Error("模型列表响应不是 JSON 对象");
+  if (!isRecord(env)) throw new Error("Model list response is not a JSON object");
   // 200 但载荷不像目录（无 function_configs）且报错文本指向登录失效 ⇒ 终态
   if (!Array.isArray(env["function_configs"]) && classifyError(200, text) === "session-dead") {
-    throw new UpstreamUnauthorized("上游凭据失效（session-dead）");
+    throw new UpstreamUnauthorized("Upstream credential is invalid (session-dead)");
   }
   return env;
 }
@@ -661,7 +661,7 @@ export function newTranslator(): StreamTranslator {
             sseFrame({
               error: {
                 type: "upstream_error",
-                message: nonEmpty(payload["message"]) ?? "上游返回了 error 事件",
+                message: nonEmpty(payload["message"]) ?? "upstream emitted an error event",
                 ...(payload["code"] === undefined ? {} : { code: payload["code"] }),
               },
             }),

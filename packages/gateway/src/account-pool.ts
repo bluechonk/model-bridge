@@ -75,7 +75,7 @@ function indexFile(cid?: string): string {
 }
 
 function accountFile(key: string, cid?: string): string {
-  if (!/^[a-z0-9][a-z0-9.-]*$/.test(key)) throw new Error(`非法 account key: ${key}`);
+  if (!/^[a-z0-9][a-z0-9.-]*$/.test(key)) throw new Error(`invalid account key: ${key}`);
   return join(accountDir(cid), `${key}.json`);
 }
 
@@ -237,11 +237,11 @@ export function activateAccount(key: string, cid?: string): PoolAccount {
   const index = readIndex(cid);
   const account = index.accounts.find((a) => a.key === key);
   if (!account) {
-    const known = index.accounts.map((a) => a.key).join(", ") || "(空池)";
-    throw new Error(`账号不存在: ${key}（该渠道池内: ${known}）`);
+    const known = index.accounts.map((a) => a.key).join(", ") || "(empty pool)";
+    throw new Error(`account not found: ${key} (pool for this channel: ${known})`);
   }
   const from = accountFile(key, cid);
-  if (!existsSync(from)) throw new Error(`账号文件缺失: ${from}`);
+  if (!existsSync(from)) throw new Error(`account file missing: ${from}`);
   ensureDir(cid);
   copyFileSync(from, credentialsPath(cid));
   try {

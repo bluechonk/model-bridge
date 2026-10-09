@@ -120,7 +120,7 @@ export async function refresh(): Promise<void> {
   const data = await upstream.fetchModels(c);
   const models = data["models"];
   if (!Array.isArray(models) || models.length === 0) {
-    throw new Error("上游返回的模型目录为空");
+    throw new Error("upstream returned an empty model catalog");
   }
 }
 

@@ -6,7 +6,7 @@
 
 一个本地 OpenAI 兼容网关 + 11 个渠道，**仓库本身就是一个 ZCode 插件**。
 每个渠道在下游是一个**池子**：模型池（`catalog` + `(deepseek|glm) × flash` 白名单）+ 账号池（同渠道多账号）。
-**对外只有三个跨渠道模型**（`deepseek-v4.1-flash` / `deepseek-v4-flash` / `glm-5.3-flash`），
+**对外只有两个跨渠道模型**（`deepseek-v4.1-flash` / `glm-5.3-flash`），
 请求落到哪家渠道由网关按各渠道**账单已用量**决定（`pool-targets.ts` / `pool-usage.ts`）。
 
 ```
@@ -50,7 +50,7 @@ docs/                全部文档
 - **落点由共享层按 `cid` 推导**：渠道不许自己拼路径（见 `docs/STORAGE-CONVENTION.md`）。
 - 调用渠道模块前必须包 `runInChannel(cid, …)`（`AsyncLocalStorage` 上下文；否则渠道内部的
   `paths.*` 在多渠道路由下不知道为谁解析）。
-- 对外模型 id **只有三个、恒小写、不带渠道前缀**：`deepseek-v4.1-flash` / `deepseek-v4-flash` /
+- 对外模型 id **只有两个、恒小写、不带渠道前缀**：`deepseek-v4.1-flash` /
   `glm-5.3-flash`；客户端请求名不剥路径段（`<cid>/<模型>` 旧形态一律 400）。
   匹配与排序见 `docs/POOL-ARCHITECTURE.md` §2。
 - 每个改动都要有测试兜底；测试必须**完全离线**、不碰真实主目录（存储根指向 `mkdtemp`）。
@@ -64,14 +64,14 @@ npm test                          # 两个校验器 + 全部包的测试
 npm run test:all                  # build + test
 npm run build --workspace=channels/<cid>    # 只编一个渠道（也走引用链）
 node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，**唯一网关端口 8787**（REPO_DEFAULT_ADDR）
-node packages/cli/dist/cli.js model list    # 池视图：三个模型 → 候选渠道 + 账单用量 + 冷却
+node packages/cli/dist/cli.js model list    # 池视图：两个模型 → 候选渠道 + 账单用量 + 冷却
 node packages/cli/dist/cli.js channels      # 渠道视角：每个渠道贡献了池内哪些模型
 node packages/cli/dist/cli.js <cid> login   # 对某个渠道操作：login / status / models / billing / checkin / accounts / paths / logs
 node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用；只有它才用该渠道的 defaultAddr）
 ```
 
 **端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，
-控制台 8788），11 个渠道从它后面供给那三个公共模型；`BridgeConfig.defaultAddr`/`uiPort`
+控制台 8788），11 个渠道从它后面供给那两个公共模型；`BridgeConfig.defaultAddr`/`uiPort`
 只在**单渠道独立运行**（`channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
 
 **构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出 13 个包），

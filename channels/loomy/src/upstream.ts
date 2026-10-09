@@ -209,25 +209,25 @@ async function businessCall(
       signal: AbortSignal.timeout(init.timeoutMs ?? HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new Error(`业务请求失败: ${String(err)}`);
+    throw new Error(`business request failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new UpstreamUnauthorized(`Loomy 拒绝了访问令牌（HTTP ${resp.status}）`);
+    throw new UpstreamUnauthorized(`Loomy rejected the access token (HTTP ${resp.status})`);
   }
-  if (resp.status !== 200) throw new Error(`业务请求返回 HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new Error(`business request returned HTTP ${resp.status}`);
   let payload: unknown;
   try {
     payload = await resp.json();
   } catch (err) {
-    throw new Error(`业务响应不是合法 JSON: ${String(err)}`);
+    throw new Error(`business response is not valid JSON: ${String(err)}`);
   }
   const env = parseEnvelope(payload);
   // ⚠ 业务失败**恒 HTTP 200**：只能说 code
   if (env.code !== OK_CODE) {
     if (isAuthError(env.code)) {
-      throw new UpstreamUnauthorized(`Loomy 登录态失效（code=${env.code} ${env.desc}）`);
+      throw new UpstreamUnauthorized(`Loomy session is invalid (code=${env.code} ${env.desc})`);
     }
-    throw new Error(`Loomy 业务失败: code=${env.code} ${env.desc}`);
+    throw new Error(`Loomy business failure: code=${env.code} ${env.desc}`);
   }
   return isRecord(payload) ? (payload as Record<string, unknown>) : {};
 }

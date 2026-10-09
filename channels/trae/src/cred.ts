@@ -157,11 +157,10 @@ export const REALMS: Record<string, string> = {
 export function resolveBaseUrl(realm = "auto"): string {
   if (realm in REALMS) return REALMS[realm]!;
   if (realm === "intl") {
-    // 早期文档里出现过 `--realm intl`；TRAE 源码中不存在国际版配置，
-    // 明确报错比把用户导向一个不存在的域更好。
-    throw new Error("TRAE 只有 CN 配置（trae-api-cn.mchost.guru），不支持 intl；请用 auto 或 cn");
+    // TRAE 源码中不存在国际版配置，明确报错比把用户导向一个不存在的域更好。
+    throw new Error("TRAE only has a CN config (trae-api-cn.mchost.guru); intl is unsupported, use auto or cn");
   }
-  if (realm !== "" && realm !== "auto") throw new Error(`未知 realm: ${realm}`);
+  if (realm !== "" && realm !== "auto") throw new Error(`Unknown realm: ${realm}`);
   try {
     const c = load();
     if (c.domain) return `https://${c.domain}`;
@@ -346,10 +345,10 @@ export function parseCallback(flat: Record<string, unknown>): CallbackFields {
     const pkce = pick(flat["code"]) || pick(flat["authCode"]) || pick(flat["authCodeInfo"]);
     if (pkce) {
       throw new Error(
-        "上游走了 PKCE 流程（回调里只有 code/authCode），本实现不支持；请更新网关或改用其它登录方式",
+        "Upstream used the PKCE flow (callback only carries code/authCode), which this implementation does not support; update the gateway or use another login method",
       );
     }
-    throw new Error("回调里没有 token：上游可能改动了回调格式");
+    throw new Error("Callback has no token: upstream may have changed the callback format");
   }
 
   const uid = pick(userInfo["UserID"]) || pick(userInfo["userId"]) || pick(flat["uid"]);
@@ -445,7 +444,7 @@ export async function startCallbackServer(port = CALLBACK_PORT): Promise<Callbac
         const timer = setTimeout(() => {
           if (!settled) {
             settled = true;
-            reject(new Error(`等待授权回调超时（${Math.round(timeoutMs / 1000)} 秒）`));
+            reject(new Error(`Timed out waiting for the authorization callback (${Math.round(timeoutMs / 1000)}s)`));
           }
         }, timeoutMs);
         params.then(
@@ -469,7 +468,7 @@ export async function startCallbackServer(port = CALLBACK_PORT): Promise<Callbac
       }
       if (!settled) {
         settled = true;
-        rejectParams(new Error("回调服务器已关闭"));
+        rejectParams(new Error("callback server closed"));
       }
     },
   };
@@ -490,7 +489,7 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
     const callbackUrl = `http://127.0.0.1:${callback.port}${CALLBACK_PATH}`;
     const authorizeUrl = buildAuthorizeUrl(callbackUrl, machineId, deviceId, baseUrl);
     onUrl?.(authorizeUrl); // 拿到 URL 立刻回调（界面据此弹窗）
-    onStatus?.(`已打开浏览器授权页，等待回调（本地端口 ${callback.port}）…`);
+    onStatus?.(`Opened the browser authorization page, waiting for callback (local port ${callback.port})…`);
     openBrowser(authorizeUrl);
 
     const flat = await callback.wait(LOGIN_TIMEOUT_MS);
@@ -512,7 +511,7 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
       obtainedAt: new Date().toISOString(),
     };
     await save(c);
-    onStatus?.("授权成功，凭据已保存。");
+    onStatus?.("Authorization succeeded, credential saved.");
     return c;
   } finally {
     callback.close();
@@ -674,7 +673,7 @@ function isAuthStatus(status: number): boolean {
  * 设备指纹字段完全不动。设备指纹之外只有 token/过期时间被更新。
  */
 export async function refresh(c: Credentials): Promise<Credentials> {
-  if (!c.refreshToken) throw new ReloginRequiredError("没有 refresh token，需要重新登录");
+  if (!c.refreshToken) throw new ReloginRequiredError("No refresh token, please log in again");
   const host = (c.apiHost || oauthHost()).replace(/\/+$/, "");
   const url = `${host}/cloudide/api/v3/trae/oauth/ExchangeToken`;
 
@@ -696,13 +695,13 @@ export async function refresh(c: Credentials): Promise<Credentials> {
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new Error(`ExchangeToken 请求失败: ${String(err)}`);
+    throw new Error(`ExchangeToken request failed: ${String(err)}`);
   }
   if (isAuthStatus(resp.status)) {
-    throw new ReloginRequiredError(`ExchangeToken 返回 HTTP ${resp.status}，凭据已失效，请重新登录`);
+    throw new ReloginRequiredError(`ExchangeToken returned HTTP ${resp.status}, credential is invalid, please log in again`);
   }
   if (resp.status !== 200) {
-    throw new Error(`ExchangeToken 返回 HTTP ${resp.status}`);
+    throw new Error(`ExchangeToken returned HTTP ${resp.status}`);
   }
 
   // ⚠ 凭据失效时上游回 HTML 错误页：必须先 text() 再试 JSON.parse（不能直接 .json()）
@@ -717,7 +716,7 @@ export async function refresh(c: Credentials): Promise<Credentials> {
     env = null;
   }
   if (!env) {
-    throw new ReloginRequiredError("ExchangeToken 返回的不是 JSON（可能是 HTML 错误页），凭据已失效，请重新登录");
+    throw new ReloginRequiredError("ExchangeToken returned non-JSON (possibly an HTML error page), credential is invalid, please log in again");
   }
 
   const result = env["Result"] ?? env["result"] ?? env["data"] ?? env;
@@ -727,7 +726,7 @@ export async function refresh(c: Credentials): Promise<Credentials> {
     pick(payload["accessToken"]);
   if (!accessToken) {
     // 2xx 且响应是 JSON 却没有 accessToken ⇒ 终态（需重新登录）
-    throw new ReloginRequiredError("ExchangeToken 响应里没有 accessToken，凭据已失效，请重新登录");
+    throw new ReloginRequiredError("ExchangeToken response has no accessToken, credential is invalid, please log in again");
   }
   const refreshToken =
     pick(payload["RefreshToken"]) || pick(payload["refresh_token"]) || c.refreshToken;

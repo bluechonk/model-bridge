@@ -121,8 +121,7 @@ function originNote(origin: CatalogOrigin): string {
 /**
  * `<cid> models`：该渠道贡献了池内哪些模型。
  *
- * 对外 id 恒为**池 id**（`deepseek-v4-flash` 这种），不是 `<cid>/…` ——
- * 后一种形态已经取消，客户端不需要也无法指定渠道。
+ * 对外 id 恒为**池 id**（`deepseek-v4-flash` 这种），客户端不指定渠道。
  * 渠道目录里没进池的条目只报数量（可能几十条，全列是噪音）。
  */
 async function listLocalModels(
@@ -202,7 +201,7 @@ function contributedOf(channel: Channel): string[] {
 }
 
 /**
- * `model list`：**公共模型池视图** —— 三个模型，各自挂出候选渠道与账本状态。
+ * `model list`：**公共模型池视图** —— 池内模型，各自挂出候选渠道与账本状态。
  *
  * 展示顺序与实际路由顺序一致（账单已用量降序、冷却中当 0、同分保持注册顺序），
  * 所以看到的第一行就是网关会先试的那家。

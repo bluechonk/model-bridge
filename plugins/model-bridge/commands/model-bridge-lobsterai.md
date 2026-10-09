@@ -8,8 +8,8 @@ skills: model-bridge-gateway
 - **登录**：`model-bridge lobsterai login`。浏览器门户 + **本地回调**（`/auth/callback`，state 严格相等）。
 - **签到**：`slot` → `{code}/context` → `POST .../actions/check_in`。幂等是**客户端**保证
   （UUID4 `idempotencyKey` + 预检 `claimedToday`）。
-- **模型**：`deepseek-v4-flash`、`glm-5.3-flash` 等（MiniMax/qwen/kimi/doubao 被挡）。无别名层；
-  推理档位有 wire 换算（`max → xhigh`）。
+- **模型**：池内只贡献 `glm-5.3-flash`（上游目录里的 `deepseek-v4-flash`(4.0) 已随收窄出池；
+  MiniMax/qwen/kimi/doubao 被挡）。无别名层；推理档位有 wire 换算（`max → xhigh`）。
 - **约束**：① 续期 body 需要登录那一刻的 `firstKeyfrom`/`latestKeyfrom`/`uuid` —— 丢了**只能重新登录**；
   ② 签到 query 里 `platform=win32` 是**伪装客户端形态**，不是运行环境，改了可能拿不到活动；
   ③ 余额取 `profile-summary` 的 `totalCreditsRemaining`，不是 `/api/user/quota`。

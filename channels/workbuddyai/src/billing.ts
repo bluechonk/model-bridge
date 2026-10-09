@@ -110,21 +110,21 @@ async function fetchAccounts(c: cred.Credentials, baseUrl: string): Promise<Reco
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new CreditsError(`billing 请求失败: ${String(err)}`);
+    throw new CreditsError(`billing request failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new cred.NotLoggedInError("billing 端点拒绝了访问令牌（401/403）");
+    throw new cred.NotLoggedInError("billing endpoint rejected the access token (401/403)");
   }
-  if (resp.status !== 200) throw new CreditsError(`billing 端点返回 HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new CreditsError(`billing endpoint returned HTTP ${resp.status}`);
 
   let env: Record<string, unknown>;
   try {
     env = (await resp.json()) as Record<string, unknown>;
   } catch (err) {
-    throw new CreditsError(`billing 响应不是合法 JSON: ${String(err)}`);
+    throw new CreditsError(`billing response is not valid JSON: ${String(err)}`);
   }
   if (env["code"] !== 0) {
-    throw new CreditsError(`billing 返回 code=${String(env["code"])} msg=${String(env["msg"] ?? "")}`);
+    throw new CreditsError(`billing returned code=${String(env["code"])} msg=${String(env["msg"] ?? "")}`);
   }
   // 信封：data.Response.Data.Accounts（三层，任一层缺失都按空处理）
   const data = env["data"];

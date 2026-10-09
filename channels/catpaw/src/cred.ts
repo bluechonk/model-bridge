@@ -11,10 +11,8 @@
  *   4. GET {POLL_TOKEN_URL}?sid=...  每 1s 轮询，≤10 分钟 → token
  *   5. GET {CURRENT_USER_URL}（`X-Auth-Token`）取 uid —— 账号池靠它认「同一账号」
  *
- * ⚠ **没有本地回调服务器**：早期实现起过 loopback 回调与轮询并行 race，
- * 但三次真机登录回调一次都没赢（`source` 恒为 `catpaw-login-poll`），
- * 已删除。轮询通道独立于 redirect（`sid` 是我们自己生成的），
- * 不需要浏览器把任何东西打回本地。详见 `login()` 的注释。
+ * ⚠ **没有本地回调服务器**：token 只从 `poll-token?sid=` 取，`sid` 由本地生成，
+ * 不依赖浏览器回打本地端口（早期 loopback 回调从未成功，已删除）。
  *
  * 返回的是与桌面端登录同一身份的不透明 SSO token（非 JWT）。
  * 落盘到 `~/.model-bridge/catpaw/credentials.json`。
@@ -200,30 +198,27 @@ async function fetchLoginEntryUrl(): Promise<string> {
   const resp = await fetchWithTimeout(LOGIN_CONFIG_URL, {
     headers: { Accept: "application/json" },
   }, HTTP_TIMEOUT_MS);
-  if (resp.status !== 200) throw new Error(`login-config 请求失败: HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new Error(`login-config request failed: HTTP ${resp.status}`);
   let body: unknown;
   try {
     body = await resp.json();
   } catch (err) {
-    throw new Error(`login-config 请求失败: invalid JSON: ${String(err)}`);
+    throw new Error(`login-config request failed: invalid JSON: ${String(err)}`);
   }
   const data =
     body && typeof body === "object" && !Array.isArray(body)
       ? ((body as Record<string, unknown>)["data"] as Record<string, unknown> | undefined)
       : undefined;
   const entry = str(data?.["loginEntryUrl"]);
-  if (!entry) throw new Error("login-config 未返回 loginEntryUrl");
+  if (!entry) throw new Error("login-config did not return loginEntryUrl");
   return entry;
 }
 
 /**
  * 拼出完整 auth_url（三参数缺一不可）。
  *
- * redirect 必须是**真实监听中的**本地回调地址，否则 passport 登录成功后
- * 会把 `POST /callback` 的 token 打到一个没人收的端口（表现为"未获取到登录票据"）。
- *
- * 可选传入已有的 `sid` / `state`：回调服务器要在拼 URL **之前**起好
- * （它需要 state 做校验），所以 `login()` 会先生成再传进来。
+ * `redirect` 只是网关的必填形式参数（缺了直接 400），我们并不监听它 ——
+ * token 一律从 `poll-token?sid=` 取（见 `login()`）。
  */
 export function buildAuthUrl(loginEntryUrl: string, redirect: string, sid?: string, state?: string): string {
   const s = sid ?? randomHex(16);
@@ -343,22 +338,12 @@ export interface LoginOptions {
 /**
  * 运行交互式浏览器登录并持久化结果。
  *
- * ## 只有一条取 token 通道：轮询 `poll-token?sid=`
+ * 只有一条取 token 通道：`poll-token?sid=`。早期还起过本地 loopback 回调服务器与
+ * 轮询并行 race，但三次真机登录回调一次都没赢（`source` 恒为 `catpaw-login-poll`），
+ * 故删除 —— 多一条通道只增维护面。
  *
- * 早期实现还起了一个本地 loopback 回调服务器，与轮询并行 `Promise.race`
- * （对齐桌面端 `CatxPassportLoginProvider`）。**实测三次真机登录，回调通道一次都没赢**
- * （`source` 恒为 `catpaw-login-poll`），所以把它删掉了：
- *
- * - 桌面端能收到回调，是因为它自己就是那个「客户端」；我们只是复刻它的 URL 形态，
- *   网关并不保证把 token POST 回 `127.0.0.1`（参考实现 `catpaw2api` 的注释也写
- *   「回调到 127.0.0.1 打不开属正常，靠 poll-token 通道取 token」）。
- * - 多一条通道就多一份维护面：GET/POST/表单三种形态、state 校验、过期标签页……
- *   而它一次都没成功过 —— 那些复杂度是纯负债。
- * - 轮询通道**独立于** redirect：`sid` 是我们自己生成的，`poll-token?sid=` 就能换 token，
- *   不依赖浏览器把任何东西打回本地。
- *
- * `redirect` 参数仍然必须传（实测不带它网关直接 400），但只作为协议要求的形式参数 ——
- * 我们不再监听那个端口，也就不再需要它「真实可达」。
+ * `redirect` 仍必须传（实测不带它网关直接 400），但只是协议要求的形式参数，
+ * 不要求真实可达。
  *
  * 流程：拼 auth_url（sid/state/redirect）→ 交给用户打开 → 每 1s 轮询 → 取 uid → 落盘。
  */
@@ -366,7 +351,7 @@ export async function login(baseUrl: string, options: LoginOptions = {}): Promis
   const { onUrl, onStatus } = options;
   void baseUrl; // catpaw 只有一个登录域，参数仅作兼容保留
 
-  onStatus?.("获取登录入口…");
+  onStatus?.("Fetching login entry...");
   const loginEntryUrl = await fetchLoginEntryUrl();
 
   // redirect 是网关的**必填**参数（实测缺它直接 400），但只是形式要求：
@@ -377,16 +362,16 @@ export async function login(baseUrl: string, options: LoginOptions = {}): Promis
   const finalAuthUrl = buildAuthUrl(loginEntryUrl, redirect, sid, state);
 
   onUrl?.(finalAuthUrl);
-  onStatus?.('请在浏览器完成登录（登录成功后页面会显示"登录成功"）');
+  onStatus?.('Complete the login in your browser (the page shows "登录成功" when done)');
   if (process.env["CATPAW_NO_BROWSER"] !== "1") openBrowser(finalAuthUrl);
 
-  onStatus?.("等待授权中（最多 10 分钟）…");
+  onStatus?.("Waiting for authorization (up to 10 minutes)...");
 
   const token = await pollToken(sid);
-  if (!token) throw new Error("轮询超时：10 分钟内未检测到登录");
+  if (!token) throw new Error("poll timeout: no login detected within 10 minutes");
 
   // 取 uid：账号池靠它认「同一个账号」（见 fetchCurrentUserId）
-  onStatus?.("登录成功，正在获取账号信息…");
+  onStatus?.("Login succeeded, fetching account info...");
   const uid = await fetchCurrentUserId(token);
 
   const c = fromToken(token, "catpaw-login-poll", uid);
@@ -429,10 +414,10 @@ export async function refresh(c: Credentials): Promise<Credentials> {
     }, HTTP_TIMEOUT_MS);
   } catch (err) {
     // 网络不通：无法判定失效，按「暂时故障」处理，不惊动用户重登
-    throw new Error(`catpaw 令牌有效性探测失败（网络错误，可稍后重试）：${String(err)}`);
+    throw new Error(`catpaw token validation failed (network error, retry later): ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new Error("catpaw 令牌已失效（上游 401/403），请重新运行 `catpaw login`");
+    throw new Error("catpaw token is invalid (upstream 401/403); re-run `catpaw login`");
   }
   // 其余状态（含 5xx）都按「暂时无法判定失效」处理：返回原凭据，不逼用户重登。
   return withUid;

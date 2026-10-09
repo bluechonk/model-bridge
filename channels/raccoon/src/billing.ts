@@ -97,7 +97,7 @@ async function getJson(
   try {
     resp = await fetch(url, { headers: headers(c, platform), signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
-    throw new CreditsError(`请求 ${url} 失败: ${String(err)}`);
+    throw new CreditsError(`Request ${url} failed: ${String(err)}`);
   }
   let payload: unknown = null;
   try {
@@ -133,16 +133,16 @@ export async function fetchCredits(
     result = await getJson(upstream.balanceUrl(cfg), c);
   }
   if (result.status === 401 || result.status === 403 || result.code === 200003) {
-    throw new cred.NotLoggedInError("Raccoon 拒绝了访问令牌（401/403 或 code 200003）");
+    throw new cred.NotLoggedInError("Raccoon rejected the access token (401/403 or code 200003)");
   }
   if (result.code !== 0) {
-    throw new CreditsError(`余额查询失败: code=${result.code} ${result.message}`);
+    throw new CreditsError(`Balance query failed: code=${result.code} ${result.message}`);
   }
 
   const available = num(result.data["available_points"]);
   if (available === null) {
     // ⚠ 形状不对 → 抛错，绝不显示成 0
-    throw new CreditsError("余额响应里没有 available_points 字段（形状不对，不显示成 0）");
+    throw new CreditsError("Balance response has no available_points field (bad shape; not shown as 0)");
   }
 
   const pools: Array<[string, number | null]> = [
@@ -256,7 +256,7 @@ export async function claimLoginReward(c?: cred.Credentials): Promise<RewardResu
       signal: AbortSignal.timeout(20_000),
     });
   } catch (err) {
-    return { status: "failed", points: 0, error: `领取请求失败: ${String(err)}` };
+    return { status: "failed", points: 0, error: `Claim request failed: ${String(err)}` };
   }
   let payload: unknown = null;
   try {
@@ -271,7 +271,7 @@ export async function claimLoginReward(c?: cred.Credentials): Promise<RewardResu
     return {
       status: "failed",
       points: 0,
-      error: `领取失败: HTTP ${resp.status} code=${code} ${cred.envelopeMessage(payload)}`,
+      error: `Claim failed: HTTP ${resp.status} code=${code} ${cred.envelopeMessage(payload)}`,
     };
   }
   const data = isRecord(record["data"]) ? (record["data"] as Record<string, unknown>) : {};

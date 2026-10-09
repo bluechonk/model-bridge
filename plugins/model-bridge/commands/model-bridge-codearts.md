@@ -9,8 +9,9 @@ skills: model-bridge-gateway
   （回调端口须 ≥10000）。
 - **签到**：`GET /v1/ops/delivery?channel=IDE` 列活动 → `POST /v1/ops/claim`（必要时 `confirm`）。
   每日活动 `type=USER_LOGIN`；可领积分字段是 `benefitAmount`（不是 `amount`）。
-- **模型**：三个公共模型**都贡献**（`deepseek-v4.1-flash` / `deepseek-v4-flash` / `glm-5.3-flash`）。
-  上游 id 去末尾 `-NNNN` 后缀归一化；`glm-5.3-flash` 与 `deepseek-v4.1-flash` 属 benefit 集合，
+- **模型**：池内**两个都贡献**（`deepseek-v4.1-flash` / `glm-5.3-flash`）；上游目录里的
+  `deepseek-v4-flash`（4.0）已随收窄出池。上游 id 去末尾 `-NNNN` 后缀归一化；
+  `glm-5.3-flash` 与 `deepseek-v4.1-flash` 属 benefit 集合，
   chat 时必须带 `maas_type: benefit` 且参与签名。
 - **约束**：① **不要按 AK 认人** —— 华为每次签发换新 AK，身份取 `refresh_token` JWT 里的
   `user_profile.account_id`；② `refresh_token` 一次性轮换，续期走进程内串行队列；

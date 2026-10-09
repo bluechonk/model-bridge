@@ -642,7 +642,7 @@ function listenOnCallbackPort(server: ReturnType<typeof createServer>): Promise<
         }
         server.close(() => {
           if (attempts > 20) {
-            reject(new Error("无法获得 ≥10000 的回调端口"));
+            reject(new Error("could not obtain a callback port >= 10000"));
             return;
           }
           const retry = Math.floor(Math.random() * (65_536 - MIN_CALLBACK_PORT)) + MIN_CALLBACK_PORT;
@@ -716,7 +716,7 @@ export async function pollTicketCredential(ticketId: string, secret: string): Pr
     }
     await new Promise((r) => setTimeout(r, TICKET_POLL_INTERVAL_MS));
   }
-  throw new Error("旧式 ticket 登录超时（轮询 120 次未拿到凭据）");
+  throw new Error("legacy ticket login timed out (120 polls without credentials)");
 }
 
 /**
@@ -741,7 +741,7 @@ export function startCallbackServer(options: {
       fail = rej;
     });
     const timer = setTimeout(() => {
-      fail(new Error("登录超时（180 秒内未检测到授权结果）"));
+      fail(new Error("login timed out (no authorization result within 180 seconds)"));
       server.close();
     }, timeoutMs);
     timer.unref?.();
@@ -828,13 +828,13 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   const url = buildLoginUrl(callback.port, pkce, ticketId);
   // ⚠️ 拿到 URL 后**立刻**回调（界面据此弹窗），不等浏览器启动结果。
   options.onUrl?.(url);
-  options.onStatus?.(`已打开授权页，等待授权中（最多 ${LOGIN_TIMEOUT_MS / 1000} 秒）…`);
+  options.onStatus?.(`authorization page opened, waiting for authorization (up to ${LOGIN_TIMEOUT_MS / 1000}s)...`);
   openBrowser(url);
   try {
     const c = await callback.result;
     await save(c);
     pruneLegacyAccounts();
-    options.onStatus?.("授权成功，凭据已保存。");
+    options.onStatus?.("authorization succeeded; credentials saved.");
     return c;
   } finally {
     await callback.close();
@@ -945,7 +945,7 @@ async function refreshInner(passedIn: Credentials): Promise<Credentials> {
   const codeVerifier = source.codeVerifier;
   const jwk = source.dpopPrivateKeyJwk;
   if (!refreshToken || !codeVerifier || !jwk) {
-    throw new Error("凭据缺少 refresh_token / code_verifier / DPoP 私钥，无法静默续期，请重新登录");
+    throw new Error("credentials lack refresh_token / code_verifier / DPoP private key; cannot refresh silently, please log in again");
   }
 
   let token: TokenResponse;
@@ -1007,7 +1007,7 @@ async function refreshInner(passedIn: Credentials): Promise<Credentials> {
  */
 export function resolveBaseUrl(realm = "auto"): string {
   const known = new Set(["auto", "", "default", "codearts", "cn", "cn-north-4"]);
-  if (!known.has(realm)) throw new Error(`未知 realm: ${realm}（CodeArts 只有 cn-north-4）`);
+  if (!known.has(realm)) throw new Error(`unknown realm: ${realm} (CodeArts only supports cn-north-4)`);
   const [cfg] = upstream.loadConfig();
   return cfg.baseUrl || DEFAULT_BASE_URL;
 }

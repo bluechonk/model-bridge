@@ -296,16 +296,16 @@ export function load(): Credentials {
   try {
     raw = readFileSync(credentialsPath(), "utf8");
   } catch {
-    throw new NotLoggedInError("未登录：请运行 `qoder login` 完成浏览器授权");
+    throw new NotLoggedInError("Not logged in: run `qoder login` to authorize in the browser");
   }
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(raw) as Record<string, unknown>;
   } catch {
-    throw new NotLoggedInError("凭据文件损坏，请重新登录");
+    throw new NotLoggedInError("Credential file is corrupted, please log in again");
   }
   const accessToken = str(parsed["accessToken"]);
-  if (!accessToken) throw new NotLoggedInError("凭据里没有 access_token，请重新登录");
+  if (!accessToken) throw new NotLoggedInError("Credential has no access_token, please log in again");
   const uid = str(parsed["uid"]);
   const realm = normalizeRealm(str(parsed["realm"]));
   const userType = str(parsed["userType"]) || DEFAULT_USER_TYPE;
@@ -389,7 +389,7 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   const authUrl = buildAuthUrl(product, challenge, nonce, machineId);
   options.onUrl?.(authUrl);
   options.onStatus?.(
-    `${product.label}：请在弹出的浏览器里完成授权（machine_id ${machineId.slice(0, 8)}…）`,
+    `${product.label}: complete authorization in the browser that just opened (machine_id ${machineId.slice(0, 8)}…)`,
   );
   shared.openBrowser(authUrl);
 
@@ -410,7 +410,7 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
       // 404 = 尚未授权（官方语义），不是错误
       if (resp.status === 404) return { kind: "pending" };
       if (!resp.ok) {
-        return { kind: "fatal", error: new Error(`设备授权轮询失败：HTTP ${resp.status}`) };
+        return { kind: "fatal", error: new Error(`Device authorization polling failed: HTTP ${resp.status}`) };
       }
       const data = (await resp.json()) as Record<string, unknown>;
       // 字段名登录与续期不一致，三种都认
@@ -432,7 +432,7 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
     },
   });
 
-  if (!token.accessToken) throw new Error("设备授权成功但没拿到 access token");
+  if (!token.accessToken) throw new Error("Device authorization succeeded but no access token was returned");
 
   const nickname = await fetchNickname(product, token.accessToken);
   rememberIdentity(product.realm, DEFAULT_USER_TYPE);
@@ -451,7 +451,7 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
     refreshExpireAt: token.refreshExpireAt,
   };
   await save(credential);
-  options.onStatus?.(`已登录 ${product.label}${nickname ? `（${nickname}）` : ""}`);
+  options.onStatus?.(`Logged in ${product.label}${nickname ? ` (${nickname})` : ""}`);
   return credential;
 }
 
@@ -466,7 +466,7 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
  * 丢了 `machine_id` 会破坏服务端设备绑定。
  */
 export async function refresh(credential: Credentials): Promise<Credentials> {
-  if (!credential.refreshToken) throw new Error("凭据里没有 refresh_token，无法静默续期");
+  if (!credential.refreshToken) throw new Error("Credential has no refresh_token, cannot refresh silently");
   const product = productOf(credential.realm);
 
   let resp: Response;
@@ -488,17 +488,17 @@ export async function refresh(credential: Credentials): Promise<Credentials> {
       20_000,
     );
   } catch (err) {
-    throw new Error(`续期请求失败（可重试）: ${String(err)}`);
+    throw new Error(`Refresh request failed (retryable): ${String(err)}`);
   }
 
   if (resp.status === 401 || resp.status === 403) {
-    throw new NotLoggedInError("refresh_token 已失效，请重新运行 `qoder login`");
+    throw new NotLoggedInError("refresh_token expired, please run `qoder login` again");
   }
-  if (!resp.ok) throw new Error(`续期失败：HTTP ${resp.status}（可重试）`);
+  if (!resp.ok) throw new Error(`Refresh failed: HTTP ${resp.status} (retryable)`);
 
   const data = (await resp.json()) as Record<string, unknown>;
   const accessToken = str(data["token"]) || str(data["device_token"]) || str(data["access_token"]);
-  if (!accessToken) throw new NotLoggedInError("续期响应没有 token，请重新登录");
+  if (!accessToken) throw new NotLoggedInError("Refresh response has no token, please log in again");
 
   const next: Credentials = {
     ...credential,

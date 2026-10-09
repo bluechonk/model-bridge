@@ -138,23 +138,23 @@ async function postJson(
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new CreditsError(`签到/额度请求失败: ${String(err)}`);
+    throw new CreditsError(`Checkin/quota request failed: ${String(err)}`);
   }
   const text = await resp.text();
   if (resp.status === 401 || resp.status === 403) {
-    throw new cred.NotLoggedInError("签到端点拒绝了访问令牌（401/403）");
+    throw new cred.NotLoggedInError("Checkin endpoint rejected the access token (401/403)");
   }
   if (resp.status !== 200) {
     const kind = upstream.classifyError(resp.status, text);
-    throw new CreditsError(`签到端点返回 HTTP ${resp.status}（${kind}）`);
+    throw new CreditsError(`Checkin endpoint returned HTTP ${resp.status} (${kind})`);
   }
   let env: unknown;
   try {
     env = JSON.parse(text);
   } catch (err) {
-    throw new CreditsError(`签到端点响应不是合法 JSON: ${String(err)}`);
+    throw new CreditsError(`Checkin endpoint response is not valid JSON: ${String(err)}`);
   }
-  if (!isRecord(env)) throw new CreditsError("签到端点响应不是 JSON 对象");
+  if (!isRecord(env)) throw new CreditsError("Checkin endpoint response is not a JSON object");
   return env;
 }
 
@@ -169,9 +169,9 @@ async function handleDeviceRateLimit(c: cred.Credentials, env: Record<string, un
     await cred.rotateCheckinGeneration(c).catch(() => {
       /* 回写失败不掩盖原始错误 */
     });
-    throw new CreditsError(`签到人数过多（9074，设备级限流），已轮换签到设备，请稍后重试`);
+    throw new CreditsError(`Too many checkins (9074, device-level rate limit); rotated the checkin device, retry later`);
   }
-  throw new CreditsError(`签到端点返回 code=${String(env["code"])} msg=${str(env, "message", "msg")}`);
+  throw new CreditsError(`Checkin endpoint returned code=${String(env["code"])} msg=${str(env, "message", "msg")}`);
 }
 
 /** 查询签到状态。 */

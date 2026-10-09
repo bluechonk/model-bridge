@@ -5,9 +5,9 @@ skills: model-bridge-gateway
 
 跑 `model-bridge channels`（`--json` 亦然）并展示：每个渠道的 cid、展示名、贡献的池内模型。
 
-⚠ **对外可用的模型 id 只有三个**（不带渠道前缀）：`deepseek-v4.1-flash`、
-`deepseek-v4-flash`、`glm-5.3-flash` —— 配 provider 时填的就是这三个，与「哪个渠道提供它」
-无关（网关按账单已用量自己挑渠道）。想看「三个模型分别会落到谁」用
+⚠ **对外可用的模型 id 只有两个**（不带渠道前缀）：`deepseek-v4.1-flash`、
+`glm-5.3-flash` —— 配 provider 时填的就是这两个，与「哪个渠道提供它」
+无关（网关按账单已用量自己挑渠道）。想看「两个模型分别会落到谁」用
 `model-bridge model list`（池视图）。
 
 某渠道没有贡献任何池内模型通常是未登录、上游目录拉取失败，或它根本没有这两族产品

@@ -164,7 +164,7 @@ describe("2. 切换与删除", () => {
   it("activateAccount：key 不存在时明确报错", withRoot(async () => {
     seedCredential("user-1");
     captureActive(CID);
-    assert.throws(() => activateAccount("deadbeefdeadbeef", CID), /账号不存在/);
+    assert.throws(() => activateAccount("deadbeefdeadbeef", CID), /account not found/);
   }));
 
   it("removeAccount：删的是 active 时同时登出，且不会被同步再收回来", withRoot(async () => {

@@ -39,11 +39,11 @@ function debugDumpDir(cid?: string): string | null {
     const value = process.env[name];
     if (!value) continue;
     if (name !== config.debugDumpEnv) {
-      noteOnce(`debug-env:${name}`, `${name} 已弃用：请改用 ${config.debugDumpEnv}`);
+      noteOnce(`debug-env:${name}`, `${name} is deprecated: use ${config.debugDumpEnv}`);
     }
     if (value === "1" || value.toLowerCase() === "true") return debugDir(cid);
     if (!isAbsolute(value)) {
-      noteOnce(`debug-rel:${value}`, `${name} 必须是绝对路径，已忽略: ${value}`);
+      noteOnce(`debug-rel:${value}`, `${name} must be an absolute path; ignored: ${value}`);
       return null;
     }
     return value;

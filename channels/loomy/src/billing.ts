@@ -124,14 +124,14 @@ export async function fetchCredits(
     data = upstream.parseEnvelope(payload).data;
   } catch (err) {
     if (err instanceof upstream.UpstreamUnauthorized) {
-      throw new cred.NotLoggedInError(`Loomy 登录态已失效（${String(err)}），请重新登录`);
+      throw new cred.NotLoggedInError(`Loomy session is invalid (${String(err)}); please log in again`);
     }
-    throw new CreditsError(`积分查询失败: ${String(err)}`);
+    throw new CreditsError(`points query failed: ${String(err)}`);
   }
 
   const balance = numOrNull(data["balance"]);
   if (balance === null) {
-    throw new CreditsError("积分响应里没有 balance 字段（形状不对，不显示成 0）");
+    throw new CreditsError("points response has no balance field (wrong shape; not showing 0)");
   }
   const dailyBalance = numOrNull(data["dailyBalance"]) ?? 0;
   const available = numOrNull(data["availableBalance"]) ?? balance + dailyBalance;
@@ -198,11 +198,11 @@ export async function claim(key: string, c?: cred.Credentials): Promise<ClaimRes
     data = await upstream.completeTask(credential, key);
   } catch (err) {
     if (err instanceof upstream.UpstreamUnauthorized) {
-      throw new cred.NotLoggedInError(`领取任务 ${key} 时登录态失效: ${String(err)}`);
+      throw new cred.NotLoggedInError(`session became invalid while claiming task ${key}: ${String(err)}`);
     }
     const text = String(err);
     if (text.includes(upstream.BAD_REQUEST_CODE)) {
-      throw new CreditsError(`未知的任务 key: ${key}（${text}）`);
+      throw new CreditsError(`unknown task key: ${key} (${text})`);
     }
     return { status: "failed", key, amount, error: text };
   }

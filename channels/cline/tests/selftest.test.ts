@@ -488,7 +488,7 @@ describe("3. 设备码授权（WorkOS）", () => {
     st.authenticateScript = [{ status: 200, body: { ok: true } }];
     await assert.rejects(
       () => cred.pollDeviceToken(device, undefined, { sleep: async () => {} }),
-      /没有 access_token/,
+      /no access_token/,
     );
   });
 
@@ -553,7 +553,7 @@ describe("4. 响应判据 success && data.accessToken", () => {
     await assert.rejects(() => cred.registerToken("a", "b", fakeBase()), /channel error/);
 
     st.registerMode = "no_token";
-    await assert.rejects(() => cred.registerToken("a", "b", fakeBase()), /没有 accessToken/);
+    await assert.rejects(() => cred.registerToken("a", "b", fakeBase()), /no accessToken/);
 
     st.registerMode = "bare";
     const bare = await cred.registerToken("a", "b", fakeBase());
@@ -622,7 +622,7 @@ describe("4. 响应判据 success && data.accessToken", () => {
 
     await assert.rejects(
       () => cred.refresh({ ...c, refreshToken: "" }),
-      /没有 refresh_token/,
+      /no refresh_token/,
       "无 refresh_token 即不可静默续期",
     );
   });

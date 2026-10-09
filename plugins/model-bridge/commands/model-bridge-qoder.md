@@ -13,8 +13,9 @@ skills: model-bridge-gateway
 - **签到**：`qoder checkin` 走 campaign 平台（「每日领取 100 Credits」）。只有
   `actionType=CLAIM_BENEFIT` 且 `claimStatus=CLAIMABLE` 才算可领；活动**每日 10:00（UTC+8）刷新**
   （刷新前看到的 CLAIMED 属昨天）。上游顶层 `claimable` 是权威判据。
-- **模型**：贡献 `deepseek-v4-flash`（上游 key `dfmodel`）与 `glm-5.3-flash`（上游 key `gfmodel`）。
-  **池内名 ≠ 上游 key**，三种输入都认（池内名 / key / 展示名）；`dmodel`/`gmodel`/`qmodel*` 不进池。
+- **模型**：池内只贡献 `glm-5.3-flash`（上游 key `gfmodel`）；`dfmodel`（DeepSeek-Flash）已随
+  `deepseek-v4-flash` 收窄出池。**池内名 ≠ 上游 key**，三种输入都认（池内名 / key / 展示名）；
+  `dmodel`/`gmodel`/`qmodel*` 不进池。
 - **约束**：① `/sash/**`（额度、活动）用**桌面身份** `Cosy-ClientType: 10`，推理信封用 **CLI 身份
   `client_type=5`**，两者**不可混用**（用 5 查活动会拿到空列表而不是报错）；② 机器头
   `Cosy-MachineToken` 与 `Cosy-MachineType` **必须成对**；③ 设备指纹按 uid **稳定派生**

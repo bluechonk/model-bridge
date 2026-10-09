@@ -113,34 +113,34 @@ export async function fetchBalance(c: cred.Credentials, cfg: upstream.Config): P
       signal: AbortSignal.timeout(BALANCE_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new CreditsError(`余额请求失败: ${String(err)}`);
+    throw new CreditsError(`balance request failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new cred.NotLoggedInError("余额端点拒绝了访问令牌（HTTP 401/403）");
+    throw new cred.NotLoggedInError("balance endpoint rejected the access token (HTTP 401/403)");
   }
   if (resp.status === 400) {
     // 实测：传 JWT 的 sub（user_…）而非 account_id（usr-…）就是这个症状
     throw new CreditsError(
-      "余额查询返回 400 Invalid request format：userId 传错了 —— " +
-        "必须用凭据里的 account_id（usr-…），不是 JWT 的 sub（user_…）",
+      "balance query returned 400 Invalid request format: wrong userId — " +
+        "must use account_id (usr-...) from credentials, not the JWT sub (user_...)",
     );
   }
-  if (resp.status !== 200) throw new CreditsError(`余额端点返回 HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new CreditsError(`balance endpoint returned HTTP ${resp.status}`);
 
   let payload: unknown;
   try {
     payload = await resp.json();
   } catch (err) {
-    throw new CreditsError(`余额响应不是合法 JSON: ${String(err)}`);
+    throw new CreditsError(`balance response is not valid JSON: ${String(err)}`);
   }
-  if (!isRecord(payload)) throw new CreditsError("余额响应不是 JSON 对象");
+  if (!isRecord(payload)) throw new CreditsError("balance response is not a JSON object");
   // 失败形态①：业务层失败（HTTP 200 + {success:false,error}）
   if (payload["success"] === false) {
-    throw new CreditsError(`余额查询失败: ${String(payload["error"] ?? "未知原因")}`);
+    throw new CreditsError(`balance query failed: ${String(payload["error"] ?? "unknown reason")}`);
   }
   const data = isRecord(payload["data"]) ? payload["data"] : {};
   const balance = num(data["balance"]);
-  if (balance === null) throw new CreditsError("余额响应里没有 balance 字段（形状不对，不显示成 0）");
+  if (balance === null) throw new CreditsError("balance response has no balance field (wrong shape; not showing 0)");
   return balance / CLINE_BALANCE_SCALE;
 }
 
@@ -209,7 +209,7 @@ export async function fetchCredits(
   if (!c.accountId) {
     // 缺 account_id 时不瞎猜（既不用 JWT 的 sub，也不返回 0）
     throw new CreditsError(
-      "凭据里没有 account_id，无法查询余额（余额端点需要 usr-… 形态的账号 id）",
+      "credentials have no account_id; cannot query balance (the balance endpoint needs a usr-... account id)",
     );
   }
 

@@ -89,7 +89,7 @@ describe("1. 分层：单根 + <cid>", () => {
   it("channelFile 拒绝非法文件名，固定文件路径都在渠道层内", () => {
     withRoot((root) => {
       useChannel("alpha");
-      assert.throws(() => paths.channelFile("Credential_Bad.json"), /非法文件名/);
+      assert.throws(() => paths.channelFile("Credential_Bad.json"), /invalid file name/);
       assert.equal(paths.credentialsPath(), join(root, "alpha", "credentials.json"));
       assert.equal(paths.pidPath(), join(root, "alpha", "gateway.pid"));
       assert.equal(paths.cacheDir(), join(root, "alpha", "cache"));

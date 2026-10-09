@@ -5,7 +5,7 @@
  * 命令实现全在 `@model-bridge/gateway`。
  *
  * 与各 bridge 自己的 CLI 的区别：注册的渠道数 > 1 → 进入**多渠道路由**，
- * `/v1/models` 暴露 `<cid>/<模型>`，`/v1/chat/completions` 按前缀选池子；
+ * `/v1/models` 只暴露池内模型，请求由网关按账本选渠道；
  * 单渠道的 CLI 仍是裸短名（兼容既有客户端配置）。
  */
 
@@ -17,6 +17,6 @@ main()
     process.exitCode = code;
   })
   .catch((err: unknown) => {
-    console.error(`[model-bridge] 未捕获异常: ${String(err)}`);
+    console.error(`[model-bridge] uncaught exception: ${String(err)}`);
     process.exitCode = 1;
   });

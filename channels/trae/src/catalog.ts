@@ -342,7 +342,7 @@ export async function refresh(): Promise<void> {
   const c = cred.load();
   const payload = await upstream.fetchModels(c);
   const entries = parseRemoteCatalog(payload);
-  if (entries.length === 0) throw new Error("上游返回的模型目录为空（或全部通道被白名单过滤）");
+  if (entries.length === 0) throw new Error("Upstream returned an empty model catalog (or every channel was filtered out by the whitelist)");
   mergeRemote(entries);
 }
 

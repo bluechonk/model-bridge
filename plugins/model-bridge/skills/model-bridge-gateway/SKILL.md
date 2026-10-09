@@ -10,16 +10,18 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 
 ## 背景事实
 
-- **一个网关 + N 个池子**：本仓库注册 10 个渠道（`catpaw` `cline` `codearts` `lobsterai`
-  `loomy` `qoder` `raccoon` `trae` `workbuddy` `workbuddyai`）。每个渠道是一个**模型池**：
+- **一个网关 + N 个池子**：本仓库注册 11 个渠道（`catpaw` `cline` `codearts` `lobsterai`
+  `loomy` `qoder` `qodercn` `raccoon` `trae` `workbuddy` `workbuddyai`）。每个渠道是一个**模型池**：
   自己的一套模型目录 + 凭证 + 上游协议。
-- **对外只有三个模型 id**（**不带渠道前缀**）：
-  `deepseek-v4.1-flash`、`deepseek-v4-flash`、`glm-5.3-flash`。
+- **对外只有两个模型 id**（**不带渠道前缀**）：
+  `deepseek-v4.1-flash`、`glm-5.3-flash`。
   客户端只写模型名，**请求落到哪家渠道由网关按各渠道账单已用量自己决定**（用得多的先走，
   失败的当 0 并进入冷却）；匹配大小写不敏感，上游 slug 仍用渠道目录里的原始写法。
   旧的 `<cid>/<模型>` 形态（如 `workbuddyai/deepseek-v4.1-flash`）**已移除**，现在会 400。
-- **这三个模型各自对应多家渠道**（例如 `glm-5.3-flash` 可由 catpaw / codearts / lobsterai /
-  loomy / raccoon 提供）。所以「某渠道未登录」通常**不影响**模型可用性 —— 网关会走别家。
+- **这两个模型各自对应多家渠道**（例如 `glm-5.3-flash` 可由 catpaw / cline / codearts /
+  lobsterai / loomy / qoder / qodercn / raccoon 提供）。所以「某渠道未登录」通常**不影响**
+  模型可用性 —— 网关会走别家。`trae` 不再贡献任何池内模型（它的 DeepSeek-V4-Flash 已随
+  `deepseek-v4-flash` 出池）。
 - **只放行 `(deepseek | glm)` 家族的 flash 模型**（网关级白名单，判据在共享层）。
   某渠道池子为空通常是未登录或上游目录拉取失败，不是插件坏了；
   但**没有 deepseek/glm 产品的渠道不会贡献任何池内模型**（这是策略有意为之）。
@@ -38,20 +40,20 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
   **同一时间只用一个账号**（轮询/失败转移属后续策略层）。删生效账号 = 同时登出。
 - 让 ZCode 用上这个网关需要**用户**在设置里加 provider（插件注册不了 provider）：类型
   `openai-chat-completions`、baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型名从
-  `/v1/models`（或 `model-bridge model list`）里取那三个池 id。不要替用户改
+  `/v1/models`（或 `model-bridge model list`）里取那两个池 id。不要替用户改
   `~/.zcode/v2/provider_config.json`。
 
 ## 命令速查
 
 | 命令 | 作用 |
 | --- | --- |
-| `model-bridge model list` | **池视图**：三个模型 → 候选渠道 + 账单已用量 + 冷却（顺序即路由顺序） |
+| `model-bridge model list` | **池视图**：两个模型 → 候选渠道 + 账单已用量 + 冷却（顺序即路由顺序） |
 | `model-bridge model usage [--refresh]` | 池账本；`--refresh` 立刻重查各渠道账单额度 |
 | `model-bridge channels` | **渠道视角**：每个渠道各自贡献了池内哪些模型 |
 | `model-bridge status`（`--json`） | 网关健康、逐渠道登录状态、守护 PID、凭证、auto_start |
 | `model-bridge start` | 守护式启动（幂等；失败默认只报告，`--strict` 才非零退出） |
 | `model-bridge stop` / `restart` | 停 / 重启守护实例（不碰第三方进程） |
-| `model-bridge models` | 查**运行中的网关**暴露的模型 id（网关没起会失败；恒为那三个） |
+| `model-bridge models` | 查**运行中的网关**暴露的模型 id（网关没起会失败；恒为那两个） |
 | `model-bridge login --channel <cid>` | 无窗口登录：stdout 给出授权链接，用户浏览器授权后自动保存 |
 | `model-bridge logs`（`--lines N`） | 网关日志尾部（排障第一步） |
 | `model-bridge credits` | 账号剩余额度（只读，不经网关，不消耗额度） |
@@ -68,8 +70,8 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 「对某个渠道做点什么」写成 `<cid> <动词>`（如 `model-bridge trae login`、`model-bridge trae billing`、
 `model-bridge trae checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
 
-`checkin` 对**所有**渠道口径统一：有端点的真查真领（codearts / lobsterai / loomy / raccoon / trae），没端点的返回渠道自己的一句说明（workbuddy / workbuddyai / catpaw / cline / gemini —— 上游自动发奖励），
-qoder 是桩（报"尚未实现"）。「没有端点」不是故障、退出码仍为 0；只有查询/领取**抛错**（未登录等）才非零。
+`checkin` 对**所有**渠道口径统一：有端点的真查真领（codearts / lobsterai / loomy / raccoon / trae / qoder / qodercn），没端点的返回渠道自己的一句说明（workbuddy / workbuddyai / catpaw / cline —— 上游自动发奖励）。
+「没有端点」不是故障、退出码仍为 0；只有查询/领取**抛错**（未登录等）才非零。
 
 ## 标准流程
 
@@ -87,6 +89,6 @@ qoder 是桩（报"尚未实现"）。「没有端点」不是故障、退出码
 - 启动失败先看日志尾部；常见原因是端口被占用（8787 上可能有旧实例或别的程序）。
 - 上游 502 / `code=11128`：多为 token 失效 → 重新登录该渠道；提示词指纹由引擎自动改写。
 - 池子为空：未登录、或该渠道上游目录拉取失败（以 `status` 的逐渠道提示为准）。
-- `400 unknown_channel`：模型 id 的 `<cid>` 前缀没写对（对照 `channels` 输出）；
-  `503 not_authenticated`：前缀对了、但该渠道没登录。
+- `400 unknown_model`：模型名不是池内两个字面量（旧的 `<cid>/<模型>` 形态已移除，对照
+  `model-bridge model list`）；`503 not_authenticated`：候选渠道都没登录。
 - `auto_start` 在 `~/.model-bridge/prefs.json`（仓库级；单渠道在 `~/.model-bridge/<cid>/prefs.json`）。

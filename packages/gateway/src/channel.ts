@@ -4,12 +4,10 @@
  *
  * ## 为什么不直接 import
  *
- * gateway / daemon / headless / auth-flow 这些模块在所有 `<渠道>-bridge` 里是同一份，
- * 但它们在运行期要调用渠道独有的实现。旧做法是每个项目各存一份共享模块、用相对
- * import 直连渠道模块（副本 + 字符串替换），改一处要重刷 11 份。
- *
- * 现在共享模块只认这里的 `Channel` 接口；每个 bridge 在入口处把自己的 4 个模块
- * 组装成一个 `Channel` 并用 `setChannel()` 注册。共享包不 import 任何渠道模块。
+ * 共享层（gateway / daemon / headless / auth-flow）不含渠道知识，但运行期要调用
+ * 渠道独有的实现。现在共享模块只认这里的 `Channel` 接口；每个 bridge 在入口处
+ * 把自己的模块组装成一个 `Channel` 并用 `setChannel()` 注册，共享包不 import
+ * 任何渠道模块。
  *
  * 渠道的**落点**（存储根、分层名、目录内文件名）不在这里决定：统一由共享层
  * `paths.ts` 按 `cid` 推导，见 docs/STORAGE-CONVENTION.md。
@@ -73,7 +71,7 @@ export interface LoginUi {
 /*
  * 下面四个接口描述「渠道模块必须提供哪些成员」。凭据/配置形态各渠道不同，
  * 故这些位置用 `any`：共享层只在**结构**上依赖它们（调用点已由 CONTRACT-TS.md
- * 固定），不做跨渠道的类型统一 —— 那会在 12 个异构渠道间制造大量摩擦。
+ * 固定），不做跨渠道的类型统一 —— 那会在多个异构渠道间制造大量摩擦。
  */
 
 /** 渠道 `cred.ts` 需要提供的接口。 */
@@ -219,8 +217,7 @@ export interface BillingModule {
 }
 
 /**
- * 渠道的静态配置：旧实现里靠字符串替换注入到共享模块的那批常量，
- * 现在集中在一个对象里。
+ * 渠道的静态配置：cid / 展示名 / 版本 / 端口与历史名清单集中在一个对象里。
  */
 export interface BridgeConfig {
   /** 渠道 id，如 `zcode`。用于日志前缀、服务名、CLI 名，以及统一存储根下的**分层名**。 */
@@ -233,8 +230,8 @@ export interface BridgeConfig {
    * **单渠道独立运行**时的网关默认监听地址，如 `127.0.0.1:8803`。
    *
    * ⚠ 仓库级（多渠道路由）网关注册多个渠道，**不看这个字段** —— 它固定用
-   * `REPO_DEFAULT_ADDR`（`127.0.0.1:8787`），所有渠道从同一个端口按 `<cid>/<模型>` 路由。
-   * 本字段只在 `channels/<cid>/dist/cli.js start|serve` 这类单渠道入口里生效。
+   * `REPO_DEFAULT_ADDR`（`127.0.0.1:8787`）。本字段只在
+   * `channels/<cid>/dist/cli.js start|serve` 这类单渠道入口里生效。
    */
   readonly defaultAddr: string;
   /** 单渠道独立运行时的控制台 API 默认端口（仓库级固定用 `REPO_DEFAULT_UI_PORT`）。 */
@@ -284,8 +281,8 @@ export function channels(): Channel[] {
 export function channelFor(cid: string): Channel {
   const found = registry.get(cid);
   if (!found) {
-    const known = [...registry.keys()].join(", ") || "(没有渠道被注册)";
-    throw new Error(`channel not registered: ${cid}（已注册: ${known}）`);
+    const known = [...registry.keys()].join(", ") || "(no channels registered)";
+    throw new Error(`channel not registered: ${cid} (registered: ${known})`);
   }
   return found;
 }
@@ -306,8 +303,7 @@ export function getChannel(cid?: string): Channel {
   }
   if (registry.size > 1) {
     throw new Error(
-      `多渠道路由下必须显式指定 cid（已注册: ${[...registry.keys()].join(", ")}）——` +
-        `HTTP 请求请用 "<cid>/<模型>" 形式的模型 id`,
+      `multi-channel routing requires an explicit cid (registered: ${[...registry.keys()].join(", ")})`,
     );
   }
   return registry.values().next().value as Channel;

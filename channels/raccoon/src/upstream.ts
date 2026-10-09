@@ -302,22 +302,22 @@ export async function fetchModels(
       signal: AbortSignal.timeout(20_000),
     });
   } catch (err) {
-    throw new Error(`模型目录请求失败: ${String(err)}`);
+    throw new Error(`Model catalog request failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new UpstreamUnauthorized(`Raccoon 拒绝了访问令牌（HTTP ${resp.status}）`);
+    throw new UpstreamUnauthorized(`Raccoon rejected the access token (HTTP ${resp.status})`);
   }
-  if (resp.status !== 200) throw new Error(`模型目录返回 HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new Error(`Model catalog returned HTTP ${resp.status}`);
   let payload: unknown;
   try {
     payload = await resp.json();
   } catch (err) {
-    throw new Error(`模型目录响应不是合法 JSON: ${String(err)}`);
+    throw new Error(`Model catalog response is not valid JSON: ${String(err)}`);
   }
   const record = isRecord(payload) ? payload : {};
   const code = typeof record["code"] === "number" ? record["code"] : 0;
   if (isAuthFailure(resp.status, code)) {
-    throw new UpstreamUnauthorized(`Raccoon 登录态失效（code=${code}）`);
+    throw new UpstreamUnauthorized(`Raccoon session expired (code=${code})`);
   }
   return record;
 }
@@ -334,16 +334,16 @@ export async function fetchMe(
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new Error(`用户信息请求失败: ${String(err)}`);
+    throw new Error(`User info request failed: ${String(err)}`);
   }
   if (resp.status === 401 || resp.status === 403) {
-    throw new UpstreamUnauthorized(`Raccoon 拒绝了访问令牌（HTTP ${resp.status}）`);
+    throw new UpstreamUnauthorized(`Raccoon rejected the access token (HTTP ${resp.status})`);
   }
-  if (resp.status !== 200) throw new Error(`用户信息返回 HTTP ${resp.status}`);
+  if (resp.status !== 200) throw new Error(`User info returned HTTP ${resp.status}`);
   const payload = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
   const code = typeof payload["code"] === "number" ? payload["code"] : 0;
   if (isAuthFailure(resp.status, code)) {
-    throw new UpstreamUnauthorized(`Raccoon 登录态失效（code=${code}）`);
+    throw new UpstreamUnauthorized(`Raccoon session expired (code=${code})`);
   }
   return isRecord(payload["data"]) ? (payload["data"] as Record<string, unknown>) : {};
 }

@@ -352,7 +352,7 @@ export async function refresh(): Promise<void> {
   const payload = await upstream.fetchModels(c, cfg);
   const env = upstream.parseEnvelope(payload);
   const entries = parseRemoteModels(env.data);
-  if (entries.length === 0) throw new Error("上游返回的模型目录为空");
+  if (entries.length === 0) throw new Error("upstream returned an empty model catalog");
   const version = str(env.data["reasoning_catalog_version"]);
   remoteCache = { entries, version, at: Date.now() };
   writeCatalogCache(entries);

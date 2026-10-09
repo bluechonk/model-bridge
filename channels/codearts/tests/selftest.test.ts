@@ -1032,7 +1032,7 @@ describe("7. 续期（STS + DPoP）", () => {
   it("缺 DPoP / code_verifier / refresh_token 时明确抛错（不假装续期）", async () => {
     await cred.save({ ...FAKE_CREDENTIAL, dpopPrivateKeyJwk: null });
     cred.resetRefreshQueue();
-    await assert.rejects(() => cred.refresh(cred.load()), /无法静默续期/);
+    await assert.rejects(() => cred.refresh(cred.load()), /cannot refresh silently/);
   });
 });
 

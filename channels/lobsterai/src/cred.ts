@@ -11,8 +11,7 @@
  * ## 落盘字段名刻意保持 snake_case
  *
  * 内存里用 TS 惯用的 camelCase，磁盘上写 `access_token` / `first_keyfrom` /
- * `latest_keyfrom` / `user_id` / `expires_at` —— 与 Go 版 `lobsterai2api`
- * 的 `auths/lobsterai-{uid}.json` 及 Python 版桥接层完全同形：
+ * `latest_keyfrom` / `user_id` / `expires_at` —— 与旧实现同形：
  * 用户从旧实现迁移过来时**无需重新登录**（`load()` 同时认两种写法）。
  *
  * ## 登录/续期的终点判定
@@ -20,7 +19,7 @@
  * - 续期：HTTP 401/403 → 终态；信封失败且 `classifyError` 判出 `session-dead`
  *   → 终态；`code:0` 但 `accessToken` 为空 → 终态；其余（网络抖动 / 5xx / 429）
  *   → 普通 Error，走可重试路径。
- * - `latestKeyfrom` **刻意不更新为当前时刻**：严格对齐 Go 的 `RefreshToken`
+ * - `latestKeyfrom` **刻意不更新为当前时刻**：严格对齐旧实现
  *   （只改 token 与过期时间，`LatestKeyfrom` 永久停在登录那一刻），续期时原样回发。
  */
 
@@ -208,13 +207,13 @@ function configuredBase(): string {
  */
 export function resolveBaseUrl(realm = "auto"): string {
   const known = new Set(["auto", "", "default", "lobsterai", "intl", "cn"]);
-  if (!known.has(realm)) throw new Error(`未知 realm: ${realm}（LobsterAI 只有单一域名）`);
+  if (!known.has(realm)) throw new Error(`unknown realm: ${realm} (LobsterAI has a single domain)`);
   return configuredBase();
 }
 
 // ── 凭据读写 ─────────────────────────────────────────────────────────────────
 
-/** 磁盘布局（snake_case，与 Go / Python 版同形）。 */
+/** 磁盘布局（snake_case）。 */
 export interface DiskCredentials {
   access_token: string;
   refresh_token: string;
@@ -503,12 +502,12 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   const url = buildLoginUrl(callback.port, session.state);
   // ⚠️ 拿到 URL 后**立刻**回调（界面据此弹窗），不等浏览器启动结果。
   options.onUrl?.(url);
-  options.onStatus?.(`已打开授权页，等待授权中（最多 ${LOGIN_TIMEOUT_MS / 60000} 分钟）…`);
+  options.onStatus?.(`authorization page opened, waiting for authorization (up to ${LOGIN_TIMEOUT_MS / 60000} min)...`);
   openBrowser(url);
   try {
     const c = await callback.result;
     await save(c);
-    options.onStatus?.("授权成功，凭据已保存。");
+    options.onStatus?.("authorization succeeded; credentials saved.");
     return c;
   } finally {
     await callback.close();
@@ -557,10 +556,10 @@ export async function refresh(c: Credentials): Promise<Credentials> {
 
   const text = await resp.text().catch(() => "");
   if (resp.status === 401 || resp.status === 403) {
-    throw new RefreshTokenExpiredError(`refresh token 已失效（HTTP ${resp.status}），请重新登录`);
+    throw new RefreshTokenExpiredError(`refresh token is invalid (HTTP ${resp.status}); please log in again`);
   }
   if (upstream.classifyError(resp.status, text) === "session-dead") {
-    throw new RefreshTokenExpiredError("服务端判定会话已失效，请重新登录");
+    throw new RefreshTokenExpiredError("server marked the session as dead; please log in again");
   }
   let env: Record<string, unknown> | null = null;
   try {
@@ -582,7 +581,7 @@ export async function refresh(c: Credentials): Promise<Credentials> {
   }
   const accessToken = str(data["accessToken"]);
   if (!accessToken) {
-    throw new RefreshTokenExpiredError("refresh 返回 code:0 但 accessToken 为空，请重新登录");
+    throw new RefreshTokenExpiredError("refresh returned code:0 but accessToken is empty; please log in again");
   }
   const user =
     data["user"] && typeof data["user"] === "object"

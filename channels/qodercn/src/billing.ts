@@ -93,10 +93,10 @@ async function sashGet(
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (resp.status === 401 || resp.status === 403) {
-    throw new CreditsError("凭据被拒绝，请重新登录");
+    throw new CreditsError("Credential rejected, please log in again");
   }
-  if (resp.status === 404) throw new CreditsError(`上游没有这个端点（HTTP 404）：${path}`);
-  if (!resp.ok) throw new CreditsError(`上游返回 HTTP ${resp.status}`);
+  if (resp.status === 404) throw new CreditsError(`Upstream has no such endpoint (HTTP 404): ${path}`);
+  if (!resp.ok) throw new CreditsError(`Upstream returned HTTP ${resp.status}`);
   return (await resp.json()) as Record<string, unknown>;
 }
 
@@ -194,7 +194,7 @@ export async function fetchCredits(options: { refreshOn401?: boolean } = {}): Pr
   }
 
   const usage = await sashGet(credential, USAGE_PATH).catch((err: unknown) => {
-    if (options.refreshOn401 && err instanceof CreditsError && String(err).includes("重新登录")) {
+    if (options.refreshOn401 && err instanceof CreditsError && String(err).includes("log in again")) {
       throw err;
     }
     throw err instanceof CreditsError ? err : new CreditsError(String(err));
@@ -204,7 +204,7 @@ export async function fetchCredits(options: { refreshOn401?: boolean } = {}): Pr
   const claimable = await listClaimable(credential).catch(() => []);
   // 查不到额度（enterprise 模式 / 上游不给数字）**不能显示成 0** —— 那是"不知道"
   if (total.size === 0 && total.remain === 0 && packages.length === 0) {
-    throw new CreditsError("上游没有返回可用的额度数字（企业模式或接口变更）");
+    throw new CreditsError("Upstream returned no usable quota numbers (enterprise mode or API change)");
   }
   return { ok: true, total, packages, ...(claimable.length > 0 ? { claimable } : {}) };
 }
@@ -233,7 +233,7 @@ async function claimCampaign(
     headers: { ...sashHeaders(credential), "Content-Type": "application/json" },
     signal: AbortSignal.timeout(20_000),
   });
-  if (!resp.ok) throw new CreditsError(`领取失败：HTTP ${resp.status}`);
+  if (!resp.ok) throw new CreditsError(`Claim failed: HTTP ${resp.status}`);
   return (await resp.json()) as Record<string, unknown>;
 }
 
