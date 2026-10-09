@@ -17,3 +17,6 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 *.tsbuildinfo
+
+# ZCode 工具自动生成（每次可能重写），不入库
+.zcodeignore
