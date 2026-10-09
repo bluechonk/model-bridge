@@ -43,6 +43,12 @@ async function fakeUpstream(): Promise<{ server: Server; url: string; captured: 
       captured.push({ authorization, body });
 
       if (authorization !== "Bearer tok-B") {
+        // tok-A 回**非标准状态码的鉴权失败**（400 + APIG.0602），验证 isAuthFailure 钩子
+        if (authorization === "Bearer tok-A") {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error_code: "APIG.0602", error_msg: "token expired" }));
+          return;
+        }
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ code: 401, msg: "invalid token" }));
         return;
