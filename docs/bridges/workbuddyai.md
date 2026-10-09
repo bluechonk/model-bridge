@@ -21,12 +21,12 @@ hooks + skills + commands。
 - **纯代理**：不修改请求/响应，只添加认证头（唯一例外见「模型短名映射」）
 - **OpenAI 兼容**：提供 `/v1/chat/completions` 与 `/v1/models`
 - **零运行依赖**：HTTP 服务用 `node:http`，HTTP 客户端用原生 `fetch`，
-  SSE 解析手写 —— 装完即用，不需要额外运行时
+ SSE 解析手写 —— 装完即用，不需要额外运行时
 - **无窗口运行**：不创建任何窗口/托盘，适合后台常驻与自动化驱动
 - **无窗口登录**：`login` 子命令走浏览器设备授权（申请链接 → 打开浏览器 → 轮询令牌），
-  全程只有「在浏览器点一下授权」需要人工
+ 全程只有「在浏览器点一下授权」需要人工
 - **端口自愈**：默认端口被自身残留实例占用时自动接管；第三方进程需确认。
-  健康探测**核对服务身份**，端口上跑着别的服务时如实报告而不是误报 OK
+ 健康探测**核对服务身份**，端口上跑着别的服务时如实报告而不是误报 OK
 - **SSE 事件块转发**：按事件块转发并剥离注释行，思考流不再碎片化
 
 ## 快速开始
@@ -90,21 +90,21 @@ API key 任意非空、模型 `deepseek-v4.1-flash`。插件注册不了 provide
 
 ```
 src/
-  cli.ts           命令行入口（node:util parseArgs，零依赖）
-  cli-consts.ts    默认地址与版本（单独一个模块，避免 cli ↔ daemon 循环导入）
-  headless.ts      serve / login 的无窗口实现
-  gateway.ts       HTTP 网关（node:http）+ 上游约束与指纹改写
-  sse-stream.ts    SSE 规范化转发与聚合
-  daemon.ts        守护进程管理（start/stop/restart/status/models/credits/logs）
-  console.ts       控制台 API
-  auth-flow.ts     登录编排（与界面解耦，只经 LoginUi 接口交互）
-  cred.ts          凭据：设备码登录、刷新、落盘
-  upstream.ts      上游端点、配置、鉴权头
-  catalog.ts       模型短名 ↔ 上游 slug
-  billing.ts       额度查询
-  portfree.ts      端口自愈与服务身份
+ cli.ts           命令行入口（node:util parseArgs，零依赖）
+ cli-consts.ts    默认地址与版本（单独一个模块，避免 cli ↔ daemon 循环导入）
+ headless.ts      serve / login 的无窗口实现
+ gateway.ts       HTTP 网关（node:http）+ 上游约束与指纹改写
+ sse-stream.ts    SSE 规范化转发与聚合
+ daemon.ts        守护进程管理（start/stop/restart/status/models/credits/logs）
+ console.ts       控制台 API
+ auth-flow.ts     登录编排（与界面解耦，只经 LoginUi 接口交互）
+ cred.ts          凭据：设备码登录、刷新、落盘
+ upstream.ts      上游端点、配置、鉴权头
+ catalog.ts       模型短名 ↔ 上游 slug
+ billing.ts       额度查询
+ portfree.ts      端口自愈与服务身份
 tests/
-  selftest.test.ts node:test 自检（离线，不出网）
+ selftest.test.ts node:test 自检（离线，不出网）
 ```
 
 构建产物 `dist/` 与依赖 `node_modules/` 已在 `.gitignore` 中。
@@ -118,7 +118,7 @@ tests/
 仍被识别但已弃用），便携/测试用。
 `model-bridge paths --all` 可只读列出全部落点。
 
-⚠ 拆分成两条渠道后，**裸 `workbuddy` 名字**（`~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
+拆分成两条渠道后，**裸 `workbuddy` 名字**（`~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
 `WORKBUDDY_DEBUG_DUMP`）**两条渠道都不再认领**：那个目录里是国际版旧凭证，而 `workbuddy`
 这个 cid 现在属于国内版 —— 认领会把国际数据迁进国内渠道（跨产品串号）。旧数据早已迁入
 `~/.model-bridge/workbuddyai/`，无需再迁。
@@ -148,17 +148,17 @@ SSE 规范化与聚合、端到端网关（system 注入 / 强制流式 / 指纹
 
 1. **首条消息必须是 system** —— 否则 400 `first message is not system prompt`
 2. **只支持流式** —— 否则 400 `Non-stream chat request is currently not supported`；
-   客户端要非流式时也向上游要流式，由本层聚合成普通 JSON
+  客户端要非流式时也向上游要流式，由本层聚合成普通 JSON
 3. **系统提示词指纹拦截** —— 命中时整条会话被 400 `code=11128` 拒绝，
-   需把样板文本改写为等价表述（`FINGERPRINT_REWRITES`）
+  需把样板文本改写为等价表述（`FINGERPRINT_REWRITES`）
 
 另外两条实测结论：
 
 - **chat 路径不用 `prefixPath`**：模型载荷声明了 `/plugin` 前缀，
-  但 `POST /plugin/v2/chat/completions` 返回 404，`/v2/chat/completions` 才是 200
+ 但 `POST /plugin/v2/chat/completions` 返回 404，`/v2/chat/completions` 才是 200
 - **SSE 里空的 `tool_calls: []` 必须剔除**：上游每个 delta 都带它，
-  而 ZCode 的解析器判定 `tool_calls != null` 就结束思考块 ——
-  不剔除会让每个 reasoning token 被切成独立的「思考」块
+ 而 ZCode 的解析器判定 `tool_calls != null` 就结束思考块 ——
+ 不剔除会让每个 reasoning token 被切成独立的「思考」块
 
 ## 许可证
 

@@ -52,18 +52,18 @@ uri          = url.pathname，若不以 '/' 结尾则补 '/'
 query        = url.search 去掉开头的 '?'
 payloadHash  = sha256_hex(body)                      # GET 传空 bytes
 canonical    = '\n'.join([
-                 method, uri, query,
-                 各头按 key 排序的 'k:v' 行,
-                 '',                              # ← 关键：头行与 SignedHeaders 之间有空行
-                 ';'.join(排序后的 key),
-                 payloadHash
-               ])
+                method, uri, query,
+                各头按 key 排序的 'k:v' 行,
+                '',                              # ← 关键：头行与 SignedHeaders 之间有空行
+                ';'.join(排序后的 key),
+                payloadHash
+              ])
 stringToSign = 'SDK-HMAC-SHA256\n' + dateStamp + '\n' + sha256_hex(canonical)
 signature    = hmac_sha256_hex(sk, stringToSign)
 ```
 
-⚠️ `canonical` 中头行与 `SignedHeaders` 之间**有一个空行**（sign.ts:24）。
-⚠️ dateStamp 保留结尾的 `Z`、毫秒被截掉。
+`canonical` 中头行与 `SignedHeaders` 之间**有一个空行**（sign.ts:24）。
+dateStamp 保留结尾的 `Z`、毫秒被截掉。
 
 ### 2.2 各端点的完整请求头清单
 
@@ -84,7 +84,7 @@ signature    = hmac_sha256_hex(sk, stringToSign)
 
 **`gateway/config`（models.ts:180）**：只有签名头，**无任何额外头**
 
-⚠️ **签名头只能出现一次，大小写也必须一致**（**实测 2026-10-08，抓包定位**）：
+**签名头只能出现一次，大小写也必须一致**（**实测 2026-10-08，抓包定位**）：
 `signRequest` 返回参与签名的 `content-type`（小写）；若调用方再追加一个
 `Content-Type`，Node 的 fetch 会把两者**都发出去**、拼成
 `content-type: application/json, application/json`。服务端按**实际收到的值**重算
@@ -95,11 +95,11 @@ canonical request，与签名时的 `application/json` 不符 ⇒
 （目录路径没有重复头），很容易误判成「凭证失效 / 签名算法错」。定位方法：把
 `chatUrl()` 指向本地 echo 服务，原样打印收到的头 —— 重复的 `content-type` 一眼可见。
 
-⚠️ **`Agent-Type` / `X-Language` 绝不能参与签名**（codearts-credits.ts:113-129）：
+**`Agent-Type` / `X-Language` 绝不能参与签名**（codearts-credits.ts:113-129）：
 实测（2026-09-18 真实凭据）进入 canonical request 与 SignedHeaders 会得
 `401 {"error_code":"APIG.0301","error_msg":"...verify ak sk signature fail"}`；签名后追加则 200。
 
-⚠️ 而 `maas_type: benefit` 是**反例**——它必须参与签名，不要据此推断。
+而 `maas_type: benefit` 是**反例**——它必须参与签名，不要据此推断。
 
 ### 2.3 凭据结构（types.ts:1127-1143）
 
@@ -109,7 +109,7 @@ canonical request，与签名时的 `application/json` 不符 ⇒
 
 ### 2.3.1 用户身份只能从 `refresh_token` 里解（**实测 2026-10-08**）
 
-⚠️ **STS 的信封（登录与续期都一样）只给 `credentials` + `refresh_token`**，
+**STS 的信封（登录与续期都一样）只给 `credentials` + `refresh_token`**，
 **从不给 `user_id` / `domain_id`** —— 凭据里那两个字段实测恒为空串。
 
 而**华为 STS 每次签发都换一套新 AK**。所以「用 AK 派生 uid」会让**同一个人每次登录
@@ -124,16 +124,16 @@ canonical request，与签名时的 `application/json` 不符 ⇒
 ```jsonc
 // refresh_token 的 payload
 {
-  "type": "refreshToken",           // ← 只认这个类型
-  "user_profile": "<再编码一次的 base64url JSON>"
+ "type": "refreshToken",           // ← 只认这个类型
+ "user_profile": "<再编码一次的 base64url JSON>"
 }
 // 解开 user_profile 得到：
 {
-  "account_id":   "019fb1171afe7d21a114c649628b72e1",   // ← 账号级身份，用它
-  "account_name": "hid_2p1fajwaqpov_95",
-  "principal_id": "019fb1171afe782f9ecf38e4299658b7",   // account_id 缺失时退到它
-  "principal_urn": "iam::019fb1171afe7d21a114c649628b72e1:user:hid_2p1fajwaqpov_95",
-  "principal_is_root_user": true
+ "account_id":   "019fb1171afe7d21a114c649628b72e1",   // ← 账号级身份，用它
+ "account_name": "hid_2p1fajwaqpov_95",
+ "principal_id": "019fb1171afe782f9ecf38e4299658b7",   // account_id 缺失时退到它
+ "principal_urn": "iam::019fb1171afe7d21a114c649628b72e1:user:hid_2p1fajwaqpov_95",
+ "principal_is_root_user": true
 }
 ```
 
@@ -149,12 +149,12 @@ canonical request，与签名时的 `application/json` 不符 ⇒
 ```
 POST https://sts.cn-north-4.myhuaweicloud.com/v1/oauth2/tokens
 Headers: DPoP: {ES256 JWS}
-         Content-Type: application/x-www-form-urlencoded
+        Content-Type: application/x-www-form-urlencoded
 Body (form-urlencoded):
-  client_id=codearts-agent
-  code_verifier={凭据里的 code_verifier}
-  grant_type=refresh_token
-  refresh_token={凭据里的 refresh_token}
+ client_id=codearts-agent
+ code_verifier={凭据里的 code_verifier}
+ grant_type=refresh_token
+ refresh_token={凭据里的 refresh_token}
 超时: 60_000 ms
 ```
 
@@ -164,11 +164,11 @@ refresh_token, error, error_code, error_msg}`
 **终态判定（只认两种，oauth.ts:134-140）**：
 `error === 'invalid_grant'` 或 `error_code` 包含 `ExpiredRefreshToken`。
 
-⚠️ **`InvalidDPoPHeader` 明确被移出终态**（oauth.ts:126-133 长注释）：
+**`InvalidDPoPHeader` 明确被移出终态**（oauth.ts:126-133 长注释）：
 它说的是「这一次 proof 没过校验」（时钟偏差 / 重放判定 / 网关抖动），
 与 refresh_token 能否继续用无关；当终态会把材料完好的账号一步标死。
 
-⚠️ **refresh_token 一次性轮换**：华为 STS 签发新凭据时旧的 `refresh_token` 即失效
+**refresh_token 一次性轮换**：华为 STS 签发新凭据时旧的 `refresh_token` 即失效
 （实测 `STS5.1806 the refresh token has been used`）。三条并发入口必须用 per-ref 串行队列，
 且**判终态前先重读凭据**确认「我刚才用的那份 refresh_token 是否还是当前那份」。
 
@@ -197,9 +197,9 @@ https://codearts.huaweicloud.com/portal/authorize?theme=2&locale=zh-cn
 常量逐字值：`OAUTH_THEME='2'`、`OAUTH_LOCALE='zh-cn'`、
 `LOGIN_PLUGIN_NAME='snap_AIIDE'`、`LOGIN_PLUGIN_VERSION='5.2.0'`
 
-⚠️ **三个实测踩坑**（源码注释明写）：
+**三个实测踩坑**（源码注释明写）：
 - `code_challenge_method` 必须是 **`SHA-256`**（非 RFC 标准缩写 `S256`）；
-  portal 以此识别 OAuth 授权，错值会**静默回退旧 ticket 流程**
+ portal 以此识别 OAuth 授权，错值会**静默回退旧 ticket 流程**
 - 授权 URL **不能带 `auth_callback_url`** —— portal 仅凭 `port` 参数构造回调
 - 回调端口 < 10000 会被 portal 拒绝
 
@@ -233,11 +233,11 @@ https://codearts.huaweicloud.com/portal/authorize?theme=2&locale=zh-cn
 - `redirectUrl = https://devcloud.cn-north-4.huaweicloud.com/doer/redirect?IdeaType=jetbrains&auth_callback_url={enc http://127.0.0.1:{port}/authentication}&plugin-name=snap_jetbrains&plugin-version=26.3.3&ticket_id={ticketId}`
 - `loginUrl = https://auth.huaweicloud.com/authui/login.html?service={enc redirectUrl}`
 - 轮询：GET `.../snap-manager/v1/login/ticket?ticket_id=&secret=`，
-  请求头 `Content-Type: application/json;charset=UTF-8`、`plugin-name: snap_jetbrains`、
-  `plugin-version: 26.3.3`；间隔 1 秒、最多 120 次
+ 请求头 `Content-Type: application/json;charset=UTF-8`、`plugin-name: snap_jetbrains`、
+ `plugin-version: 26.3.3`；间隔 1 秒、最多 120 次
 - 凭据解析兼容两种形状（login.ts:33-62）：
-  `data.credential.{access,secret,securitytoken|securityToken,expires_at|expiresAt}`
-  或 `data.result.{accessKeyId,secretAccessKey,securityToken,expiration|expiresAt}`
+ `data.credential.{access,secret,securitytoken|securityToken,expires_at|expiresAt}`
+ 或 `data.result.{accessKeyId,secretAccessKey,securityToken,expiration|expiresAt}`
 - `expires_at` 无法解析时回退 `now + 24h`
 
 ---
@@ -268,13 +268,13 @@ https://codearts.huaweicloud.com/portal/authorize?theme=2&locale=zh-cn
 | `assistant` | `{role, content: string, reasoning_content: string（**恒带，无推理时空串**）, tool_calls?: [...]}` |
 | `tool` | `{role:'tool', tool_call_id, content}`（工具结果从 harness user 消息**展开**为独立消息） |
 
-⚠️ **`reasoning_content` 恒带是硬要求**：deepseek-v4 系对缺失该字段的历史直接
+**`reasoning_content` 恒带是硬要求**：deepseek-v4 系对缺失该字段的历史直接
 400 `Missing reasoning_content field`（llm-adapter.ts:148-152）。
 
 - 只保留 `text` 块；`reasoning` 块折叠进 `reasoning_content`；**图片块被丢弃**
 - 孤儿 tool_call / tool_result 必须剔除，否则后端对之后每条消息都 400
 - `options.system` 非空时 `messages.unshift({role:'system', ...})`
-  —— **没有**「首条必须是 system」的硬约束（那是 WorkBuddy 的机制）
+ —— **没有**「首条必须是 system」的硬约束（那是 WorkBuddy 的机制）
 
 ### 3.3 DSML 工具模式（llm-adapter.ts:202-264, 1076-1084）
 
@@ -302,7 +302,7 @@ DSML 解析出的工具调用 id 用 `dsml-{uuid 去横线}`。
 
 ### 3.4 思考控制
 
-⚠️ 唯一生效的是**顶层** `thinking.type`；`reasoning_effort` 与嵌套 `reasoning.effort`
+唯一生效的是**顶层** `thinking.type`；`reasoning_effort` 与嵌套 `reasoning.effort`
 均被接受但**完全无效**（实测 2026-09-29，判据为 reasoning_tokens）。
 
 故只声明「开启/关闭」两档，`disabled` → reasoning_tokens 3/3 全为 0。
@@ -320,7 +320,7 @@ DSML 解析出的工具调用 id 用 `dsml-{uuid 去横线}`。
 | 用量 | `usage.{prompt_tokens, completion_tokens, prompt_tokens_details.cached_tokens, prompt_cache_hit_tokens, completion_tokens_details.reasoning_tokens}` |
 | **结束标志** | `data: [DONE]` |
 
-⚠️ **该通道的 `reasoning_content` 内容全部作为 reasoning 输出**（`text + reasoning` 合并）——
+**该通道的 `reasoning_content` 内容全部作为 reasoning 输出**（`text + reasoning` 合并）——
 因为实测 deepseek-v4-flash 的 reasoning_content 通常不带 `<thought>` 标签，
 若把提取器的 `text` 部分发给正文块，思考会泄漏到正文。
 
@@ -335,7 +335,7 @@ DSML 解析出的工具调用 id 用 `dsml-{uuid 去横线}`。
 | `error_code === 'InferHub.4004.200'` | 账号无 benefit 包 → 去掉 `maas_type` 头重试一次 |
 | 其它 | `INVALID_REQUEST` |
 
-⚠️ **`429` 必须锚定为独立数字**：无边界子串会让额度码 `InferHub.4291.200` 命中 `429` 前缀
+**`429` 必须锚定为独立数字**：无边界子串会让额度码 `InferHub.4291.200` 命中 `429` 前缀
 而被误判成「可重试排队」，进入 30 分钟静默重试、界面零输出
 （真实缺陷，2026-10-02 实测 25 秒内 4 次 chat + 3 次探测、产出 0 chunk）。
 
@@ -351,7 +351,7 @@ DSML 解析出的工具调用 id 用 `dsml-{uuid 去横线}`。
 
 - 每 10 秒重发**整个** chat 请求，上限 180 次 = 30 分钟；排队期间**不产出任何 chunk**
 - **SSE 空闲超时分两阶段**：首 token 300_000 ms、chunk 间 600_000 ms
-  （依据：APIG 网关对 SSE 有 ~60s 空闲断连策略，`reader.read()` 抛 `TypeError: terminated`）
+ （依据：APIG 网关对 SSE 有 ~60s 空闲断连策略，`reader.read()` 抛 `TypeError: terminated`）
 
 ---
 
@@ -366,7 +366,7 @@ DSML 解析出的工具调用 id 用 `dsml-{uuid 去横线}`。
 
 **归一化（models.ts:77-100）**：
 - `normalizeModelId(id)`：去掉末尾 `-` + 4 位数字（`deepseek-v4-flash-0731` → `deepseek-v4-flash`）。
-  chat 端点只认不带后缀的 id
+ chat 端点只认不带后缀的 id
 - 过滤 id 含 `-VL-` 或以 `-VL` 结尾的视觉模型
 - `name` 取 `model_name`（同样归一化），缺失时用 id；按 id 去重
 
@@ -393,7 +393,7 @@ deepseek-v4-flash, deepseek-v4-pro, deepseek-v4.1-flash
 `GLM-5.2`=202752、`glm-5.3-flash`=1048576、`deepseek-v4-flash`=1048576、
 `deepseek-v4-pro`=1048576、`deepseek-v4.1-flash`=1000000
 
-### 5.4 ⚠️ `maas_type: benefit` 的完整机制
+### 5.4  `maas_type: benefit` 的完整机制
 
 `opengw.developer.huaweicloud.com/api/v1/gateway/config` 返回 **benefit（免费额度）模型列表**；
 **这些模型即 benefit 集合**：chat 时必须带 `maas_type: benefit`（且**参与签名**），否则 404 未注册。
@@ -421,15 +421,15 @@ deepseek-v4-flash, deepseek-v4-pro, deepseek-v4.1-flash
 
 `GET {SNAP}/snap-manager/v1/statistics/plugin`
 
-⚠️ **响应是裸对象，无 `{code,data}` 信封**（与 `ops/*` 不同）
+**响应是裸对象，无 `{code,data}` 信封**（与 `ops/*` 不同）
 
 - `package.is_credit_package`（积分账户判定）、`package.is_token_package`、
-  `package.spec_code`、`package.package_name_cn` / `package_name_en`、`package.status`
+ `package.spec_code`、`package.package_name_cn` / `package_name_en`、`package.status`
 - `metrics[]`：`name` / `package_credit_amount` / `package_credit_used` / `package_credit_remain`
 - metric 名（codearts-credits.ts:142-150）：`usageTotalPackageCredit`（总积分包）、
-  `usageBasicPackageCredit`、`usageOnDemandPackageCredit`、`usageBonusPackageCredit`
+ `usageBasicPackageCredit`、`usageOnDemandPackageCredit`、`usageBonusPackageCredit`
 
-⚠️ 总额取 `usageTotalPackageCredit` 的 `package_credit_remain`，**不累加分类明细**；
+总额取 `usageTotalPackageCredit` 的 `package_credit_remain`，**不累加分类明细**；
 总额 metric 缺失才回退分类求和。无任何 credit metric → 返回 `undefined`（与 `total: 0` 严格区分）。
 
 ### 6.2 活动列表与领取
@@ -437,9 +437,9 @@ deepseek-v4-flash, deepseek-v4-pro, deepseek-v4.1-flash
 `GET {SNAP}/v1/ops/delivery?channel=IDE`
 - 信封 `{code, message, data}`，`code !== 0` 即失败
 - `data.items[]`，每项字段：`campaignId`（**数字**）、`title`、`type`、
-  `benefitAmount`（**可领积分，值 1000**）、`benefitUnit`、`displayConfig`、`pageUrl`、
-  `claimable`、`hooks`、`extra`、`description`、`status`（不可领取时为 **`null`**）、
-  `pendingCount`、`pendingTotalAmount`
+ `benefitAmount`（**可领积分，值 1000**）、`benefitUnit`、`displayConfig`、`pageUrl`、
+ `claimable`、`hooks`、`extra`、`description`、`status`（不可领取时为 **`null`**）、
+ `pendingCount`、`pendingTotalAmount`
 - 每日签到活动 `type === 'USER_LOGIN'`
 
 `POST {SNAP}/v1/ops/claim`，body `{"campaignId": "<字符串化的 id>", "channel": "IDE"}`
@@ -447,7 +447,7 @@ deepseek-v4-flash, deepseek-v4-pro, deepseek-v4.1-flash
 —— 仅当 claim 响应 `data.id !== null && !== undefined` 时补发
 （漏掉积分停在「待确认」不入账）
 
-⚠️ **幂等**：**无幂等键、无「今天已签到」业务码**；唯一保护是活动列表预检。
+**幂等**：**无幂等键、无「今天已签到」业务码**；唯一保护是活动列表预检。
 `claimable === false` 且 `status ∈ {CLAIMED, CONFIRMED, CONSUMED}` → `already-claimed`。
 
 ---
@@ -456,21 +456,21 @@ deepseek-v4-flash, deepseek-v4-pro, deepseek-v4.1-flash
 
 1. **`Agent-Type` / `X-Language` 绝不能参与签名**（见 §2.2）
 2. **`campaignId` 是数字**（实测 `1`）。用只接受字符串的解析会得到空串 →
-   领取判 `failed`「活动缺少 campaignId」（真实缺陷）
+  领取判 `failed`「活动缺少 campaignId」（真实缺陷）
 3. **可领积分字段是 `benefitAmount`**（实测 1000），不是 `amount`；读错恒为 0
 4. **不可领取活动的 `status` 是 `null`**，解析要能容忍
 5. **`429` 判据必须锚定为独立数字**（见 §4.1）
 6. **额度报文不含重置时刻**：`InferHub.4291.200` 的 `details` 只有
-   requestId/timestamps/modelId/traceId，故按 **UTC+8 自然日次日 00:00** 自行推算
+  requestId/timestamps/modelId/traceId，故按 **UTC+8 自然日次日 00:00** 自行推算
 7. **官方文档给的 portal 路径不可用**：`codearts.huaweicloud.com/portal/...` 是 BFF、
-   依赖浏览器 Cookie，实测带 AK/SK 签名也只返回 IAM 登录跳转 HTML
+  依赖浏览器 Cookie，实测带 AK/SK 签名也只返回 IAM 登录跳转 HTML
 8. **ESM 下不能用 `require('node:fs')`**：本包 `"type": "module"`，
-   `require` 未定义、抛 ReferenceError 后被 catch 静默吞掉 → 磁盘缓存读写长期失效
+  `require` 未定义、抛 ReferenceError 后被 catch 静默吞掉 → 磁盘缓存读写长期失效
 9. **tool_call 的 `id` 偶发完全不返回**：必须兜底 `call_{wireIndex}`，
-   空串 id 会让会话永久报废
+  空串 id 会让会话永久报废
 10. **`function.name` 只允许非空覆盖**：后续分片带空串 `""`，直接覆盖会清空工具名 →
-    `unknown tool ""`
+   `unknown tool ""`
 11. **`usage` 的缓存字段**：`prompt_tokens_details.cached_tokens` 或 `prompt_cache_hit_tokens`；
-    `inputTokens` 只计未命中部分
+   `inputTokens` 只计未命中部分
 12. **`openBrowser` 在 Windows 下必须用 `cmd /c start "" "{url}"` + `windowsVerbatimArguments: true`**
-    （否则 `&` 被当命令分隔符截断 URL）
+   （否则 `&` 被当命令分隔符截断 URL）

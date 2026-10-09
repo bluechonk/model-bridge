@@ -23,11 +23,11 @@
 落地时对方案的两处修正：
 
 1. **`dirName` 直接删除**：被取代的 `.<cid>-bridge` 不是消失，而是降级为 `legacyDirs` 的**首项**
-   （迁移来源）—— 现行名与历史名共用一条清单，不再需要额外字段。
+  （迁移来源）—— 现行名与历史名共用一条清单，不再需要额外字段。
 2. **收拢的搜索父目录收紧**（实现时踩到）：只有当存储根**不是**由环境变量显式指定时，
-   才把用户主目录列入搜索范围。否则测试/便携模式把根指到别处时，收拢会去动真实主目录里的
-   旧目录（实测：catpaw 的测试曾把 `~/.catpaw-bridge` 当作历史目录读取）。
-   见 `paths.legacySearchParents()`。
+  才把用户主目录列入搜索范围。否则测试/便携模式把根指到别处时，收拢会去动真实主目录里的
+  旧目录（实测：catpaw 的测试曾把 `~/.catpaw-bridge` 当作历史目录读取）。
+  见 `paths.legacySearchParents()`。
 
 ---
 
@@ -80,20 +80,20 @@
 
 | cid | 现存储目录（**迁移来源**） | 目标层 | 现覆盖变量 | 调试覆盖 | legacyDirs（新→旧） | legacyEnvVars |
 |---|---|---|---|---|---|---|
-| workbuddy | `.workbuddy-bridge` | `<root>/workbuddy` | `WORKBUDDY_HOME` | `WBAI_DEBUG_DUMP` ⚠ | `.zcode-workbuddy-bridge`, `.zcode-connect-workbuddyai`, `.workbuddyai2api`, `.workbuddyai-gateway` | `ZCB_HOME`, `WBAI2API_HOME` |
+| workbuddy | `.workbuddy-bridge` | `<root>/workbuddy` | `WORKBUDDY_HOME` | `WBAI_DEBUG_DUMP`  | `.zcode-workbuddy-bridge`, `.zcode-connect-workbuddyai`, `.workbuddyai2api`, `.workbuddyai-gateway` | `ZCB_HOME`, `WBAI2API_HOME` |
 | catpaw | `.catpaw-bridge` | `<root>/catpaw` | `CATPAW_HOME` | `CATPAW_DEBUG_DUMP` | `.zcode-catpaw-bridge`, `.zcode-connect-catpaw` | `ZCC_HOME` |
-| zcode | `.zcode-bridge` | `<root>/zcode` | `ZCODE_HOME` | `ZCODE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-zcode`, `.zcode2api`, `.zcode-gateway` | — |
-| trae | `.trae-bridge` | `<root>/trae` | `TRAE_HOME` | `TRAE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-trae`, `.trae2api`, `.trae-gateway` | — |
-| codearts | `.codearts-bridge` | `<root>/codearts` | `CODEARTS_HOME` | `CODEARTS_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-codearts`, `.codearts2api`, `.codearts-gateway` | — |
-| lobsterai | `.lobsterai-bridge` | `<root>/lobsterai` | `LOBSTERAI_HOME` | `LOBSTERAI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-lobsterai`, `.lobsterai2api`, `.lobsterai-gateway` | — |
-| cline | `.cline-bridge` | `<root>/cline` | `CLINE_HOME` | `CLINE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-cline`, `.cline2api`, `.cline-gateway` | — |
-| loomy | `.loomy-bridge` | `<root>/loomy` | `LOOMY_HOME` | `LOOMY_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-loomy`, `.loomy2api`, `.loomy-gateway` | — |
-| raccoon | `.raccoon-bridge` | `<root>/raccoon` | `RACCOON_HOME` | `RACCOON_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-raccoon`, `.raccoon2api`, `.raccoon-gateway` | — |
-| minimax | `.minimax-bridge` | `<root>/minimax` | `MINIMAX_HOME` | `MINIMAX_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-minimax`, `.minimax2api`, `.minimax-gateway` | — |
-| gemini | `.gemini-bridge` | `<root>/gemini` | `GEMINI_HOME` | `GEMINI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-gemini`, `.gemini2api`, `.gemini-gateway` | — |
-| qoder | `.qoder-bridge` | `<root>/qoder` | `QODER_HOME` | `QODER_DEBUG_DUMP` | `.zcode-workbuddy-bridge` ⚠, `.zcode-connect-qoder`, `.qoder2api`, `.qoder-gateway` | — |
+| zcode | `.zcode-bridge` | `<root>/zcode` | `ZCODE_HOME` | `ZCODE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-zcode`, `.zcode2api`, `.zcode-gateway` | — |
+| trae | `.trae-bridge` | `<root>/trae` | `TRAE_HOME` | `TRAE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-trae`, `.trae2api`, `.trae-gateway` | — |
+| codearts | `.codearts-bridge` | `<root>/codearts` | `CODEARTS_HOME` | `CODEARTS_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-codearts`, `.codearts2api`, `.codearts-gateway` | — |
+| lobsterai | `.lobsterai-bridge` | `<root>/lobsterai` | `LOBSTERAI_HOME` | `LOBSTERAI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-lobsterai`, `.lobsterai2api`, `.lobsterai-gateway` | — |
+| cline | `.cline-bridge` | `<root>/cline` | `CLINE_HOME` | `CLINE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-cline`, `.cline2api`, `.cline-gateway` | — |
+| loomy | `.loomy-bridge` | `<root>/loomy` | `LOOMY_HOME` | `LOOMY_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-loomy`, `.loomy2api`, `.loomy-gateway` | — |
+| raccoon | `.raccoon-bridge` | `<root>/raccoon` | `RACCOON_HOME` | `RACCOON_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-raccoon`, `.raccoon2api`, `.raccoon-gateway` | — |
+| minimax | `.minimax-bridge` | `<root>/minimax` | `MINIMAX_HOME` | `MINIMAX_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-minimax`, `.minimax2api`, `.minimax-gateway` | — |
+| gemini | `.gemini-bridge` | `<root>/gemini` | `GEMINI_HOME` | `GEMINI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-gemini`, `.gemini2api`, `.gemini-gateway` | — |
+| qoder | `.qoder-bridge` | `<root>/qoder` | `QODER_HOME` | `QODER_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-qoder`, `.qoder2api`, `.qoder-gateway` | — |
 
-⚠ = 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据。）此后渠道有过增删：`zcode` 移除、`workbuddy` 拆成 `workbuddy` + `workbuddyai`、`gemini` / `minimax` 移除 —— 下表是**迁移当时**的快照，不代表当前渠道集合。`<root>` = `~/.model-bridge`。
+= 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据。）此后渠道有过增删：`zcode` 移除、`workbuddy` 拆成 `workbuddy` + `workbuddyai`、`gemini` / `minimax` 移除 —— 下表是**迁移当时**的快照，不代表当前渠道集合。`<root>` = `~/.model-bridge`。
 
 > 上表是**迁移前快照**，其中 `workbuddy` 一行指的是**当时**那个兼做国际/国内的渠道
 > （后来改名为 `workbuddyai`）。该渠道现已**拆成两条**，见 §2.4。
@@ -102,7 +102,7 @@
 
 | 渠道 | 位置 | 文件 | 覆盖变量 |
 |---|---|---|---|
-| codearts | `~/.cache/deveco/` ⚠ | `codearts_models.json`, `codearts_benefit_models.json` | `DSH_CODEARTS_CACHE_DIR` / `CODEARTS_CACHE_DIR` |
+| codearts | `~/.cache/deveco/`  | `codearts_models.json`, `codearts_benefit_models.json` | `DSH_CODEARTS_CACHE_DIR` / `CODEARTS_CACHE_DIR` |
 
 其它渠道的目录外文件都是**只读的包内资源**，不是用户存储，属正当例外：
 
@@ -196,7 +196,7 @@ if (existsSync(target)) return target;   // 新目录在 → 直接返回，lega
 ### 3.6【低】小的重复与桩
 
 - workbuddy / catpaw 的 `cred.ts` 各自重复 export 了一份 `CREDENTIALS_FILE`（仅供测试），
-  应删掉，测试改用共享层 `paths`。
+ 应删掉，测试改用共享层 `paths`。
 - qoder 是桩（22 处 `todo`），登记信息合规但无落盘行为，统计里应标「未实现」。
 
 ---
@@ -206,45 +206,45 @@ if (existsSync(target)) return target;   // 新目录在 → 直接返回，lega
 1. **单一存储根**：`~/.model-bridge/`，由共享层唯一解析，渠道不得自行拼绝对路径。
 2. **按 cid 分层**：`<root>/<cid>/`。`cid` 全小写、仅 `[a-z0-9-]`、等于 `BridgeConfig.cid`。
 3. **根目录覆盖变量**：`MODEL_BRIDGE_HOME`（唯一）。旧的 `<CID>_HOME` 降级为兼容别名：
-   读到即视为覆盖根（并打一条 deprecation 日志）—— 现状脚本与测试不会断。
+  读到即视为覆盖根（并打一条 deprecation 日志）—— 现状脚本与测试不会断。
 4. **目录内固定文件名**（唯一定义处：`packages/gateway/src/paths.ts`）：
 
-   | 文件 | 用途 |
-   |---|---|
-   | `credentials.json` | 登录凭证 |
-   | `upstream.json` | 上游端点与鉴权头名称 |
-   | `prefs.json` | 渠道内偏好（`auto_start` 等） |
-   | `gateway.pid` | 守护式网关 PID |
-   | `gateway.log` | 守护进程 stdout/stderr |
+  | 文件 | 用途 |
+  |---|---|
+  | `credentials.json` | 登录凭证 |
+  | `upstream.json` | 上游端点与鉴权头名称 |
+  | `prefs.json` | 渠道内偏好（`auto_start` 等） |
+  | `gateway.pid` | 守护式网关 PID |
+  | `gateway.log` | 守护进程 stdout/stderr |
 
 5. **渠道特有文件必须落在自己的 cid 层内**：
-   - `cache/` 可安全删除、可重建（缓存，丢了只是变慢/回落兜底表）
-     - `cache/models.json` —— **远端模型目录缓存**：各渠道 `upstream.fetchModels()`
-       拉到的真实目录，由共享层 `catalog-cache.ts` 原子写入（信封
-       `{version, fetched_at, models}`，权限 `0600`）。
-       - **谁写**：渠道的 `catalog.ts` 在成功拉到远端目录的那一刻写一次（每次成功拉取覆盖）。
-       - **谁读**：同一渠道的 `catalog.ts` 在**首次被问**时读一次做种子 —— 于是
-         `model list` 这类**新进程**能看到真实目录，而不是回落到随包发布的兜底快照。
-       - **常态是读、不是写**：`model list` 命中缓存时**不打网络**；只有本地没有缓存
-         （首次使用）才会拉一次并记录。要更新用 `model refresh` / `--refresh`。
-       - **可安全删除**：删掉只影响下一个新进程的显示（回到兜底表），不影响登录态与额度。
-       - 没有远端目录层的渠道不会产生这个文件（它只是「不存在」，不是错误）。
-   - `state/` 跨重启保持的**状态**：目前唯一使用者是 `state/signin.json`（签到台账：
-     `{version, timezone, last_claim, history}`，由共享层在**领取成功**或**上游回填**时写入）
-   - `debug/` 抓包落盘默认位置（`<CID>_DEBUG_DUMP` 仅作覆盖，值须为绝对路径）
-   - **禁止**写 `~/` 下任何其它目录（含 `~/.cache/`、`~/.config/`）
+  - `cache/` 可安全删除、可重建（缓存，丢了只是变慢/回落兜底表）
+    - `cache/models.json` —— **远端模型目录缓存**：各渠道 `upstream.fetchModels()`
+      拉到的真实目录，由共享层 `catalog-cache.ts` 原子写入（信封
+      `{version, fetched_at, models}`，权限 `0600`）。
+      - **谁写**：渠道的 `catalog.ts` 在成功拉到远端目录的那一刻写一次（每次成功拉取覆盖）。
+      - **谁读**：同一渠道的 `catalog.ts` 在**首次被问**时读一次做种子 —— 于是
+        `model list` 这类**新进程**能看到真实目录，而不是回落到随包发布的兜底快照。
+      - **常态是读、不是写**：`model list` 命中缓存时**不打网络**；只有本地没有缓存
+        （首次使用）才会拉一次并记录。要更新用 `model refresh` / `--refresh`。
+      - **可安全删除**：删掉只影响下一个新进程的显示（回到兜底表），不影响登录态与额度。
+      - 没有远端目录层的渠道不会产生这个文件（它只是「不存在」，不是错误）。
+  - `state/` 跨重启保持的**状态**：目前唯一使用者是 `state/signin.json`（签到台账：
+    `{version, timezone, last_claim, history}`，由共享层在**领取成功**或**上游回填**时写入）
+  - `debug/` 抓包落盘默认位置（`<CID>_DEBUG_DUMP` 仅作覆盖，值须为绝对路径）
+  - **禁止**写 `~/` 下任何其它目录（含 `~/.cache/`、`~/.config/`）
 6. **权限**：根 `0700`，各 cid 层 `0700`，`credentials.json` 等含密文件 `0600`。
-   渠道只能写自己的层。
+  渠道只能写自己的层。
 7. **命名细则**：全小写；单词用 `-` 连接；扩展名固定 `.json` / `.log` / `.pid`；
-   临时文件同目录加 `.tmp`；**不用**大写、下划线、渠道名前缀。
+  临时文件同目录加 `.tmp`；**不用**大写、下划线、渠道名前缀。
 8. **迁移链**：`legacyDirs` / `legacyEnvVars` 只允许填**本渠道**的历史名，按「新→旧」排序。
 9. **端口**：每渠道独占一组，登记在 `BridgeConfig.defaultAddr` / `uiPort`，不与他渠道重复。
 10. **（可选）根级共享偏好**：`<root>/prefs.json` 放跨渠道设置；渠道内 `prefs.json` 只放
-    本渠道设置。本期可不实现，但预留位置，避免以后又想加一层。
+   本渠道设置。本期可不实现，但预留位置，避免以后又想加一层。
 11. **根级共享运行时文件**：属于「全部渠道」而不属于任一渠道的文件放根上 ——
-    `gateway.pid` / `gateway.log`（仓库级网关）、`pool-usage.json`（公共模型池的渠道账本：
-    账单已用量 + 失败冷却，见 `docs/POOL-ARCHITECTURE.md` §2.3）。走 `paths.rootFile()`，
-    文件名同样受 §4.7 的校验。
+   `gateway.pid` / `gateway.log`（仓库级网关）、`pool-usage.json`（公共模型池的渠道账本：
+   账单已用量 + 失败冷却，见 `docs/POOL-ARCHITECTURE.md` §2.3）。走 `paths.rootFile()`，
+   文件名同样受 §4.7 的校验。
 
 ---
 
@@ -313,8 +313,8 @@ fileMigrations?: Array<{ from: string; to?: string; action?: "delete" }>;
 
 - 本渠道：打印根、cid 层、五个固定文件与三个子目录的绝对路径、是否存在、权限位。
 - `--all`：读工作区根 `package.json` 的 `workspaces` 得到全渠道清单，
-  一张表输出：`cid / 层目录 / 是否存在 / 文件清单 / 权限 / 凭证摘要(脱敏) / 最后修改 /
-  是否有待迁移的旧顶层目录或历史文件`。
+ 一张表输出：`cid / 层目录 / 是否存在 / 文件清单 / 权限 / 凭证摘要(脱敏) / 最后修改 /
+ 是否有待迁移的旧顶层目录或历史文件`。
 
 有了单根，这个命令就是「目录 + 分层」规范的自动统计，不需要人肉 `ls ~`。
 
@@ -334,7 +334,7 @@ fileMigrations?: Array<{ from: string; to?: string; action?: "delete" }>;
 全程**不删用户数据**：只「搬移 / 补齐 / 保留」。唯一的删除项是 workbuddy 的空 `webview/`，
 且要求人工确认。
 
-> ⚠ 迁移**没有独立命令**：任何走 `paths` 的读写（`status` / `models` / `start` / `serve`）都会
+>  迁移**没有独立命令**：任何走 `paths` 的读写（`status` / `models` / `start` / `serve`）都会
 > 在首次访问时触发收拢。所以「装了新版第一次跑命令」就等于迁移；若旧目录正被**运行中的**
 > 旧进程占用（Windows 下 rename 会 `EPERM`），收拢退化为「逐文件补齐」并保留旧目录原样 ——
 > 两边各一份，不会丢数据，但要换到新位置需先停掉旧进程再跑任一命令。

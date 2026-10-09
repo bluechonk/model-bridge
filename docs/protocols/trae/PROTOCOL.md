@@ -22,10 +22,10 @@
 | `pluginVersion`（登录 URL 用，≠ideVersion） | `2.3.62834` | 333 |
 | `userAgent` | `Trae/0.1.52` | 335 |
 
-⚠️ **源码中不存在国际版（trae.com）配置** —— 只有这一份 CN 配置。
+**源码中不存在国际版（trae.com）配置** —— 只有这一份 CN 配置。
 `trae.cn`（UG/登录门户）与 `trae.com.cn`（OAuth）是同一份配置里的两个 host。
 
-⚠️ **版本号是模型准入条件**：上游按 `X-Ide-Version` / `X-App-Version-Code` 决定哪些模型可返回，
+**版本号是模型准入条件**：上游按 `X-Ide-Version` / `X-App-Version-Code` 决定哪些模型可返回，
 版本过低时 glm-5.3 等新模型报 `4001 param is invalid`。
 
 ### 1.2 端点清单（trae.ts:44-70）
@@ -50,7 +50,7 @@
 
 ### 2.1 登录：浏览器授权 + 本地回调
 
-⚠️ **回调直接回传 token**，不是 OAuth `?code=`。
+**回调直接回传 token**，不是 OAuth `?code=`。
 
 登录 URL：`{consoleHost}/authorization?` + **17 个参数**（trae-oauth.ts:99-127），逐字为：
 
@@ -75,7 +75,7 @@ x_app_version=0.1.52
 x_app_type=stable
 ```
 
-⚠️ **参数名必须是 `auth_callback_url`**（没有 `callback_url`/`redirect_uri`），
+**参数名必须是 `auth_callback_url`**（没有 `callback_url`/`redirect_uri`），
 写错登录页**永远停在授权中**（真实缺陷）。
 
 **回调解析**（trae-oauth.ts:263-345）：
@@ -84,7 +84,7 @@ x_app_type=stable
 - `userJwt.Token`
 - 另有 PKCE 新流程变体 `code` / `authCode` / `authCodeInfo`（**不支持**，明确报「上游走了 PKCE 流程」）
 - 昵称有 latin-1 双重编码乱码（实测 `Óû§8847309959`），用 `raw.encode('latin1').decode('utf8')` 修复；
-  修不好且无 CJK 时回退 `用户+uid末4位`
+ 修不好且无 CJK 时回退 `用户+uid末4位`
 
 **ExchangeToken**（trae-oauth.ts:375-393）：
 ```
@@ -111,7 +111,7 @@ Body: {"ClientID":"en1oxy7wnw8j9n","RefreshToken":"<refreshToken>","ClientSecret
 **`machine_id`（32 hex，登录后绝不变）**、**`device_id`（32 hex，每账号互不相同）**、
 `domain?`、`api_host?`、`enterprise_id`
 
-⚠️ 同日两账号共用 device_id 会被「该设备已签到」拦截。
+同日两账号共用 device_id 会被「该设备已签到」拦截。
 
 ### 2.3 续期
 
@@ -122,7 +122,7 @@ Body: {"ClientID":"en1oxy7wnw8j9n","RefreshToken":"<refreshToken>","ClientSecret
 - 错误分类为 `session-dead`
 - **2xx 且响应是 JSON 却没有 accessToken**
 
-⚠️ 凭据失效时网关返回 HTML 错误页，必须先 `text()` 再试 `JSON.parse`，不能直接 `.json()`。
+凭据失效时网关返回 HTML 错误页，必须先 `text()` 再试 `JSON.parse`，不能直接 `.json()`。
 
 ---
 
@@ -151,7 +151,7 @@ Body: {"ClientID":"en1oxy7wnw8j9n","RefreshToken":"<refreshToken>","ClientSecret
 | `X-Machine-Id` | `machine_id` |
 | `X-Device-Id` | `device_id` |
 
-⚠️ **同一 token 设三处**（Authorization / X-Cloudide-Token / X-Ide-Token），**缺任一个都可能被拒**。
+**同一 token 设三处**（Authorization / X-Cloudide-Token / X-Ide-Token），**缺任一个都可能被拒**。
 
 ### 3.2 请求体（`transformToSOLOBody`，trae.ts:1545-1577）
 
@@ -162,23 +162,23 @@ Body: {"ClientID":"en1oxy7wnw8j9n","RefreshToken":"<refreshToken>","ClientSecret
 5. assistant 的 `tool_calls[].function` → `function_call`；无 `function_call.name` 的调用被剔除
 6. `tools[].function.parameters` 对象 → **JSON 字符串**（SOLO 要求）
 7. `tool_choice` 归一化：`"none"`/`{type:"none"}` → 删 `tool_choice` + 删 `tools`/`functions`；
-   `auto`/`required` → 字符串；`{type:"function",function:{name}}` → 字符串 name
+  `auto`/`required` → 字符串；`{type:"function",function:{name}}` → 字符串 name
 8. `max_tokens` 收敛到安全上限 **64000**（实测客户端索要 131072 会被上游打成 4xx）
 9. `reasoning_effort` 原样透传
 
 **Max 模式（1M 上下文）字段**（trae.ts:1508-1525，仅远端 `display_config.max_mode === true` 的模型允许）：
 `model_auto_selection:{strategy:'max',...}`、`model_selection_strategy:'max'`、`mode_type:1`、
 `context_window_size:<maxContext>`、`prompt_max_tokens:936000`、`max_tokens:<__max 明细或 64000>`
-⚠️ 只调大 `max_tokens` 无效，必须成套下发。
+只调大 `max_tokens` 无效，必须成套下发。
 
 ### 3.3 特殊约束
 
 - 请求体**不存在** `query` 字段
 - **本地无历史裁剪闸门**
-- ⚠️ **工具消息顺序硬约束**：`role:'tool'` 必须紧跟其 assistant `tool_calls`，
-  中间插任何消息（含带图 user 消息）会被拒
-  `code=4027 Messages with role 'tool' must be a response to a preceding message with 'tool_calls'`；
-  坏报文会落进会话历史导致**永久无法对话**（trae-adapter.ts:463-506）
+-  **工具消息顺序硬约束**：`role:'tool'` 必须紧跟其 assistant `tool_calls`，
+ 中间插任何消息（含带图 user 消息）会被拒
+ `code=4027 Messages with role 'tool' must be a response to a preceding message with 'tool_calls'`；
+ 坏报文会落进会话历史导致**永久无法对话**（trae-adapter.ts:463-506）
 - 图片能力逐模型判定（远端 `display_config.multimodal`）
 - 空响应（HTTP 200 但一个事件都没发）判为可重试的 TRANSPORT，同账号重试一次
 
@@ -198,7 +198,7 @@ Body: {"ClientID":"en1oxy7wnw8j9n","RefreshToken":"<refreshToken>","ClientSecret
 
 - `tool_calls[]` 里 `function_call` → `function`，并清理 SOLO 专属字段 `namespace` / `partial_arguments`
 - 帧格式：`event:<name>\n` + `data:<json>\n\n`，空行是事件分隔；`data:` 可跨行拼接；
-  注释行（`:`）忽略（trae.ts:1860-1917）
+ 注释行（`:`）忽略（trae.ts:1860-1917）
 - 结束：`done` 事件（非 `[DONE]`）；转成 OpenAI 时最后发 `data: [DONE]\n\n`
 
 ### 4.2 错误码与换号
@@ -227,19 +227,19 @@ Body: {"ClientID":"en1oxy7wnw8j9n","RefreshToken":"<refreshToken>","ClientSecret
 ```
 POST {agentHost}/api/ide/v1/batch_get_detail_param
 Body:
-  functions: [22 个通道，逐字]
-    ui_builder_v2, solo_coder, chat_v3, solo_builder, builder_v3, builder,
-    chat, inline_chat, git_ai, custom_agent_generation, utils, code_reviewer,
-    code_review_summary, solo_agent, solo_agent_remote, solo_work_remote,
-    solo_agent_lite, solo_work_lite, solo_design_lite, solo_design_remote,
-    multimodal, system_diagnosis
-  agent_type: ""
-  current_config_info: { config_name: "", is_custom_model: false }
-  mode_type: 0
-  access_type: 0
-  ab_force_vids: ""
-  ab_autotest_advanced_mode: 0
-  show_custom_model: true
+ functions: [22 个通道，逐字]
+   ui_builder_v2, solo_coder, chat_v3, solo_builder, builder_v3, builder,
+   chat, inline_chat, git_ai, custom_agent_generation, utils, code_reviewer,
+   code_review_summary, solo_agent, solo_agent_remote, solo_work_remote,
+   solo_agent_lite, solo_work_lite, solo_design_lite, solo_design_remote,
+   multimodal, system_diagnosis
+ agent_type: ""
+ current_config_info: { config_name: "", is_custom_model: false }
+ mode_type: 0
+ access_type: 0
+ ab_force_vids: ""
+ ab_autotest_advanced_mode: 0
+ show_custom_model: true
 ```
 
 响应 `{function_configs:[{function, config_info_list:[...]}]}`，每个 function 各自一套目录。
@@ -262,7 +262,7 @@ chat_v3, builder_v3, solo_coder, solo_design_lite, solo_design_remote,
 git_ai, code_reviewer, code_review_summary, multimodal, system_diagnosis
 ```
 
-⚠️ 它**同时是白名单与排序表**：不在表内的通道**整组丢弃**（连同其独有模型）；
+它**同时是白名单与排序表**：不在表内的通道**整组丢弃**（连同其独有模型）；
 同一模型被多个白名单通道列出时，按「空档位不得覆盖有档位」→「两侧都有档位时取更靠前者」→
 其余「后覆盖前」合并。
 
@@ -330,16 +330,16 @@ Sec-Fetch-Dest/Mode/Site: empty/no-cors/none
 
 ```
 POST /trae/api/v2/ug/checkin_credits/status   body {} 
-  → {code:0, checked_in, credits, enable, streak_days, total_credits}
+ → {code:0, checked_in, credits, enable, streak_days, total_credits}
 
 POST /trae/api/v2/ug/checkin_credits/claim    body {}（不是 {"req_source":2}）
-  → 成功响应仅 {"code":0,"message":"success"}，**不含积分数**，必须补查一次 status 拿 credits（实测 150）
+ → 成功响应仅 {"code":0,"message":"success"}，**不含积分数**，必须补查一次 status 拿 credits（实测 150）
 
 POST /trae/api/v2/pay/ide_user_ent_usage      body {"require_usage": true, "req_source": 2}
-  → user_entitlement_pack_list[]，每条取 entitlement_base_info.display_desc（包名）、
-    entitlement_base_info.quota.credits_limit、usage.credits_amount、
-    条目级 expire_time（**秒**级 Unix，×1000 才是毫秒）
-    remaining = credits_limit - used
+ → user_entitlement_pack_list[]，每条取 entitlement_base_info.display_desc（包名）、
+   entitlement_base_info.quota.credits_limit、usage.credits_amount、
+   条目级 expire_time（**秒**级 Unix，×1000 才是毫秒）
+   remaining = credits_limit - used
 ```
 
 ### 6.3 错误分类冷却表（trae-credits.ts:74-100）
@@ -360,13 +360,13 @@ POST /trae/api/v2/pay/ide_user_ent_usage      body {"require_usage": true, "req_
 
 - **machine_id 默认不轮换**：只有 `DSH_TRAE_ROTATE_MACHINE_ID=1` 时每 4 次请求派生一代
 - **签到设备轮换代次**：`deriveCheckinDeviceId` = `sha256(base#genN)` 前 32 hex；
-  9074 是 **device_id 级**限流
+ 9074 是 **device_id 级**限流
 - **思考档位**：`reasoning_effort_config.options` 是单值字符串（既展示名也是 wire 值）；
-  默认档**采信上游 `default_level`**（实测上游会下发不在 options 里的 `default_level:'max'`，
-  此时必须退到最强档，不能照抄）
+ 默认档**采信上游 `default_level`**（实测上游会下发不在 options 里的 `default_level:'max'`，
+ 此时必须退到最强档，不能照抄）
 - **展示名带倍率**：`名称 · x0.08` 或活动期 `名称 · x0.80→x0.08`；`rate===0` 显示「免费」；
-  `display_contact_config` 必须二次 `JSON.parse`（它是字符串）
+ `display_contact_config` 必须二次 `JSON.parse`（它是字符串）
 - `is_invisible_to_user`（官方隐藏）与「能否调用」是两个独立维度：
-  `glm-5.1` 属「可调用但被官方隐藏」
+ `glm-5.1` 属「可调用但被官方隐藏」
 - **模型昵称**：`ScreenName` 是按 uid 自动生成的默认名（`用户26815487395`），
-  必须用 `NonPlainTextMobile`（脱敏手机号）优先、邮箱兜底
+ 必须用 `NonPlainTextMobile`（脱敏手机号）优先、邮箱兜底

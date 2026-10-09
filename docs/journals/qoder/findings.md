@@ -14,13 +14,13 @@
 
 | 项目 | 语言 | ★ | 许可证 | 路线 | 价值 |
 | --- | --- | --- | --- | --- | --- |
-| **`qoder2api-hub`**（shuishuipingan） | Python | 86 | **MIT** | COSY 纯代码复刻 | ⭐ **主参考**：33 个模块、双区、多账号、签到、模型目录动态拉取，注释是逆向笔记级别的详细 |
+| **`qoder2api-hub`**（shuishuipingan） | Python | 86 | **MIT** | COSY 纯代码复刻 |  **主参考**：33 个模块、双区、多账号、签到、模型目录动态拉取，注释是逆向笔记级别的详细 |
 | `jyao0708/qoder2api` | Go | 31 | **MIT** | COSY 纯代码复刻（`crypto/rsa` + `crypto/aes`） | 佐证算法；`internal/qoder/legacy.go` 结构可对照 |
 | `Zhengyuuuui/qoder2api` | Go | 50 | 无 | COSY 纯代码复刻（`internal/cosy/{session,signature,fingerprint}.go`） | 佐证算法；文件切分可借鉴 |
 | `cubk1/qoder2api` | Java | 89 | 无 | **旧签名**（`md5("cosy" + "&" + SECRET + "&" + RFC1123日期)`） | 反例：这套已过时，见 §3.1 |
 | `fengyinxia/qoder2api` | Python | 30 | 无 | 未细看（`qoder_auth.py`） | — |
 
-> ⚠ 许可证只对「能否复制代码」有约束。**MIT 的两个**（hub / jyao0708）可以借鉴甚至改写；
+>  许可证只对「能否复制代码」有约束。**MIT 的两个**（hub / jyao0708）可以借鉴甚至改写；
 > **无 LICENSE 的三个**只能读思路、自己重写实现 —— 我们本来就打算用 TS 重写，不受影响。
 
 ---
@@ -35,7 +35,7 @@
 temp_key  = 16 个十六进制字符（uuid4().hex[:16]）  ← 同时当 AES-128 的 key 与 IV（key == iv）
 cosy_key  = base64( RSA_PKCS1v15_encrypt(temp_key) )   ← 官方 1024-bit 公钥，硬编码 PEM
 identity  = { name, aid, uid, yx_uid, organization_id, organization_name,
-              user_type, security_oauth_token, refresh_token }        ← 9 键，顺序无关
+             user_type, security_oauth_token, refresh_token }        ← 9 键，顺序无关
 info      = base64( AES-128-CBC-PKCS7( json_sorted_compact(identity), key=temp_key, iv=temp_key ) )
 ```
 
@@ -54,8 +54,8 @@ sig         = md5_hex(raw)
 Authorization = "Bearer COSY." + payload_b64 + "." + sig
 ```
 
-⚠ `body` 是**已编码的请求体**（见 §2.3），不是明文 JSON。
-⚠ `path` 去 `/algo` 前缀：`/algo/api/v2/model/list` → `/api/v2/model/list`。
+`body` 是**已编码的请求体**（见 §2.3），不是明文 JSON。
+`path` 去 `/algo` 前缀：`/algo/api/v2/model/list` → `/api/v2/model/list`。
 
 ### 2.3 请求体的自定义 Base64 变体
 
@@ -219,7 +219,7 @@ data:{"headers":{...},"body":"<内层 OpenAI chunk 的 JSON 字符串>","statusC
 **必须照抄、不要"顺手加固"的点**（hub 明确写了风险但选择兼容）：
 
 1. `temp_key` 是 16 个 hex 字符（≈64 bit 熵），且同时当 key 与 IV —— 服务端按同一字节串解包，
-   改成纯随机 16 字节会**直接失败**，除非端到端验证过。
+  改成纯随机 16 字节会**直接失败**，除非端到端验证过。
 2. RSA 公钥只用 1024 位（官方如此）—— 我们无法改。
 3. 设备指纹必须**按 uid 稳定派生**，随机机器码会触发上游风控。
 
@@ -235,8 +235,8 @@ data:{"headers":{...},"body":"<内层 OpenAI chunk 的 JSON 字符串>","statusC
 - `billing.ts`：余额 + 活动领取（桌面身份头）
 - 共享层顺带支持 `buildChatBody` 返回**字符串**（自编码请求体直发）
 
-真机结果：登录 ✅ → 动态模型目录 ✅ → 非流式对话 `content: "通了"` ✅ →
-流式（信封逐帧解包）✅ → 额度 `589/800 credits` ✅ → 签到状态 ✅。
+真机结果：登录  → 动态模型目录  → 非流式对话 `content: "通了"`  →
+流式（信封逐帧解包） → 额度 `589/800 credits`  → 签到状态 。
 
 ### 7.1 真机踩到、离线测不出的一个坑
 
@@ -276,11 +276,11 @@ Request with GET/HEAD method cannot have body.
 
 - 两区 `checkin --status` 都正常：`? [qoder] 上游今天没有可领的奖励（当前没有可领取的签到活动）`
 - **一键签到**（`model-bridge checkin`，不带 `<cid>`）覆盖全部 11 个渠道，三类状态分得很清楚：
-  有端点（`·`）、无端点（`?` + 渠道自己的说明）、查询失败（`?` 如实报未知）
+ 有端点（`·`）、无端点（`?` + 渠道自己的说明）、查询失败（`?` 如实报未知）
 - 直接 dump 上游表明**结论正确**：`{"showCampaign":true,"claimable":false,"campaigns":[{...,"actionType":"VIEW_DETAILS","claimStatus":"CLAIMED"}]}`
-  —— 该账号此刻唯一的活动是 Pro 推广（`VIEW_DETAILS`），没有 `CLAIM_BENEFIT` 可领项
+ —— 该账号此刻唯一的活动是 Pro 推广（`VIEW_DETAILS`），没有 `CLAIM_BENEFIT` 可领项
 - 因此把措辞改准：没有签到活动时 `claimedToday` 返回 `null`（**不适用**）而不是 `false`（未签），
-  并补上「上游顶层 `claimable` 是权威判据」的短路，避免 campaigns 结构演进时漏领
+ 并补上「上游顶层 `claimable` 是权威判据」的短路，避免 campaigns 结构演进时漏领
 
 ## 10. 遗留：国际版推理未通（诊断已定位到「上游不响应」）
 
@@ -290,10 +290,10 @@ Request with GET/HEAD method cannot have body.
 
 | 假设 | 实验 | 结论 |
 | --- | --- | --- |
-| 签名错 | 同一套签名 GET 模型目录 → 成功 | ❌ 签名没问题 |
-| 主机错 | 逐台 `api1/api2/api3.qoder.sh` 试推理 POST | ❌ 三台全部 45s 超时（都是无响应，不是拒绝） |
-| 网络/连通性 | 无签名 GET/POST 同一路径 → `403`/`400` **秒回**（0.5~0.8s） | ❌ 主机连得通、不挑方法 |
-| 编码错 | 国内版 `qodercn` 用**逐字节相同**的实现推理成功 | ❌ 编码与请求体构造正确 |
+| 签名错 | 同一套签名 GET 模型目录 → 成功 |  签名没问题 |
+| 主机错 | 逐台 `api1/api2/api3.qoder.sh` 试推理 POST |  三台全部 45s 超时（都是无响应，不是拒绝） |
+| 网络/连通性 | 无签名 GET/POST 同一路径 → `403`/`400` **秒回**（0.5~0.8s） |  主机连得通、不挑方法 |
+| 编码错 | 国内版 `qodercn` 用**逐字节相同**的实现推理成功 |  编码与请求体构造正确 |
 
 **剩下的解释**：上游**接受了请求但不返回响应** —— `agent_chat_generation` 是 SSE 长连接，
 服务端可能正在**排队**（参考实现为此实现了专门的排队重试：内层 `code="10605"`、

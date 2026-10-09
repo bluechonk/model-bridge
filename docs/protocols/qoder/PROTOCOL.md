@@ -1,6 +1,6 @@
 # Qoder 协议规格（阿里系）
 
-> **⚠ 修订（2026-10-09，渠道已实现）**：本文件 §7.1「WASM 签名无纯代码替代，只能 wasmtime +
+> ** 修订（2026-10-09，渠道已实现）**：本文件 §7.1「WASM 签名无纯代码替代，只能 wasmtime +
 > 重写 glue」的结论**已过时**。社区至少三个独立项目用纯代码复刻出了同一套算法
 > （RSA-PKCS1v15 包裹会话密钥 + AES-128-CBC 加密身份体 + MD5 签名 + 自定义 Base64 请求体编码），
 > **完全不需要 WASM** —— 渠道已按这条路线实现（`channels/qoder/src/upstream.ts`）。
@@ -41,7 +41,7 @@
 | `userAgentPrefix` | `qoder`（拼成 `qoder/1.0.0`） | 同 | 456 / 628 |
 | `clientMetadata` | `{client_type:'5', business_product:'cli', business_type:'agent', scene:'assistant'}` | 同 | 448-453 / 619-624 |
 
-⚠️ `client_id` **必须用 prod 值**：用 test 值会被服务端在回调阶段拒绝，页面报「参数无效 / 你可以稍后前往 IDE 客户端并登录Qoder」（qoder.ts:103-107，真实缺陷记录）。
+`client_id` **必须用 prod 值**：用 test 值会被服务端在回调阶段拒绝，页面报「参数无效 / 你可以稍后前往 IDE 客户端并登录Qoder」（qoder.ts:103-107，真实缺陷记录）。
 
 ### 1.2 端点清单
 
@@ -72,11 +72,11 @@
 - challenge = `base64url(sha256(verifier))` 且**去 padding**（带 `=` 服务端校验失败）
 
 **machine_id**（qoder.ts:71-95）：客户端自生成随机 UUID 并**持久化**。
-⚠️ 不是硬件指纹 —— 官方是 SMBIOS UUID + salt 的 sha256，本实现**刻意不复刻**。
+不是硬件指纹 —— 官方是 SMBIOS UUID + salt 的 sha256，本实现**刻意不复刻**。
 
 **轮询规则**（qoder-oauth.ts:119-164）：
 - 间隔 `1000ms`、总超时 `300000ms`、连续网络失败上限 5
-- ⚠️ **HTTP 404 = 用户尚未授权，继续轮询**（实测 404 体 `{"errorCode":"NotFound"}`；任意不存在路径返回 401，说明该端点被网关豁免认证）
+-  **HTTP 404 = 用户尚未授权，继续轮询**（实测 404 体 `{"errorCode":"NotFound"}`；任意不存在路径返回 401，说明该端点被网关豁免认证）
 - 其他非 2xx 立即抛错
 - 轮询请求头只有 `Accept: application/json`
 
@@ -84,7 +84,7 @@
 `token` / `device_token` / `access_token`（取第一个非空）、`refresh_token|refreshToken`、
 `expires_at|expiresAt`、`refresh_token_expires_at`、`user_id|userId`、`user_name|userName`
 
-⚠️ **踩坑**：设备码轮询响应**不带 `user_name`**，故登录后必须补一次
+**踩坑**：设备码轮询响应**不带 `user_name`**，故登录后必须补一次
 `GET /api/v1/userinfo` 取 `name` 作昵称（qoder.ts:344-394）。`uid` 实际来源是设备码响应的 `user_id`。
 
 ### 2.2 凭据字段（qoder.ts:144-164）
@@ -126,7 +126,7 @@ Body: {"refresh_token": "...", "machine_id": "..."}
 | `X-Request-ID` / `X-Session-ID` | 请求级随机 id |
 | `User-Agent` | `qoder/1.0.0` |
 
-⚠️ 用普通 Bearer 覆盖会 `403 Signature invalid`（qoder-wasm.ts:649-655）。
+用普通 Bearer 覆盖会 `403 Signature invalid`（qoder-wasm.ts:649-655）。
 
 ---
 
@@ -142,24 +142,24 @@ session_id                                      = 随机 UUID
 stream                                          = true（固定）
 chat_task                                       = "FREE_INPUT"
 chat_context = {
-  text            = 最后一条 user 消息的文本
-  features        = []
-  extra = {
-    context: [],
-    modelConfig: { key: <目录key>, is_reasoning: bool },
-    originalContent: <同 text>
-  }
-  chatPrompt      = ""
-  imageUrls       = null            ← 官方也恒置 null，图片不走这里
+ text            = 最后一条 user 消息的文本
+ features        = []
+ extra = {
+   context: [],
+   modelConfig: { key: <目录key>, is_reasoning: bool },
+   originalContent: <同 text>
+ }
+ chatPrompt      = ""
+ imageUrls       = null            ← 官方也恒置 null，图片不走这里
 }
 is_reply = true, is_retry = false, source = 1, version = "3"
 agent_id = "agent_common", task_id = "common"
 session_type = "qodercli"（国际）/ "qoder_work"（国内）
 aliyun_user_type = ""
 model_config = {
-  key, display_name, model: "", format: "openai",
-  is_vl: bool, is_reasoning: bool, api_key: "", url: "",
-  source: "system", max_input_tokens: number(默认 200000)
+ key, display_name, model: "", format: "openai",
+ is_vl: bool, is_reasoning: bool, api_key: "", url: "",
+ source: "system", max_input_tokens: number(默认 200000)
 }
 custom_model = null
 system  = [{type:"text", text}] 或 []
@@ -212,9 +212,9 @@ data:{"headers":{...},"body":"{\"choices\":[{\"delta\":{\"content\":\"Q\"}}]}","
 - **内层 `body` 未加密**（只有请求体要 WASM 加密）；`body` 是 JSON 字符串时直接取，是对象时 `JSON.stringify`（:42-52）
 - 剥完后就是**标准 OpenAI SSE**
 - 内层帧分类（:54-102）：
-  - `chunk`：有 `choices` 数组（**`choices: []` 也算**）或 `usage`
-  - `heartbeat`：`null`、空串、`{}`、裸标量 → **整帧跳过**（早期把 `body:null` 当业务错误，导致正常回完内容却报失败，issue IKJOZ8）
-  - `error`：显式带 `code` / `message` / `error` / `statusCodeValue` / `type` 之一 → 抛出，且**保真转发** `{code, message, type:'model_error'}`（`code` 必须独立字段，下游靠 `code==='10605'` 识别排队）
+ - `chunk`：有 `choices` 数组（**`choices: []` 也算**）或 `usage`
+ - `heartbeat`：`null`、空串、`{}`、裸标量 → **整帧跳过**（早期把 `body:null` 当业务错误，导致正常回完内容却报失败，issue IKJOZ8）
+ - `error`：显式带 `code` / `message` / `error` / `statusCodeValue` / `type` 之一 → 抛出，且**保真转发** `{code, message, type:'model_error'}`（`code` 必须独立字段，下游靠 `code==='10605'` 识别排队）
 - 非 `data:` 行（如 `event:finish`）原样保留；`[DONE]` 原样传递（:145-154, 204）
 
 ### 4.2 事件与结束标志
@@ -235,7 +235,7 @@ data:{"headers":{...},"body":"{\"choices\":[{\"delta\":{\"content\":\"Q\"}}]}","
 | `105` | `auth_error`（与 10605 独立，不可合并） | 续期后重试 | model-queue.ts:26 |
 | 409 | `duplicate_request` | 不刷新凭据，直接重发一次 | qoder-adapter.ts:834-838 |
 
-⚠️ 排队错误的**两种下发形态都必须处理**（只修一条会回归）：
+排队错误的**两种下发形态都必须处理**（只修一条会回归）：
 HTTP 403 + 排队 JSON 体；HTTP 200 + SSE 内嵌 `{code:"10605",...}` 帧（qoder-adapter.ts:744-757）。
 
 额度错误实测走 SSE（HTTP 200）通道；受限时标记「该账号 + 该模型」到 **UTC+8 当日 24:00**，
@@ -280,12 +280,12 @@ HTTP 403 + 排队 JSON 体；HTTP 200 + SSE 内嵌 `{code:"10605",...}` 帧（qo
 ### 5.3 档位与上下文口径
 
 - 档位白名单（asar 常量 `Qj`）：`['none','low','medium','high','xhigh','max']`，
-  别名 `disabled→none`、`off→none`
+ 别名 `disabled→none`、`off→none`
 - 中文名：`none:关闭思考 / minimal:最小 / low:低 / medium:中 / high:高 / xhigh:极高 / max:最大`（qoder-product.ts:113-117）
-- ⚠️ **上下文口径**：取目录 `context_config` 档位表**最大档**，不是 `max_input_tokens`
-  （两者经常矛盾，官方客户端只认档位表）。实测服务端上限因模型而异：
-  `dfmodel` 999,991 通过、`qfmodel` 983,490 通过（越界报 `Range of input length should be [1, 983616]`）、
-  `dmodel` 852,951 通过（qoder-product.ts:485-520）
+-  **上下文口径**：取目录 `context_config` 档位表**最大档**，不是 `max_input_tokens`
+ （两者经常矛盾，官方客户端只认档位表）。实测服务端上限因模型而异：
+ `dfmodel` 999,991 通过、`qfmodel` 983,490 通过（越界报 `Range of input length should be [1, 983616]`）、
+ `dmodel` 852,951 通过（qoder-product.ts:485-520）
 
 ---
 
@@ -296,8 +296,8 @@ HTTP 403 + 排队 JSON 体；HTTP 200 + SSE 内嵌 `{code:"10605",...}` 帧（qo
 ```
 GET {openApiBase}/sash/api/v2/me/usage
 Headers: Accept: application/json, Authorization: Bearer <token>,
-         Cosy-ClientType: 10, User-Agent: Qoder,
-         Cosy-MachineToken: <配对头>, Cosy-MachineType: <配对头>
+        Cosy-ClientType: 10, User-Agent: Qoder,
+        Cosy-MachineToken: <配对头>, Cosy-MachineType: <配对头>
 ```
 （qoder-credits.ts:229-240）
 
@@ -305,7 +305,7 @@ Headers: Accept: application/json, Authorization: Bearer <token>,
 `qoderUsage.userQuota{total,used,remaining,unit}`、`qoderUsage.addOnQuota{...}`、
 `qoderUsage.dedicatedResourcePackages[]`、`expiresAt`。
 
-⚠️ **余额不只在 `userQuota`**（实测 userQuota.remaining=0 而 addOnQuota.remaining=100）。
+**余额不只在 `userQuota`**（实测 userQuota.remaining=0 而 addOnQuota.remaining=100）。
 
 ### 6.2 活动与领取
 
@@ -318,8 +318,8 @@ body: 空串（不是 {}）
 ```
 - 只有 `actionType==='CLAIM_BENEFIT' && claimStatus==='CLAIMABLE'` 才可领；`VIEW_DETAILS` 不领
 - 幂等判据是响应体 `replayed:true`（重复领取同样 HTTP 200，但不含 `benefit`、`claimedAt` 是旧时间）
-- ⚠️ 活动每日 **10:00（UTC+8）刷新**（`QODER_CAMPAIGN_REFRESH_HOUR_UTC8 = 10`，qoder-credits.ts:89）；
-  刷新前看到的 `CLAIMED` 属昨天，**不能报「今天已领」**
+-  活动每日 **10:00（UTC+8）刷新**（`QODER_CAMPAIGN_REFRESH_HOUR_UTC8 = 10`，qoder-credits.ts:89）；
+ 刷新前看到的 `CLAIMED` 属昨天，**不能报「今天已领」**
 
 ---
 
@@ -339,26 +339,26 @@ body: 空串（不是 {}）
 **调用链**：
 ```
 generate_runtime_auth_fields({uid, security_oauth_token, organization_id,
-                              organization_tags, data_policy_agreed})
-  → {encrypt_user_info, key}
+                             organization_tags, data_policy_agreed})
+ → {encrypt_user_info, key}
 qodercontext_new(machineId, version, userInfoJson, clientMetadataJson)
 qodercontext_prepareInferRequest(host, body, modelKey, source)
-  → {url, headers, body}    其中 Authorization: Bearer COSY.<载荷>.<签名>
+ → {url, headers, body}    其中 Authorization: Bearer COSY.<载荷>.<签名>
 ```
 （qoder-wasm.ts:545-698）
 
 **Python 复现路线**：
 - **无纯 Python 替代**，源码里也没有第二实现
 - 唯一可行路线是用 `wasmtime` / `wasmtime-py` 加载**同一个 .wasm**，并自己重写 wasm-bindgen glue
-  （本仓库的 glue 约 200 行 TS，qoder-wasm.ts:357-543）
+ （本仓库的 glue 约 200 行 TS，qoder-wasm.ts:357-543）
 - 三个必须照抄的坑（qoder-wasm.ts:390-410, 462-527）：
-  1. 两个 `getRandomValues` import 签名方向相反（`__wbg_getRandomValues_d49329ff89a07af1` 写 wasm 内存；
-     `_c44a50d8cfdaebeb` 调 JS 对象），写反得到 Rust panic `unreachable`
-  2. 返回值布局两套：字符串类 `ptr/len/valIdx/isErr`，而 `qodercontext_new`/`prepareInferRequest`
-     是 `ptr/errIdx/isErr`，混用得 `null pointer passed to rust`
-  3. `requestresult_url(栈指针, ptr)` 参数顺序与直觉相反
+ 1. 两个 `getRandomValues` import 签名方向相反（`__wbg_getRandomValues_d49329ff89a07af1` 写 wasm 内存；
+    `_c44a50d8cfdaebeb` 调 JS 对象），写反得到 Rust panic `unreachable`
+ 2. 返回值布局两套：字符串类 `ptr/len/valIdx/isErr`，而 `qodercontext_new`/`prepareInferRequest`
+    是 `ptr/errIdx/isErr`，混用得 `null pointer passed to rust`
+ 3. `requestresult_url(栈指针, ptr)` 参数顺序与直觉相反
 - 另需实现对象堆（1024 个 undefined + 4 个哨兵 undefined/null/true/false，索引 ≥1028 可回收）
-  与 `IMPORT_MODULE = './qoder_auth_wasm_bg.js'` 的 import 表
+ 与 `IMPORT_MODULE = './qoder_auth_wasm_bg.js'` 的 import 表
 
 **不想要的替代路径**：公开端点 `/model/v1/chat/completions` 只需 Bearer，
 但只认通用名（`qwen-flash` 等）、不认目录 key，且拿不到 Qwen3.8 系列。
@@ -368,18 +368,18 @@ qodercontext_prepareInferRequest(host, body, modelKey, source)
 来源优先级（qoder-machine.ts:211-231, 319-471）：
 
 1. **实时 spawn** `<home>/.qoder/.bin/umid-<platform>-<hash>/runtime-info(.exe)`，
-   参数**必须**是 `['3', '--account-stdin']`（environment 是第一个位置参数，
-   漏掉会拿到另一套身份：`machineType=15e6683914666dab9f` 只回 1 条 `VIEW_DETAILS`；
-   正确 `3` 得 `3582ddfb14d9bf289a` 并回 `CLAIM_BENEFIT/CLAIMABLE/100`），
-   stdin 写 `{"account": ""}`，单次约 3.8 秒、超时 20 秒；输出 JSON 取 `machineToken` / `machineType`
+  参数**必须**是 `['3', '--account-stdin']`（environment 是第一个位置参数，
+  漏掉会拿到另一套身份：`machineType=15e6683914666dab9f` 只回 1 条 `VIEW_DETAILS`；
+  正确 `3` 得 `3582ddfb14d9bf289a` 并回 `CLAIM_BENEFIT/CLAIMABLE/100`），
+  stdin 写 `{"account": ""}`，单次约 3.8 秒、超时 20 秒；输出 JSON 取 `machineToken` / `machineType`
 2. 退路：读 `machine_token.json`（`%APPDATA%\Qoder\SharedClientCache\cache\machine_token.json`，
-   也列 `Qoder CN` 与 macOS/Linux 路径），取 `token` / `type`；
-   实测该文件可陈旧 179 天且跑 exe 不更新它
+  也列 `Qoder CN` 与 macOS/Linux 路径），取 `token` / `type`；
+  实测该文件可陈旧 179 天且跑 exe 不更新它
 3. 都拿不到 → 不带这两个头（保守降级）
 
 环境变量覆盖：`QODER_MACHINE_TOKEN_PATH`、`QODER_RUNTIME_INFO`。
 
-⚠️ **消融结论**：`Cosy-MachineToken` 与 `Cosy-MachineType` **必须成对**，缺一即失效；
+**消融结论**：`Cosy-MachineToken` 与 `Cosy-MachineType` **必须成对**，缺一即失效；
 `Cosy-MachineId` / `Cosy-Version` / `MachineOS` / `MachineHostname` / `MachineCode` 实测**均非必需**。
 另外 `Cosy-ClientType: 10`（桌面 app 身份）是「必要但不充分」前提 —— 只用 `5`（CLI）时 campaigns 恒 `campaigns:[]`。
 
@@ -387,5 +387,5 @@ qodercontext_prepareInferRequest(host, body, modelKey, source)
 
 - 排队 `10605` 与额度 `110` 与认证 `105` 是**三个独立码**，不能合并
 - `Cosy-ClientType` 两个身份不可合并：推理信封的 `clientMetadata.client_type='5'`（CLI）
-  与 `/sash/` 的 `sashClientType='10'`（桌面 app）
+ 与 `/sash/` 的 `sashClientType='10'`（桌面 app）
 - 续期请求体缺 `machine_id` 会破坏设备绑定；续期后必须保留 `machine_id`/`uid`/`nickname`
