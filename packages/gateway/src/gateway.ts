@@ -339,6 +339,11 @@ interface QueueProbe {
   delayMs?: number;
   /** 已产出的**内容帧**（OpenAI SSE 字节）。非空 = 已有实质输出，不能再重试。 */
   contentFrames: Buffer[];
+  /**
+   * 探测消费掉的**非排队错误帧**（`data: {"error":…}`）。
+   * 必须交回调用方转发/回报 —— 吞掉就会退化成空响应（非流式尤甚）。
+   */
+  errorFrames: Buffer[];
   /** 排队帧里解析到的 retryAfterSeconds 原文（日志用）。 */
   rawDelaySec?: number;
 }
@@ -348,7 +353,8 @@ interface QueueProbe {
  *
  * 翻译器逐帧处理：
  * - 内容帧（`data:` 且非 error）→ 记入 `contentFrames`，立即停止（有内容就不能重试）
- * - 错误帧 → 问渠道 `isQueueError`：是排队就记下延迟并继续等下一帧；否则停止
+ * - 错误帧 → 问渠道 `isQueueError`：是排队就记下延迟并继续等下一帧；
+ *   否则记入 `errorFrames` 后停止（交回调用方，不能吞）
  * - 流结束仍无内容也无排队 → `queued: false`（正常完成或普通错误）
  *
  * ⚠ 只在 `relayUpstream` **之前**调用：一旦开始向客户端写字节，本函数就没意义了。
@@ -360,7 +366,7 @@ async function consumeQueueProbe(
 ): Promise<QueueProbe> {
   const translator = channel.upstream.newTranslator();
   const reader = upstreamBody.getReader();
-  const probe: QueueProbe = { queued: false, contentFrames: [] };
+  const probe: QueueProbe = { queued: false, contentFrames: [], errorFrames: [] };
   try {
     for (;;) {
       const { done, value } = await reader.read();
@@ -389,7 +395,8 @@ async function consumeQueueProbe(
             }
             continue; // 排队帧不算内容，继续读后续帧
           }
-          // 非排队的错误帧：停止探测（由调用方按原结果处理）
+          // 非排队的错误帧：记下来停止探测（交回调用方转发/回报）
+          probe.errorFrames.push(buf);
           return probe;
         }
         probe.contentFrames.push(buf);
@@ -415,6 +422,8 @@ async function consumeQueueProbe(
             probe.rawDelaySec = sec;
             probe.delayMs = Math.max(1_000, sec * 1000);
           }
+        } else {
+          probe.errorFrames.push(buf);
         }
         continue;
       }
@@ -667,7 +676,8 @@ async function handleChat(
       for (;;) {
         const probe = await inChannel(channel, () => consumeQueueProbe(call.body!, channel, cid));
         if (!probe.queued || probe.contentFrames.length > 0) {
-          pendingFrames.push(...probe.contentFrames);
+          // 探测消费掉的帧一个都不能丢：内容帧是响应前缀，错误帧要转发/回报
+          pendingFrames.push(...probe.contentFrames, ...probe.errorFrames);
           break;
         }
         const elapsed = Date.now() - startedAt;
@@ -710,7 +720,7 @@ async function handleChat(
     // 上游收下了这次请求 → 该渠道可用（清冷却）→ 交给转发层，池路由到此为止。
     noteSuccess(cid);
     markActiveHealth("ok", cid);
-    await relayUpstream(res, channel, cid, call, wantStream, opts.logger, sendBody, pendingFrames, queuedOut);
+    await relayUpstream(res, channel, cid, call, wantStream, opts.logger, pendingFrames, queuedOut);
     return;
   }
 
@@ -721,6 +731,16 @@ async function handleChat(
     message: "upstream request failed; see gateway logs",
   };
   writeJsonError(res, final.status, final.code, final.message);
+}
+
+/** 聚合结果是否「什么都没有」：无 content、无 reasoning、无 token 用量。 */
+function isEmptyCompletion(completion: ReturnType<typeof sseStream.aggregateChatSse>): boolean {
+  const choice = completion.choices[0];
+  if (!choice) return true;
+  if (choice.message.content) return false;
+  if (choice.message.reasoning_content) return false;
+  const total = (completion.usage as { total_tokens?: unknown }).total_tokens;
+  return !(typeof total === "number" && total > 0);
 }
 
 /**
@@ -736,7 +756,6 @@ async function relayUpstream(
   call: UpstreamCall,
   wantStream: boolean,
   logger: (m: string) => void,
-  sendBody?: Buffer,
   pendingFrames: Buffer[] = [],
   queuedOut = false,
 ): Promise<void> {
@@ -751,53 +770,28 @@ async function relayUpstream(
   // 等待 + 重开上游重试（与流式路径同一套预算）。
   if (!wantStream) {
     try {
-      let body: ReadableStream<Uint8Array>;
-      let buf: Buffer;
-      let queuedLocal = queuedOut;
-      if (isCustomWire(channel) && channel.upstream.isQueueError) {
-        body = streamBody;
-        const startedAt = Date.now();
-        for (;;) {
-          const probe = await inChannel(channel, () => consumeQueueProbe(body, channel, cid));
-          if (!probe.queued || probe.contentFrames.length > 0) {
-            buf = Buffer.concat([Buffer.concat(pendingFrames), ...probe.contentFrames]);
-            break;
-          }
-          const elapsed = Date.now() - startedAt;
-          const delayMs = Math.min(probe.delayMs ?? QUEUE_RETRY_MAX_DELAY_MS, QUEUE_RETRY_MAX_DELAY_MS);
-          if (elapsed + delayMs > QUEUE_RETRY_BUDGET_MS) {
-            logger(`queue wait budget exhausted (channel ${cid}, waited ${Math.round(elapsed / 1000)}s)`);
-            buf = Buffer.concat([Buffer.concat(pendingFrames), ...probe.contentFrames]);
-            queuedLocal = true;
-            break;
-          }
-          logger(`upstream queued (channel ${cid}), waiting ${Math.round(delayMs / 1000)}s before retry`);
-          await new Promise((r) => setTimeout(r, delayMs));
-          const credential = sendBody ? loadCredentialSafe(channel) : null;
-          const next =
-            credential !== null
-              ? await inChannel(channel, () => openStream(channel, credential, sendBody!))
-              : null;
-          if (!next || !next.ok || !next.body) {
-            logger(`queue retry reopen failed (channel ${cid}): ${String(next?.error?.message ?? "no credential")}`);
-            buf = Buffer.concat([Buffer.concat(pendingFrames), ...probe.contentFrames]);
-            queuedLocal = true;
-            break;
-          }
-          body = next.body;
-        }
-      } else {
-        buf = Buffer.concat([
-          ...pendingFrames,
-          await inChannel(channel, () => collectAsOpenAiSse(streamBody, channel, cid)),
-        ]);
-      }
+      // ⚠ 这里**不再二次探测**：`handleChat` 已用同一条件探测过这条流并推进了它的位置，
+      // 再探测会丢掉第一次消费掉的帧（非流式空响应的元凶）。此处只把探测结果（前缀内容帧 /
+      // 错误帧）与流剩余部分拼起来聚合。
+      const buf = Buffer.concat([
+        ...pendingFrames,
+        await inChannel(channel, () => collectAsOpenAiSse(streamBody, channel, cid)),
+      ]);
       // 排队耗尽且零内容：给客户端一个明确的错误，而不是空 completion
-      if (queuedLocal && buf.length === 0) {
+      if (queuedOut && buf.length === 0) {
         writeJsonError(res, 503, "upstream_queued", "upstream is queued and the wait budget was exhausted");
         return;
       }
-      writeJson(res, sseStream.aggregateChatSse(buf));
+      const aggregated = sseStream.aggregateChatSse(buf);
+      // 流内业务错误（上游 HTTP 200 + error 帧）且没有任何内容 → 报错误，别回空 completion
+      if (isEmptyCompletion(aggregated)) {
+        const sseError = sseStream.firstSseError(buf);
+        if (sseError) {
+          writeJsonError(res, 502, sseError.code ?? "upstream_error", sseError.message ?? "upstream error");
+          return;
+        }
+      }
+      writeJson(res, aggregated);
     } catch (err) {
       logger(`reading upstream response interrupted: ${String(err)}`);
       writeJsonError(res, 502, "upstream_error", "upstream request failed; see gateway logs");

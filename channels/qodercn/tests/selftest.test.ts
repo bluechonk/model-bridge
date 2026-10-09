@@ -237,6 +237,28 @@ describe("5. SSE 信封解包", () => {
     assert.ok(out.includes("10605"), out);
   });
 
+  it("非 200 信封内嵌的业务错误要保真（真机：403 裹 10605 排队）", () => {
+    // 实测原帧：statusCodeValue=403，body 里再套一层 {"code":"403","message":"{…10605…isQueued…}"}。
+    // 修前只回通用文案「Qoder upstream returned 403」，共享层认不出排队 →
+    // 非流式聚合出空 completion。这里锁死「内层信息必须活着出来」。
+    const inner = JSON.stringify({
+      code: "10605",
+      message: JSON.stringify({ isQueued: true, retryAfterSeconds: 30, serviceAvailable: false }),
+    });
+    const body = JSON.stringify({ code: "403", message: inner });
+    const frame = `data:${JSON.stringify({
+      headers: { "Content-Type": ["application/json"] },
+      body,
+      statusCodeValue: 403,
+      statusCode: "FORBIDDEN",
+    })}\n\n`;
+    const out = feedAll([frame]);
+    const line = out.split("\n").find((l) => l.startsWith("data: "));
+    assert.ok(line, `非 200 信封必须产出 error 帧：${JSON.stringify(out)}`);
+    const payload = JSON.parse(line.slice(6)) as Record<string, unknown>;
+    assert.equal(upstream.isQueueError(payload), true, `排队帧必须被识别：${out}`);
+  });
+
   it("跨 chunk 切断的行能拼回来（增量解析）", () => {
     const whole = envelope({ choices: [{ index: 0, delta: { content: "OK" } }] });
     const half = Math.floor(whole.length / 2);

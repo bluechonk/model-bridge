@@ -610,7 +610,7 @@ export function isQueueError(frame: Record<string, unknown>): boolean {
   if (!err) return false;
   const code = String(err.code ?? "");
   const msg = String(err.message ?? "");
-  return code === "10605" || /isQueued|retryAfterSeconds/i.test(msg);
+  return code === "10605" || /isQueued|retryAfterSeconds|10605/i.test(msg);
 }
 
 interface Envelope {
@@ -629,6 +629,23 @@ function innerError(payload: Record<string, unknown>): { code?: string; message?
     ...(typeof code === "string" ? { code } : {}),
     ...(message !== undefined ? { message: typeof message === "string" ? message : JSON.stringify(message) } : {}),
   };
+}
+
+/** 解析信封 `body`（字符串或对象）为对象；解析不出返回 null。 */
+function parseEnvelopeBody(body: unknown): Record<string, unknown> | null {
+  if (typeof body === "string") {
+    try {
+      const decoded: unknown = JSON.parse(body);
+      return decoded && typeof decoded === "object" && !Array.isArray(decoded)
+        ? (decoded as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  return body && typeof body === "object" && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : null;
 }
 
 /**
@@ -678,6 +695,16 @@ export function newTranslator(): StreamTranslator {
 
     const status = Number(envelope.statusCodeValue ?? 200);
     if (Number.isFinite(status) && status !== 200) {
+      // 非 200 信封里**仍可能内嵌业务错误**。实测排队回 statusCodeValue=403 且
+      // body={"code":"403","message":"{\"code\":\"10605\",…\"isQueued\":true,\"retryAfterSeconds\":30}"}——
+      // 只回通用文案会把 10605 丢掉，共享层的排队重试就永远不触发。先保真内层 code/message。
+      const nested = parseEnvelopeBody(envelope.body);
+      const nestedErr = nested ? innerError(nested) : null;
+      if (nestedErr) {
+        return [
+          `data: ${JSON.stringify({ error: { code: nestedErr.code ?? String(status), message: nestedErr.message ?? `Qoder upstream returned ${status}` } })}\n\n`,
+        ];
+      }
       return [
         `data: ${JSON.stringify({ error: { code: String(status), message: `Qoder upstream returned ${status}` } })}\n\n`,
       ];

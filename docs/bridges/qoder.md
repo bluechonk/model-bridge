@@ -36,10 +36,15 @@ qoder status / models / credits / stop
 
 ## 排队重试（10605）
 
-上游过载/排队时回 HTTP 200 + SSE 内嵌业务错误帧（内层 `code:"10605"` + `retryAfterSeconds`）。
+上游过载/排队时回 SSE 内嵌业务错误帧（内层 `code:"10605"` + `retryAfterSeconds`）。
 本渠道声明了共享层的 `isQueueError` 钩子：网关在**响应头发出前**探测到排队帧会按
 `retryAfterSeconds`（封顶 10s）等待并重开上游，总时长上限 5 分钟；耗尽仍无内容则
 流式给 error 帧、非流式给 503 `upstream_queued`。详见 `docs/POOL-ARCHITECTURE.md` §2.4。
+
+> **注意**：实测排队的原始形态是 `statusCodeValue:403` 的信封里再套一层
+> `{"code":"403","message":"{\"code\":\"10605\",…\"isQueued\":true}"}`——真正的排队载荷在内层。
+> 翻译器对非 200 信封会先解析 body 保真内层 code/message（否则 10605 会被通用文案盖掉、
+> 排队重试永不触发），见 `channels/qoder/src/upstream.ts` 的 `newTranslator`。
 
 ## 让 ZCode 走这个网关
 

@@ -147,6 +147,37 @@ export function aggregateChatSse(buf: Buffer): AggregatedCompletion {
 }
 
 /**
+ * 取 SSE 字节里**第一个错误帧**（`data: {"error":{…}}`）；没有则返回 null。
+ *
+ * 上游 HTTP 200 但流内投递业务错误（如排队/限流）时，聚合器会把它当无内容可聚，
+ * 结果退化成空 completion。调用方用本函数把这种「有错误帧但零内容」明确报成错误。
+ */
+export function firstSseError(buf: Buffer): { code?: string; message?: string } | null {
+  for (const block of buf.toString("utf8").split("\n\n")) {
+    for (const line of block.split("\n")) {
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      let chunk: unknown;
+      try {
+        chunk = JSON.parse(data);
+      } catch {
+        continue;
+      }
+      if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) continue;
+      const err = (chunk as Record<string, unknown>)["error"];
+      if (!err || typeof err !== "object" || Array.isArray(err)) continue;
+      const e = err as Record<string, unknown>;
+      return {
+        ...(typeof e["code"] === "string" ? { code: e["code"] } : {}),
+        ...(typeof e["message"] === "string" ? { message: e["message"] } : {}),
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * 剔除 data 块里语义为空的字段（目前只有空数组 `tool_calls`）。
  *
  * ⚠ 上游每个 delta 都带 `"tool_calls": []`，而客户端判定
