@@ -768,7 +768,7 @@ describe("5. 请求体改写", () => {
       { type: "function", function: { name: "write", description: "写文件", parameters: { type: "object" } } },
     ];
     const body = upstream.buildChatBody(
-      { model: "deepseek-v4-flash", messages: [{ role: "user", content: "写文件" }], tools },
+      { model: "glm-5.3-flash", messages: [{ role: "user", content: "写文件" }], tools },
       "deepseek-v4-flash",
     );
     assert.equal(body["tools"], undefined, "DSML 模式下不发 tools 字段");
@@ -779,7 +779,7 @@ describe("5. 请求体改写", () => {
     // 小参数工具（read）不触发 DSML
     const normal = upstream.buildChatBody(
       {
-        model: "deepseek-v4-flash",
+        model: "glm-5.3-flash",
         messages: [],
         tools: [{ type: "function", function: { name: "read", parameters: {} } }],
       },
@@ -828,7 +828,7 @@ describe("5. 请求体改写", () => {
     assert.ok(headers["Authorization"]!.includes("maas_type"), "maas_type 进签名");
 
     upstream.buildChatBody(
-      { model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }] },
+      { model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] },
       "deepseek-v4-flash",
     );
     const plain = upstream.buildHeaders(FAKE_CREDENTIAL);
@@ -1317,8 +1317,8 @@ describe("10. 端到端网关（假上游）", () => {
     };
     assert.deepEqual(
       models.data.map((m) => m.id),
-      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
-      "对外只有三个池模型（不带渠道前缀）",
+      ["deepseek-v4.1-flash", "glm-5.3-flash"],
+      "对外只有两个池模型（不带渠道前缀）",
     );
     const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<string, unknown>;
     assert.equal(health["logged_in"], true);
@@ -1351,12 +1351,12 @@ describe("10. 端到端网关（假上游）", () => {
     assert.equal(record.body!["prompt_cache_key"], record.headers["session-id"]);
   });
 
-  it("非流式：本层聚合成 chat.completion；非 benefit 模型不带 maas_type", async () => {
+  it("非流式：本层聚合成 chat.completion；benefit 模型带 maas_type", async () => {
     const fake = holder.fake!;
     fake.captured.length = 0;
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -1364,8 +1364,9 @@ describe("10. 端到端网关（假上游）", () => {
     assert.equal(payload.object, "chat.completion");
     assert.equal(payload.choices[0]!.message.content, "网关通了");
     const record = lastAt(fake, "/api/v2/chat/completions")!;
-    assert.equal(record.body!["model"], "deepseek-v4-flash", "池 id 即该渠道目录里的名字");
-    assert.equal(record.headers["maas_type"], undefined);
+    assert.equal(record.body!["model"], "glm-5.3-flash", "池 id 即该渠道目录里的名字");
+    // 池内两个模型（glm-5.3-flash / deepseek-v4.1-flash）在本渠道都属 benefit
+    assert.equal(record.headers["maas_type"], "benefit");
   });
 
   it("上游 500 → 502 且不回传上游原文", async () => {

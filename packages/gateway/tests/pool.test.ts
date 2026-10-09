@@ -180,8 +180,8 @@ function chat(gw: gateway.RunningGateway, model: string) {
 
 // ── 1. 对外形态与池路由 ──────────────────────────────────────────────────────
 
-describe("1. /v1/models 只有三个模型，请求由池决定落到谁", () => {
-  let deep: FakeUpstream; // 提供 deepseek-v4-flash（目录里是混排大小写 + 一个 glm）
+describe("1. /v1/models 只有两个模型，请求由池决定落到谁", () => {
+  let deep: FakeUpstream; // 提供 glm-5.3-flash（目录里是混排大小写 + 一个出池的 4.0）
   let four: FakeUpstream; // 提供 deepseek-v4.1-flash（raccoon 式连字符写法）
   let gw: gateway.RunningGateway;
 
@@ -213,36 +213,36 @@ describe("1. /v1/models 只有三个模型，请求由池决定落到谁", () =>
     clearChannels();
   });
 
-  it("/v1/models 恒返回三个模型，不带渠道前缀", async () => {
+  it("/v1/models 恒返回两个模型，不带渠道前缀", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string; owned_by: string }> };
     assert.deepEqual(
       payload.data.map((m) => m.id),
-      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
+      ["deepseek-v4.1-flash", "glm-5.3-flash"],
     );
     assert.equal(payload.data[0]!.owned_by, "model-bridge", "池身份，不泄露候选渠道");
   });
 
-  it("请求 deepseek-v4-flash → 打到唯一能提供它的渠道，且用目录里的原始 slug", async () => {
+  it("请求 glm-5.3-flash → 打到唯一能提供它的渠道，且用目录里的原始 slug", async () => {
     deep.captured.length = 0;
     four.captured.length = 0;
-    const { status } = await chat(gw, "deepseek-v4-flash");
+    const { status } = await chat(gw, "glm-5.3-flash");
     assert.equal(status, 200);
     assert.equal(deep.captured.length, 1);
     assert.equal(four.captured.length, 0);
     assert.equal(deep.captured[0]!.body!["routed_to"], "alpha");
     assert.equal(
       deep.captured[0]!.body!["model"],
-      "DeepSeek-V4-Flash-Official",
+      "GLM-5.3-Flash",
       "池内 id 是小写规范名，上游收到的是目录里的原始写法",
     );
     assert.equal(deep.captured[0]!.headers["authorization"], "Bearer tok-alpha");
   });
 
-  it("大小写不敏感：DeepSeek-V4-Flash 同样命中", async () => {
+  it("大小写不敏感：GLM-5.3-Flash 同样命中", async () => {
     deep.captured.length = 0;
-    const { status } = await chat(gw, "DeepSeek-V4-Flash");
+    const { status } = await chat(gw, "GLM-5.3-Flash");
     assert.equal(status, 200);
     assert.equal(deep.captured.length, 1);
   });
@@ -286,7 +286,7 @@ describe("1. /v1/models 只有三个模型，请求由池决定落到谁", () =>
     }
   });
 
-  it("未知模型 → 400 并列出三个可用 id", async () => {
+  it("未知模型 → 400 并列出两个可用 id", async () => {
     const { status, text } = await chat(gw, "gpt-4o");
     assert.equal(status, 400);
     const err = JSON.parse(text) as { error: { code: string; message: string } };
@@ -296,7 +296,7 @@ describe("1. /v1/models 只有三个模型，请求由池决定落到谁", () =>
   });
 
   it("旧的 `<cid>/<模型>` 形态已失效（破坏性更新）", async () => {
-    const { status, text } = await chat(gw, "alpha/deepseek-v4-flash");
+    const { status, text } = await chat(gw, "alpha/glm-5.3-flash");
     assert.equal(status, 400);
     assert.equal((JSON.parse(text) as { error: { code: string } }).error.code, "unknown_model");
   });
@@ -325,7 +325,7 @@ describe("2. 账单已用量排序：用得多的先走，失败当 0", () => {
   let second: FakeUpstream; // 用量低
   let gw: gateway.RunningGateway;
 
-  const both = (): Array<[string, string]> => [["deepseek-v4-flash", "deepseek-v4-flash"]];
+  const both = (): Array<[string, string]> => [["deepseek-v4.1-flash", "deepseek-v4.1-flash"]];
 
   before(async () => {
     first = await fakeUpstream("first");
@@ -349,7 +349,7 @@ describe("2. 账单已用量排序：用得多的先走，失败当 0", () => {
   it("已用量大的渠道优先", async () => {
     first.captured.length = 0;
     second.captured.length = 0;
-    const { status } = await chat(gw, "deepseek-v4-flash");
+    const { status } = await chat(gw, "deepseek-v4.1-flash");
     assert.equal(status, 200);
     assert.equal(first.captured.length, 1, "used=100 的渠道先走");
     assert.equal(second.captured.length, 0);
@@ -360,7 +360,7 @@ describe("2. 账单已用量排序：用得多的先走，失败当 0", () => {
     second.captured.length = 0;
     first.fail = true;
     try {
-      const { status } = await chat(gw, "deepseek-v4-flash");
+      const { status } = await chat(gw, "deepseek-v4.1-flash");
       assert.equal(status, 200, "次选顶上，客户端拿到正常响应");
       assert.equal(first.captured.length, 1, "先试了用量高的那家");
       assert.equal(second.captured.length, 1, "失败后落到次选");
@@ -379,7 +379,7 @@ describe("2. 账单已用量排序：用得多的先走，失败当 0", () => {
     second.captured.length = 0;
     assert.equal(poolUsage.scoreOf("first"), 0, "冷却中得分当 0");
     assert.equal(poolUsage.scoreOf("second"), 10);
-    const { status } = await chat(gw, "deepseek-v4-flash");
+    const { status } = await chat(gw, "deepseek-v4.1-flash");
     assert.equal(status, 200);
     assert.equal(first.captured.length, 0, "冷却中的渠道不再被优先尝试");
     assert.equal(second.captured.length, 1);
@@ -395,8 +395,8 @@ describe("3. 仓库级命令在多渠道路由下可用", () => {
     solo = await fakeUpstream("x");
     clearChannels();
     poolUsage.resetPoolLedgerForTest();
-    setChannel(makeChannel("alpha", solo.url, [["deepseek-v4-flash", "deepseek-v4-flash"]]));
-    setChannel(makeChannel("beta", solo.url, [["deepseek-v4-flash", "deepseek-v4-flash"]]));
+    setChannel(makeChannel("alpha", solo.url, [["deepseek-v4.1-flash", "deepseek-v4.1-flash"]]));
+    setChannel(makeChannel("beta", solo.url, [["deepseek-v4.1-flash", "deepseek-v4.1-flash"]]));
   });
 
   after(async () => {
@@ -429,7 +429,7 @@ describe("4. 单渠道模式也走池（不再暴露裸短名）", () => {
     only = await fakeUpstream("solo");
     clearChannels();
     poolUsage.resetPoolLedgerForTest();
-    setChannel(makeChannel("solo", only.url, [["deepseek-v4-flash", "deepseek-v4-flash"]]));
+    setChannel(makeChannel("solo", only.url, [["deepseek-v4.1-flash", "deepseek-v4.1-flash"]]));
     poolUsage.writeBilling("solo", { total: { used: 0 } });
     gw = await gateway.start("127.0.0.1:0", { logger: () => {} });
   });
@@ -440,13 +440,13 @@ describe("4. 单渠道模式也走池（不再暴露裸短名）", () => {
     clearChannels();
   });
 
-  it("/v1/models 仍是三个池模型；service 身份是 solo-bridge", async () => {
+  it("/v1/models 仍是两个池模型；service 身份是 solo-bridge", async () => {
     const models = (await (await fetch(`http://${gw.addr}/v1/models`)).json()) as {
       data: Array<{ id: string; owned_by: string }>;
     };
     assert.deepEqual(
       models.data.map((m) => m.id),
-      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
+      ["deepseek-v4.1-flash", "glm-5.3-flash"],
     );
     assert.equal(models.data[0]!.owned_by, "solo-bridge");
 
@@ -459,7 +459,7 @@ describe("4. 单渠道模式也走池（不再暴露裸短名）", () => {
   });
 
   it("池内模型可用", async () => {
-    const { status } = await chat(gw, "deepseek-v4-flash");
+    const { status } = await chat(gw, "deepseek-v4.1-flash");
     assert.equal(status, 200);
   });
 

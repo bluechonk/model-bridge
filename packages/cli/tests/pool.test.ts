@@ -1,5 +1,5 @@
 /**
- * 仓库级入口冒烟：注册全部渠道 → 一个网关对外暴露**三个公共模型**。
+ * 仓库级入口冒烟：注册全部渠道 → 一个网关对外暴露**两个公共模型**。
  *
  * ⚠ 存储根指向临时目录：注册全部渠道后，任何 `paths.*` 调用都会解析到
  * `<root>/<cid>/`，本测试绝不碰真实主目录。
@@ -47,13 +47,13 @@ describe("仓库级模型池", () => {
     assert.equal(per.length, 11, "逐渠道报告");
   });
 
-  it("/v1/models 恒返回三个池模型，不带渠道前缀", async () => {
+  it("/v1/models 恒返回两个池模型，不带渠道前缀", async () => {
     const resp = await fetch(`http://${running.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string; owned_by: string }> };
     assert.deepEqual(
       payload.data.map((m) => m.id),
-      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
+      ["deepseek-v4.1-flash", "glm-5.3-flash"],
     );
     assert.ok(
       payload.data.every((m) => !m.id.includes("/")),
@@ -71,16 +71,12 @@ describe("仓库级模型池", () => {
     assert.ok(four1.includes("codearts"), `4.1 候选: ${four1.join(", ")}`);
     assert.ok(four1.length >= 3, `4.1 至少 3 家，实际 ${four1.length}`);
 
-    const four0 = cidsOf("deepseek-v4-flash");
-    assert.ok(four0.includes("catpaw"), `4.0 候选: ${four0.join(", ")}`);
-    assert.ok(four0.includes("trae"), `4.0 候选: ${four0.join(", ")}`);
-
     const glm = cidsOf("glm-5.3-flash");
     assert.ok(glm.includes("catpaw"), `glm 候选: ${glm.join(", ")}`);
     assert.ok(glm.includes("raccoon"), `glm 候选: ${glm.join(", ")}`);
 
-    // 三个模型的候选集合互不相同（否则归一化把它们串在一起了）
-    assert.notDeepEqual([...four1].sort(), [...four0].sort());
+    // 两个模型的候选集合互不相同（否则归一化把它们串在一起了）
+    assert.notDeepEqual([...four1].sort(), [...glm].sort());
   });
 
   it("旧的 `<cid>/<模型>` 形态 → 400 unknown_model", async () => {
@@ -117,11 +113,12 @@ describe("仓库级模型池", () => {
       contributed("workbuddyai").includes("deepseek-v4.1-flash"),
       "workbuddyai 应贡献 deepseek-v4.1-flash",
     );
-    // qoder 的上游 key 是短名（dfmodel / gfmodel），由渠道自己映射成池内名
+    // qoder 的上游 key 是短名（gfmodel），由渠道自己映射成池内名；
+    // 4.0 的 dfmodel 已随 deepseek-v4-flash 出池，故只剩 glm 一条
     assert.deepEqual(
       [...contributed("qoder")].sort(),
-      ["deepseek-v4-flash", "glm-5.3-flash"],
-      "qoder 用 dfmodel / gfmodel 贡献两个池模型",
+      ["glm-5.3-flash"],
+      "qoder 用 gfmodel 贡献 glm-5.3-flash",
     );
     // 裸 HOME 无缓存：cline 拉不到远端目录，兜底表里没有池内模型
     assert.deepEqual(contributed("cline"), [], "（裸 HOME 下）cline 兜底表不含池内模型");
