@@ -16,7 +16,8 @@ Loomy（讯飞）的本地 OpenAI Chat Completion 透明代理网关（**TypeScr
 ```bash
 uv sync
 uv run loomy serve --json    # 前台无窗口运行
-uv run loomy login --json    # 无窗口登录：输出授权链接
+uv run loomy login --json    # 无窗口登录：短信验证码走环境变量（LOOMY_PHONE + LOOMY_SMS_CODE）
+uv run loomy login --wechat  # 微信扫码登录（未绑手机号时同样需要上述两个环境变量完成绑定）
 uv tool install .            # 全局安装后用 loomy 直接调用
 loomy start                  # 守护式启动（幂等）
 loomy status / models / credits / stop

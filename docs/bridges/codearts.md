@@ -52,6 +52,13 @@ CodeArts 的 STS 信封**只给 `credentials` + `refresh_token`**，从不给 `u
 
 日常操作不用直接打这些接口 —— 插件 `codearts-bridge` 用命令与技能把能力包好了。
 
+## 鉴权失效识别（APIG.0602）
+
+CodeArts 的 APIG 网关对**过期 token** 回 `HTTP 400 + {"error_code":"APIG.0602"}`，
+不是标准的 401/403。本渠道声明了共享层的 `isAuthFailure` 钩子（复用渠道自己的
+`isAuthError` 判定），网关收到这类响应会归一成 401，走既有的「刷新 token →
+换池内账号」链路。详见 `docs/POOL-ARCHITECTURE.md` §2.4。
+
 ## 让 ZCode 走这个网关
 
 在 ZCode 设置里添加 provider：类型 `openai-chat-completions`、

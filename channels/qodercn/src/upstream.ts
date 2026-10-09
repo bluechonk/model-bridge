@@ -598,6 +598,21 @@ export async function fetchModels(credential: Credentials): Promise<Record<strin
 
 // ── SSE 信封解包（增量） ──────────────────────────────────────────────────────
 
+/**
+ * 排队帧判定（共享层在**响应头发出前**调用）。
+ *
+ * Qoder 过载/排队时回 HTTP 200 + SSE 里投递业务错误帧，内层 `code:"10605"`
+ * （或 message 含 `isQueued` / `retryAfterSeconds`）。翻译器把它转成
+ * `data: {"error":{"code":"10605","message":"..."}}` —— 共享层据此等待并重开上游。
+ */
+export function isQueueError(frame: Record<string, unknown>): boolean {
+  const err = frame["error"] as { code?: unknown; message?: unknown } | undefined;
+  if (!err) return false;
+  const code = String(err.code ?? "");
+  const msg = String(err.message ?? "");
+  return code === "10605" || /isQueued|retryAfterSeconds/i.test(msg);
+}
+
 interface Envelope {
   headers?: unknown;
   body?: unknown;

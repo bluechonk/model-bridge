@@ -284,6 +284,13 @@ Request with GET/HEAD method cannot have body.
 
 ## 10. 遗留：国际版推理未通（诊断已定位到「上游不响应」）
 
+**状态：已实现（2026-10-10）** —— `10605` 排队帧退避重试已落地：共享层新增
+`upstream.isQueueError(frame)` 可选钩子，qoder / qodercn 均已声明；排队帧在**响应头发出前**
+被探测吞掉，按 `retryAfterSeconds`（封顶 10s）等待后重开上游，总时长上限 5 分钟。
+测试见 `packages/gateway/tests/queue-retry.test.ts`（流式 + 非流式各一条）。
+架构说明见 `docs/POOL-ARCHITECTURE.md` §2.4「排队帧退避重试」。
+以下保留原始诊断记录。
+
 **现象**：国际版 `qoder` 的模型目录、额度、签到都成功，唯独推理不通。
 
 **已排除的因素**（都有对照实验）：

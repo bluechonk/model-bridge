@@ -34,6 +34,13 @@ qoder status / models / credits / stop
 
 日常操作不用直接打这些接口 —— 插件 `qoder-bridge` 用命令与技能把能力包好了。
 
+## 排队重试（10605）
+
+上游过载/排队时回 HTTP 200 + SSE 内嵌业务错误帧（内层 `code:"10605"` + `retryAfterSeconds`）。
+本渠道声明了共享层的 `isQueueError` 钩子：网关在**响应头发出前**探测到排队帧会按
+`retryAfterSeconds`（封顶 10s）等待并重开上游，总时长上限 5 分钟；耗尽仍无内容则
+流式给 error 帧、非流式给 503 `upstream_queued`。详见 `docs/POOL-ARCHITECTURE.md` §2.4。
+
 ## 让 ZCode 走这个网关
 
 在 ZCode 设置里添加 provider：类型 `openai-chat-completions`、

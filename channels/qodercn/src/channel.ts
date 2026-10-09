@@ -27,6 +27,12 @@ export const config: BridgeConfig = {
   debugDumpEnv: "QODERCN_DEBUG_DUMP",
 };
 
-export const channel: Channel = { config, cred, upstream, catalog, billing };
+export const channel: Channel = {
+  config,
+  cred,
+  upstream: { ...upstream, isQueueError: (frame: Record<string, unknown>) => upstream.isQueueError(frame) },
+  catalog,
+  billing,
+};
 
 setChannel(channel);

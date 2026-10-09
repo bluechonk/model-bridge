@@ -75,6 +75,11 @@ const STRIP_HEADERS = new Set([
 
 const READ_TIMEOUT_MS = 120_000;
 
+/** 排队重试：单帧退避上限（上游给的 retryAfterSeconds 超过它就按这个等）。 */
+const QUEUE_RETRY_MAX_DELAY_MS = 10_000;
+/** 排队重试：整个请求的总时长上限（含首次尝试与所有等待）。 */
+const QUEUE_RETRY_BUDGET_MS = 300_000;
+
 /**
  * 服务标识：出现在 `/health` 应答里。
  *
@@ -316,6 +321,115 @@ async function collectAsOpenAiSse(
   return Buffer.concat(out);
 }
 
+// ── 排队探测（响应头发出前） ─────────────────────────────────────────────────
+
+/** `cred.load()` 的安全包装：未登录返回 null（排队重开上游时用）。 */
+function loadCredentialSafe(channel: Channel): Credential | null {
+  try {
+    return inChannel(channel, () => channel.cred.load());
+  } catch {
+    return null;
+  }
+}
+
+interface QueueProbe {
+  /** 流内是否出现排队帧（渠道 isQueueError 判定）。 */
+  queued: boolean;
+  /** 上游建议的等待秒数（从排队帧解析；没有就不给）。 */
+  delayMs?: number;
+  /** 已产出的**内容帧**（OpenAI SSE 字节）。非空 = 已有实质输出，不能再重试。 */
+  contentFrames: Buffer[];
+  /** 排队帧里解析到的 retryAfterSeconds 原文（日志用）。 */
+  rawDelaySec?: number;
+}
+
+/**
+ * 消费上游流做「排队探测」：**不向客户端写任何字节**。
+ *
+ * 翻译器逐帧处理：
+ * - 内容帧（`data:` 且非 error）→ 记入 `contentFrames`，立即停止（有内容就不能重试）
+ * - 错误帧 → 问渠道 `isQueueError`：是排队就记下延迟并继续等下一帧；否则停止
+ * - 流结束仍无内容也无排队 → `queued: false`（正常完成或普通错误）
+ *
+ * ⚠ 只在 `relayUpstream` **之前**调用：一旦开始向客户端写字节，本函数就没意义了。
+ */
+async function consumeQueueProbe(
+  upstreamBody: ReadableStream<Uint8Array>,
+  channel: Channel,
+  cid?: string,
+): Promise<QueueProbe> {
+  const translator = channel.upstream.newTranslator();
+  const reader = upstreamBody.getReader();
+  const probe: QueueProbe = { queued: false, contentFrames: [] };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const frame of translator.feed(Buffer.from(value))) {
+        const buf = asBuffer(frame);
+        const text = buf.toString("utf8");
+        // 错误帧形如 `data: {"error":{...}}`
+        const isErrorFrame = /^data: /.test(text) && /"error"\s*:/.test(text);
+        if (isErrorFrame) {
+          let payload: Record<string, unknown>;
+          try {
+            payload = JSON.parse(text.slice("data: ".length).trim()) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+          if (channel.upstream.isQueueError?.(payload)) {
+            probe.queued = true;
+            const errObj = payload["error"] as { code?: unknown; message?: unknown } | undefined;
+            const msg = String(errObj?.message ?? "");
+            const m = /retryAfterSeconds\D+(\d+)/i.exec(msg);
+            if (m) {
+              const sec = Number.parseInt(m[1]!, 10);
+              probe.rawDelaySec = sec;
+              probe.delayMs = Math.max(1_000, sec * 1000);
+            }
+            continue; // 排队帧不算内容，继续读后续帧
+          }
+          // 非排队的错误帧：停止探测（由调用方按原结果处理）
+          return probe;
+        }
+        probe.contentFrames.push(buf);
+        return probe; // 已有内容 → 不能重试
+      }
+    }
+    for (const frame of translator.finish()) {
+      const buf = asBuffer(frame);
+      const text = buf.toString("utf8");
+      if (/^data: /.test(text) && /"error"\s*:/.test(text)) {
+        let payload: Record<string, unknown>;
+        try {
+          payload = JSON.parse(text.slice("data: ".length).trim()) as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+        if (channel.upstream.isQueueError?.(payload)) {
+          probe.queued = true;
+          const errObj = payload["error"] as { code?: unknown; message?: unknown } | undefined;
+          const m = /retryAfterSeconds\D+(\d+)/i.exec(String(errObj?.message ?? ""));
+          if (m) {
+            const sec = Number.parseInt(m[1]!, 10);
+            probe.rawDelaySec = sec;
+            probe.delayMs = Math.max(1_000, sec * 1000);
+          }
+        }
+        continue;
+      }
+      probe.contentFrames.push(buf);
+      return probe;
+    }
+  } finally {
+    // ⚠ 必须 releaseLock（不是 cancel）：流可能还没读完就提前返回（发现内容/普通错误），
+    // 此时 cancel 会抛「ReadableStream is locked」；releaseLock 后调用方才能安全地
+    // cancel 或重新 getReader。
+    reader.releaseLock();
+  }
+  return probe;
+}
+
 // ── 路由 ──────────────────────────────────────────────────────────────────────
 
 /** 账号池失败转移的最大尝试账号数（首个账号也计入）。 */
@@ -540,7 +654,49 @@ async function handleChat(
       lastError = { status: 502, code: "upstream_unauthenticated", message: outcome.error };
       continue;
     }
-    const call = outcome.call;
+    let call = outcome.call;
+
+    // 排队重试：渠道声明了 isQueueError 且上游回了排队帧（HTTP 200 + 流内业务错误）
+    // → 按 retryAfterSeconds 退避后重开上游，直到出内容或预算耗尽。
+    // ⚠ 只在**响应头发出前**做：一旦开始向客户端写字节就不能再换请求。
+    // 探测消费掉的内容帧记在 `pendingFrames`，转发前先写给客户端（不能丢）。
+    const pendingFrames: Buffer[] = [];
+    let queuedOut = false;
+    if (isCustomWire(channel) && channel.upstream.isQueueError) {
+      const startedAt = Date.now();
+      for (;;) {
+        const probe = await inChannel(channel, () => consumeQueueProbe(call.body!, channel, cid));
+        if (!probe.queued || probe.contentFrames.length > 0) {
+          pendingFrames.push(...probe.contentFrames);
+          break;
+        }
+        const elapsed = Date.now() - startedAt;
+        const delayMs = Math.min(probe.delayMs ?? QUEUE_RETRY_MAX_DELAY_MS, QUEUE_RETRY_MAX_DELAY_MS);
+        if (elapsed + delayMs > QUEUE_RETRY_BUDGET_MS) {
+          opts.logger(`queue wait budget exhausted (channel ${cid}, waited ${Math.round(elapsed / 1000)}s)`);
+          queuedOut = true;
+          break;
+        }
+        opts.logger(`upstream queued (channel ${cid}), waiting ${Math.round(delayMs / 1000)}s before retry`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        const credential = loadCredentialSafe(channel);
+        if (!credential) {
+          opts.logger(`queue retry aborted: no credential available (channel ${cid})`);
+          queuedOut = true;
+          break;
+        }
+        const next = await inChannel(channel, () => openStream(channel, credential, sendBody));
+        if (!next.ok) {
+          // 重开失败（连接/鉴权）→ 放弃排队等待，按原结果走后续错误处理
+          opts.logger(`queue retry reopen failed (channel ${cid}): ${String(next.error?.message ?? "")}`);
+          queuedOut = true;
+          break;
+        }
+        // 旧流已消费完：释放 reader 锁并丢弃剩余数据，再换新流
+        await call.body?.cancel().catch(() => {});
+        call = next;
+      }
+    }
 
     if (!call.ok) {
       // 上游错误体只进本地日志，不回传客户端（可能含内部信息）
@@ -551,10 +707,10 @@ async function handleChat(
       continue;
     }
 
-    // 上游收下了这次请求 → 该渠道可用（清冷却）→ 交给转发层，池路由到此为止
+    // 上游收下了这次请求 → 该渠道可用（清冷却）→ 交给转发层，池路由到此为止。
     noteSuccess(cid);
     markActiveHealth("ok", cid);
-    await relayUpstream(res, channel, cid, call, wantStream, opts.logger);
+    await relayUpstream(res, channel, cid, call, wantStream, opts.logger, sendBody, pendingFrames, queuedOut);
     return;
   }
 
@@ -580,6 +736,9 @@ async function relayUpstream(
   call: UpstreamCall,
   wantStream: boolean,
   logger: (m: string) => void,
+  sendBody?: Buffer,
+  pendingFrames: Buffer[] = [],
+  queuedOut = false,
 ): Promise<void> {
   const streamBody = call.body;
   if (!streamBody) {
@@ -587,10 +746,57 @@ async function relayUpstream(
     return;
   }
 
-  // 非流式：消费完整上游流（必要时先翻译），聚合成一个 chat.completion JSON
+  // 非流式：消费完整上游流（必要时先翻译），聚合成一个 chat.completion JSON。
+  // custom 线型且渠道声明了 isQueueError 时，**响应头还没发**——排队帧可以触发
+  // 等待 + 重开上游重试（与流式路径同一套预算）。
   if (!wantStream) {
     try {
-      const buf = await inChannel(channel, () => collectAsOpenAiSse(streamBody, channel, cid));
+      let body: ReadableStream<Uint8Array>;
+      let buf: Buffer;
+      let queuedLocal = queuedOut;
+      if (isCustomWire(channel) && channel.upstream.isQueueError) {
+        body = streamBody;
+        const startedAt = Date.now();
+        for (;;) {
+          const probe = await inChannel(channel, () => consumeQueueProbe(body, channel, cid));
+          if (!probe.queued || probe.contentFrames.length > 0) {
+            buf = Buffer.concat([Buffer.concat(pendingFrames), ...probe.contentFrames]);
+            break;
+          }
+          const elapsed = Date.now() - startedAt;
+          const delayMs = Math.min(probe.delayMs ?? QUEUE_RETRY_MAX_DELAY_MS, QUEUE_RETRY_MAX_DELAY_MS);
+          if (elapsed + delayMs > QUEUE_RETRY_BUDGET_MS) {
+            logger(`queue wait budget exhausted (channel ${cid}, waited ${Math.round(elapsed / 1000)}s)`);
+            buf = Buffer.concat([Buffer.concat(pendingFrames), ...probe.contentFrames]);
+            queuedLocal = true;
+            break;
+          }
+          logger(`upstream queued (channel ${cid}), waiting ${Math.round(delayMs / 1000)}s before retry`);
+          await new Promise((r) => setTimeout(r, delayMs));
+          const credential = sendBody ? loadCredentialSafe(channel) : null;
+          const next =
+            credential !== null
+              ? await inChannel(channel, () => openStream(channel, credential, sendBody!))
+              : null;
+          if (!next || !next.ok || !next.body) {
+            logger(`queue retry reopen failed (channel ${cid}): ${String(next?.error?.message ?? "no credential")}`);
+            buf = Buffer.concat([Buffer.concat(pendingFrames), ...probe.contentFrames]);
+            queuedLocal = true;
+            break;
+          }
+          body = next.body;
+        }
+      } else {
+        buf = Buffer.concat([
+          ...pendingFrames,
+          await inChannel(channel, () => collectAsOpenAiSse(streamBody, channel, cid)),
+        ]);
+      }
+      // 排队耗尽且零内容：给客户端一个明确的错误，而不是空 completion
+      if (queuedLocal && buf.length === 0) {
+        writeJsonError(res, 503, "upstream_queued", "upstream is queued and the wait budget was exhausted");
+        return;
+      }
       writeJson(res, sseStream.aggregateChatSse(buf));
     } catch (err) {
       logger(`reading upstream response interrupted: ${String(err)}`);
@@ -611,6 +817,16 @@ async function relayUpstream(
     }
   }
   res.writeHead(call.status, outHeaders);
+  // 排队探测阶段已经消费掉的内容帧先补写给客户端（它们属于这次响应的前缀）
+  for (const frame of pendingFrames) res.write(frame);
+  if (queuedOut && pendingFrames.length === 0) {
+    // 排队预算耗尽且没有任何内容：给出明确错误帧后结束
+    res.write(
+      `data: ${JSON.stringify({ error: { code: "upstream_queued", message: "upstream is queued and the wait budget was exhausted" } })}\n\n`,
+    );
+    res.end();
+    return;
+  }
   await inChannel(channel, () =>
     relayStream(res, streamBody, call.headers.get("content-type") ?? "", logger, channel, cid),
   );
@@ -762,9 +978,9 @@ export async function start(addr: string, opts: GatewayOptions = {}): Promise<Ru
   const [host, portText] = splitAddr(addr);
   const port = Number.parseInt(portText, 10);
   const logger =
-    opts.logger ?? ((m: string) => console.error(`[${getChannel().config.cid}-bridge] ${m}`));
+    opts.logger ?? ((m: string) => console.error(`[${serviceName()}] ${m}`));
   const server = await bindFreeServer(host, port, logger);
-  const handler = createHandler(opts);
+  const handler = createHandler({ ...opts, logger });
   server.on("request", (req, res) => {
     void handler(req, res);
   });

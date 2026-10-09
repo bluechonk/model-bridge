@@ -102,8 +102,10 @@ export async function runLogin(options: {
   realm?: string;
   /** 渠道 id（多渠道路由时必须给；单渠道可省）。 */
   cid?: string;
+  /** 微信扫码登录（渠道声明 `cred.loginWechat` 才支持，如 loomy）。 */
+  wechat?: boolean;
 } = {}): Promise<number> {
-  const { force = false, json = false, realm = "auto", cid } = options;
+  const { force = false, json = false, realm = "auto", cid, wechat = false } = options;
   const target = getChannel(cid);
   const { cred } = target;
   if (force) {
@@ -114,6 +116,49 @@ export async function runLogin(options: {
       /* 本来就没有 */
     }
   }
+
+  // 微信路径：渠道自己声明了 loginWechat 才能走（共享层不含渠道知识）
+  if (wechat) {
+    const loginWechat = (cred as { loginWechat?: (baseUrl?: string, options?: Record<string, unknown>) => Promise<unknown> }).loginWechat;
+    if (!loginWechat) {
+      console.error(`[login] channel ${target.config.cid} does not support --wechat login`);
+      return 1;
+    }
+    const ui = new StdoutLoginUi(json, cid);
+    if (json) emit({ event: "start", mode: "login", force, realm, wechat: true, ...(cid ? { cid } : {}) });
+    let ok = false;
+    try {
+      await runInChannel(target.config.cid, () =>
+        loginWechat.call(cred, cred.resolveBaseUrl(realm), {
+          onUrl: (url: string) => ui.setState("login", "open this URL and scan the QR code with WeChat", url),
+          onStatus: (msg: string) => ui.setState("login", msg),
+        }),
+      );
+      ok = true;
+    } catch (err) {
+      ui.setState("error", `wechat login failed: ${String(err)}`);
+    }
+    if (ok && target) runInChannel(target.config.cid, () => syncPool(target.config.cid));
+    if (json) {
+      const done: Record<string, unknown> = { event: "done", ok };
+      if (ui.authUrl) done["auth_url"] = ui.authUrl;
+      if (ok) {
+        try {
+          const c = cred.load();
+          done["uid"] = c.uid;
+          done["domain"] = c.domain;
+          done["obtained_at"] = (c as { obtainedAt?: string }).obtainedAt ?? "";
+        } catch {
+          /* 读不到就不附 */
+        }
+      }
+      emit(done);
+    } else if (ok) {
+      console.log("[login] done.");
+    }
+    return ok ? 0 : 1;
+  }
+
   const ui = new StdoutLoginUi(json, cid);
   if (json) emit({ event: "start", mode: "login", force, realm, ...(cid ? { cid } : {}) });
 
