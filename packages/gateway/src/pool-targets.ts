@@ -38,6 +38,53 @@ export const POOL_MODELS = [
 
 export type PoolModel = (typeof POOL_MODELS)[number];
 
+/**
+ * 池模型的对外元数据 —— **字段结构对齐 DeepSeek 官方 `GET /models`**。
+ *
+ * 官方（实测 `https://api.deepseek.com/models`）每条长这样：
+ *
+ * ```json
+ * {"id":"deepseek-flash","object":"model","owned_by":"deepseek","name":"DeepSeek-V4.1-Flash",
+ *  "context_window":1048576,"max_output_tokens":393216,
+ *  "input_modalities":["text","image"],"output_modalities":["text"],
+ *  "effort":{"supported_levels":["low","high","max"],"default_level":"high"},
+ *  "api_capabilities":{...}}
+ * ```
+ *
+ * 注意官方**没有 `created` 字段**，且 `name` 是展示名而不是 id 的副本 —— 我们照此对齐。
+ * `api_capabilities` 是官方 Anthropic 兼容层的私有描述，与我们的转发语义无关，故不输出。
+ */
+export interface PoolModelMeta {
+  name: string;
+  contextWindow: number;
+  maxOutputTokens: number;
+  inputModalities: string[];
+  outputModalities: string[];
+  effort: { supportedLevels: string[]; defaultLevel: string };
+}
+
+/** 两个池模型的元数据（数值取各上游口径）。 */
+export const POOL_MODEL_META: Record<PoolModel, PoolModelMeta> = {
+  // 直接采官方 `deepseek-flash` 的数值（我们的 4.1 flash 就是它）
+  "deepseek-v4.1-flash": {
+    name: "DeepSeek-V4.1-Flash",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 393_216,
+    inputModalities: ["text", "image"],
+    outputModalities: ["text"],
+    effort: { supportedLevels: ["low", "high", "max"], defaultLevel: "high" },
+  },
+  // GLM-5.3-Flash：上游目录口径（1M 上下文），无多模态输入
+  "glm-5.3-flash": {
+    name: "GLM-5.3-Flash",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 131_072,
+    inputModalities: ["text"],
+    outputModalities: ["text"],
+    effort: { supportedLevels: ["low", "high", "max"], defaultLevel: "high" },
+  },
+};
+
 /** 渠道包装前缀（去掉后才可能命中池内模型）。 */
 const WRAPPER_PREFIXES = ["sn-", "z-ai-", "bytedance-"];
 
