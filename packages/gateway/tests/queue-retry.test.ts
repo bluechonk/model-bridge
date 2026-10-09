@@ -251,3 +251,74 @@ describe("排队重试（10605）", () => {
     assert.ok(payload.choices?.[0]?.message?.content?.includes("queued-ok"));
   });
 });
+
+describe("上游 HTTP 200 + 流内业务错误帧（非排队）", () => {
+  // 回归：修前非流式会**二次探测**同一条已消费的流，把第一次探测吞掉的错误帧丢掉，
+  // 最终聚合成空 completion（content:""、usage 全 0、finish_reason:"stop"）。
+  let root = "";
+  let upstream: Awaited<ReturnType<typeof fakeUpstreamError>>;
+  let gw: gateway.RunningGateway;
+  const logs: string[] = [];
+
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), "mb-instream-err-"));
+    process.env["MODEL_BRIDGE_HOME"] = root;
+    upstream = await fakeUpstreamError();
+    process.env["MB_TEST_UPSTREAM"] = upstream.url;
+
+    clearChannels();
+    setChannel(makeChannel());
+    mkdirSync(paths.channelDir(CID), { recursive: true });
+    writeFileSync(
+      paths.credentialsPath(CID),
+      JSON.stringify({ accessToken: "tok-q", uid: "u-q", domain: "" }, null, 2),
+      "utf8",
+    );
+    gw = await gateway.start("127.0.0.1:0", { logger: (m) => logs.push(m) });
+  });
+
+  after(async () => {
+    await gw?.close().catch(() => {});
+    await new Promise<void>((r) => upstream.server.close(() => r()));
+    delete process.env["MB_TEST_UPSTREAM"];
+    delete process.env["MODEL_BRIDGE_HOME"];
+    clearChannels();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("非流式：报错而不是回空 completion", async () => {
+    const { status, text } = await chat(gw.addr, false);
+    assert.equal(status, 502, `流内业务错误应报 502（实际 ${status}: ${text.slice(0, 300)}）`);
+    const payload = JSON.parse(text) as { error?: { code?: string; message?: string } };
+    assert.equal(payload.error?.code, "429", `保留上游错误码（实际: ${text}）`);
+    assert.ok(payload.error?.message?.includes("rate limited"), text);
+  });
+
+  it("流式：错误帧透传给客户端（data: {\"error\":…}）", async () => {
+    const { status, text } = await chat(gw.addr, true);
+    assert.equal(status, 200, `流式仍按上游状态码透传（实际 ${status}: ${text.slice(0, 300)}）`);
+    assert.ok(text.includes('"error"'), `流内错误帧要透传（实际: ${text}）`);
+    assert.ok(text.includes("429"), text);
+  });
+});
+
+/** 假上游：恒回 HTTP 200 + 一个流内业务错误帧（非排队），然后结束。 */
+async function fakeUpstreamError(): Promise<{ server: Server; url: string }> {
+  const server = createServer((req, res) => {
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      const envelope = JSON.stringify({
+        headers: {},
+        body: JSON.stringify({ code: "429", message: "rate limited" }),
+        statusCodeValue: 200,
+      });
+      res.write(`data:${envelope}\n\n`);
+      res.end();
+    });
+  });
+  const port = await new Promise<number>((resolve) => {
+    server.listen(0, "127.0.0.1", () => resolve((server.address() as { port: number }).port));
+  });
+  return { server, url: `http://127.0.0.1:${port}` };
+}
