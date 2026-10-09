@@ -65,7 +65,7 @@ describe("1. 归一化：各渠道实测写法都能收敛", () => {
     // 厂商路径段（cline）
     ["deepseek/deepseek-v4.1-flash", "deepseek-v4.1-flash"],
     ["z-ai/glm-5.3-flash", "glm-5.3-flash"],
-    // 不进池的（归一化后仍不等于三个目标）
+    // 不进池的（归一化后仍不等于两个目标）
     ["glm-5.3-flashx", "glm-5.3-flashx"],
     ["deepseek-v4-flash-vision-exp", "deepseek-v4-flash-vision-exp"],
     ["deepseek-flash", "deepseek-flash"],
@@ -84,10 +84,13 @@ describe("1. 归一化：各渠道实测写法都能收敛", () => {
 });
 
 describe("2. asPoolModel：命中/不命中", () => {
-  it("三个目标（含大小写变体）都命中", () => {
+  it("两个池内目标（含大小写变体）都命中", () => {
     assert.equal(asPoolModel("deepseek-v4.1-flash"), "deepseek-v4.1-flash");
-    assert.equal(asPoolModel("DEEPSEEK-V4-FLASH"), "deepseek-v4-flash");
+    assert.equal(asPoolModel("DEEPSEEK-V4.1-FLASH"), "deepseek-v4.1-flash");
     assert.equal(asPoolModel("Glm-5.3-Flash"), "glm-5.3-flash");
+    // 4.0 已移出池：归一化仍正确，但不再是可路由的池模型
+    assert.equal(asPoolModel("deepseek-v4-flash"), null);
+    assert.equal(asPoolModel("DEEPSEEK-V4-FLASH"), null);
   });
 
   it("近亲不命中（4.0 vs 4.1、flashx、vision-exp、无版本）", () => {
@@ -102,21 +105,17 @@ describe("2. asPoolModel：命中/不命中", () => {
 describe("3. poolCandidates：渠道目录 → 候选", () => {
   it("归一化命中才算候选，顺序 = 注册顺序", () => {
     clearChannels();
-    setChannel(stubChannel("alpha", ["DeepSeek-V4-Flash", "glm-5.3-flashx"]));
-    setChannel(stubChannel("beta", ["sn-deepseek-v4-1-flash", "deepseek-v4-flash"]));
+    setChannel(stubChannel("alpha", ["DeepSeek-V4.1-Flash", "glm-5.3-flashx"]));
+    setChannel(stubChannel("beta", ["sn-deepseek-v4-1-flash", "deepseek-v4.1-flash"]));
     setChannel(stubChannel("gamma", ["qwen3.8-flash"]));
 
     assert.deepEqual(
-      poolCandidates("deepseek-v4-flash").map((c) => [c.cid, c.exposedId]),
+      poolCandidates("deepseek-v4.1-flash").map((c) => [c.cid, c.exposedId]),
       [
-        ["alpha", "DeepSeek-V4-Flash"],
-        ["beta", "deepseek-v4-flash"],
+        ["alpha", "DeepSeek-V4.1-Flash"],
+        ["beta", "sn-deepseek-v4-1-flash"],
       ],
       "exposedId 保留目录里的原始写法（上游 slug 可能大小写敏感）",
-    );
-    assert.deepEqual(
-      poolCandidates("deepseek-v4.1-flash").map((c) => c.cid),
-      ["beta"],
     );
     assert.deepEqual(poolCandidates("glm-5.3-flash"), [], "flashx 不算");
     clearChannels();
@@ -124,10 +123,10 @@ describe("3. poolCandidates：渠道目录 → 候选", () => {
 
   it("同一渠道多条命中同一目标时取目录里第一条", () => {
     clearChannels();
-    setChannel(stubChannel("alpha", ["deepseek-v4-flash-0731", "deepseek-v4-flash"]));
+    setChannel(stubChannel("alpha", ["sn-deepseek-v4-1-flash", "deepseek-v4.1-flash"]));
     assert.deepEqual(
-      poolCandidates("deepseek-v4-flash").map((c) => c.exposedId),
-      ["deepseek-v4-flash-0731"],
+      poolCandidates("deepseek-v4.1-flash").map((c) => c.exposedId),
+      ["sn-deepseek-v4-1-flash"],
     );
     clearChannels();
   });

@@ -333,7 +333,7 @@ describe("6. 端到端网关", () => {
     assert.equal(text, "网关通了");
   });
 
-  it("旧短名不再是可用的模型 id（网关只认池内三个规范名）", async () => {
+  it("旧短名不再是可用的模型 id（网关只认池内两个规范名）", async () => {
     // 渠道自己的 catalog 仍能解析旧短名（见上文「对外暴露上游真名」用例），
     // 但**网关入口**只接受池内 id —— 这是刻意的破坏性更新。
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {

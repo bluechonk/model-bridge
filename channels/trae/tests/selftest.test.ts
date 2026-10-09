@@ -130,20 +130,6 @@ function collect(frames: Array<Buffer | string>): {
   return { content, reasoning, finishes, usage, toolCalls, blob };
 }
 
-function contentOf(text: string): string {
-  let content = "";
-  for (const line of text.split("\n")) {
-    if (!line.startsWith("data:")) continue;
-    const payload = line.slice(5).trim();
-    if (!payload || payload === "[DONE]") continue;
-    const chunk = JSON.parse(payload) as { choices?: Array<{ delta?: { content?: string } }> };
-    for (const choice of chunk.choices ?? []) {
-      if (choice.delta?.content) content += choice.delta.content;
-    }
-  }
-  return content;
-}
-
 /** 构造一段 TRAE event 流（思考、正文、工具调用、usage、done）。 */
 function traeWire(): Buffer {
   const events: Array<[string, Record<string, unknown>]> = [
@@ -929,8 +915,8 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     const ids = payload.data.map((m) => m.id);
     assert.deepEqual(
       ids,
-      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
-      "对外只有三个池模型（不带渠道前缀）",
+      ["deepseek-v4.1-flash", "glm-5.3-flash"],
+      "对外只有两个池模型（不带渠道前缀）",
     );
     assert.ok(
       ids.every((id) => !id.includes("/")),
@@ -944,51 +930,33 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     assert.equal(modelsReq.headers["authorization"], "Cloud-IDE-JWT tok-e2e");
   });
 
-  it("流式对话：event 流被增量翻译；核对上游真实收到的头与体", async () => {
+  it("池内没有可用模型：流式对话直接 503，不触达上游", async () => {
+    // trae 目录只有 DeepSeek-V4-Flash 系 + 非 flash 的 glm，池收窄后一个都不提供
     fake.requests.length = 0;
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "deepseek-v4-flash",
+        model: "glm-5.3-flash",
         messages: [{ role: "user", content: "hi" }],
         stream: true,
       }),
       headers: { "Content-Type": "application/json" },
     });
-    assert.equal(resp.status, 200);
-    assert.ok(resp.headers.get("content-type")?.includes("text/event-stream"));
-    const text = await resp.text();
-    assert.equal(contentOf(text), "网关通了");
-
-    const sent = fake.requests.find((r) => r.path === upstream.CHAT_PATH)!;
-    assert.equal(sent.headers["authorization"], "Cloud-IDE-JWT tok-e2e");
-    assert.equal(sent.headers["x-cloudide-token"], "tok-e2e");
-    assert.equal(sent.headers["x-ide-token"], "tok-e2e");
-    assert.equal(sent.headers["x-device-id"], "b".repeat(32));
-    const body = sent.body!;
-    assert.equal(body["function"], "solo_agent", "deepseek 走 solo_agent 通道");
-    assert.equal(body["model"], "DeepSeek-V4-Flash", "上游收到目录里的原始写法（大小写敏感）");
-    assert.equal(body["config_name"], "DeepSeek-V4-Flash", "model 与 config_name 双字段同值");
-    assert.equal(body["stream"], true);
-    const messages = body["messages"] as Array<{ content: Array<Record<string, unknown>> }>;
-    assert.equal(messages[0]!.content[0]!["type"], "text");
+    assert.equal(resp.status, 503);
+    const payload = (await resp.json()) as { error: { code: string } };
+    assert.equal(payload.error.code, "not_authenticated");
+    assert.equal(fake.requests.length, 0, "没有候选渠道时不该触达上游");
   });
 
-  it("非流式：本层聚合成 chat.completion", async () => {
+  it("非流式：同样 503", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "deepseek-v4.1-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
-    assert.equal(resp.status, 200);
-    const payload = (await resp.json()) as {
-      object: string;
-      choices: Array<{ message: { content: string } }>;
-      usage: Record<string, number>;
-    };
-    assert.equal(payload.object, "chat.completion");
-    assert.equal(payload.choices[0]!.message.content, "网关通了");
-    assert.equal(payload.usage["prompt_tokens"], 7);
+    assert.equal(resp.status, 503);
+    const payload = (await resp.json()) as { error: { code: string } };
+    assert.equal(payload.error.code, "not_authenticated");
   });
 
   it("请求校验：缺 model/messages 返回 400 统一信封", async () => {
@@ -1002,17 +970,17 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     assert.equal(payload.error.code, "invalid_request");
   });
 
-  it("上游 500 → 502 upstream_error 且不回传上游原文", async () => {
+  it("即使上游会回 500：没有候选渠道时仍是 503，不泄露上游原文", async () => {
     mode.status = 500;
     try {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
-        body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
+        body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
         headers: { "Content-Type": "application/json" },
       });
-      assert.equal(resp.status, 502);
+      assert.equal(resp.status, 503, "无候选渠道时请求根本到不了上游");
       const payload = (await resp.json()) as { error: { code: string; message: string } };
-      assert.equal(payload.error.code, "upstream_error");
+      assert.equal(payload.error.code, "not_authenticated");
       assert.ok(!payload.error.message.includes("internal detail leak"));
     } finally {
       mode.status = 200;

@@ -1107,13 +1107,13 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     await gw?.close().catch(() => {});
   });
 
-  it("/v1/models 返回三个池模型；/health 报告 ok 与登录状态", async () => {
+  it("/v1/models 返回两个池模型；/health 报告 ok 与登录状态", async () => {
     const models = (await (await fetch(`http://${gw.addr}/v1/models`)).json()) as {
       data: Array<{ id: string }>;
     };
     const ids = models.data.map((m) => m.id);
-    // 对外只有三个公共模型 id（不带渠道前缀），与「本渠道目录里有什么」无关
-    assert.deepEqual(ids, ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"]);
+    // 对外只有两个公共模型 id（不带渠道前缀），与「本渠道目录里有什么」无关
+    assert.deepEqual(ids, ["deepseek-v4.1-flash", "glm-5.3-flash"]);
     assert.ok(
       ids.every((id) => !id.includes("/")),
       "不再暴露 <cid>/<模型> 形态",

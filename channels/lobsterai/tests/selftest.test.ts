@@ -915,7 +915,7 @@ describe("9. 端到端网关（假上游）", () => {
         data: [
           { modelId: "kimi-k3", modelName: "Kimi K3", contextWindow: 1_000_000 },
           { modelId: "glm-5.2", modelName: "GLM-5.2", contextWindow: 1_000_000 },
-          { modelId: "deepseek-v4-flash", modelName: "DeepSeek-V4-Flash", contextWindow: 1_000_000 },
+          { modelId: "glm-5.3-flash", modelName: "GLM-5.3-Flash", contextWindow: 1_000_000 },
         ],
       },
     }));
@@ -948,7 +948,7 @@ describe("9. 端到端网关（假上游）", () => {
     const underlying = catalog.details().map((r) => r["id"]);
     assert.ok(underlying.includes("kimi-k3") && underlying.includes("glm-5.2"), "远端目录已灌入（优先于兜底表）");
     const ids = catalog.exposedIds();
-    assert.deepEqual(ids, ["deepseek-v4-flash"], "白名单过滤后池内只剩带 flash 的那条");
+    assert.deepEqual(ids, ["glm-5.3-flash"], "白名单过滤后池内只剩带 flash 的 glm 那条");
     assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能有 flash 模型");
     assert.ok(!ids.includes("glm-5.2") && !ids.includes("kimi-k3"), "非 flash 被挡在池外");
   });
@@ -960,8 +960,8 @@ describe("9. 端到端网关（假上游）", () => {
     const ids = models.data.map((m) => m.id);
     assert.deepEqual(
       ids,
-      ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"],
-      "对外只有三个池模型（不带渠道前缀）",
+      ["deepseek-v4.1-flash", "glm-5.3-flash"],
+      "对外只有两个池模型（不带渠道前缀）",
     );
     assert.ok(
       catalog.details().some((r) => r["id"] === "kimi-k3"),
@@ -976,7 +976,7 @@ describe("9. 端到端网关（假上游）", () => {
     const server = fake.current!;
     server.captured.length = 0;
     const text = await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-v4-flash",
+      model: "glm-5.3-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
@@ -986,14 +986,14 @@ describe("9. 端到端网关（假上游）", () => {
     assert.equal(record.headers["x-lobsterai-client-capabilities"], upstream.CLIENT_CAPABILITIES);
     assert.ok(record.headers["x-lobsterai-client-version"], "上游必须收到版本头");
     assert.equal(record.body!["stream"], true);
-    assert.equal(record.body!["model"], "deepseek-v4-flash", "池 id 即该渠道目录里的名字");
+    assert.equal(record.body!["model"], "glm-5.3-flash", "池 id 即该渠道目录里的名字");
     assert.equal(record.body!["tool_choice"], undefined);
   });
 
   it("非流式：本层聚合成 chat.completion", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -1031,7 +1031,7 @@ describe("10. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "deepseek-v4-flash",
+          model: "glm-5.3-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),

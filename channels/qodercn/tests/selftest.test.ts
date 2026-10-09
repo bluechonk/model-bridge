@@ -279,15 +279,19 @@ describe("5. SSE 信封解包", () => {
 // ── 5. 模型目录 ──────────────────────────────────────────────────────────────
 
 describe("6. 模型目录映射（决定能否进公共模型池）", () => {
-  it("兜底表只有进池的两条", () => {
-    assert.deepEqual(catalog.exposedIds().sort(), ["deepseek-v4-flash", "glm-5.3-flash"]);
+  it("兜底表只有进池的那一条（4.0 已出池）", () => {
+    assert.deepEqual(catalog.exposedIds().sort(), ["glm-5.3-flash"]);
   });
 
   it("对外 id → 上游 key；三种输入形态都认", () => {
-    assert.equal(catalog.resolveModel("deepseek-v4-flash"), "dfmodel");
     assert.equal(catalog.resolveModel("glm-5.3-flash"), "gfmodel");
-    assert.equal(catalog.resolveModel("dfmodel"), "dfmodel");
-    assert.equal(catalog.resolveModel("DeepSeek-Flash"), "dfmodel");
+    assert.equal(catalog.resolveModel("gfmodel"), "gfmodel");
+    assert.equal(catalog.resolveModel("GLM-5.3-Flash"), "gfmodel");
+    assert.equal(
+      catalog.resolveModel("deepseek-v4-flash"),
+      "deepseek-v4-flash",
+      "4.0 已出池，不再映射，原样返回",
+    );
     assert.equal(catalog.resolveModel("未知模型"), "未知模型", "未命中原样返回");
   });
 
@@ -299,11 +303,12 @@ describe("6. 模型目录映射（决定能否进公共模型池）", () => {
   });
 
   it("目录条目的元数据可用于请求体（reasoning / 上下文）", () => {
-    const entry = catalog.entryOf("deepseek-v4-flash");
+    const entry = catalog.entryOf("glm-5.3-flash");
     assert.ok(entry);
-    assert.equal(entry.key, "dfmodel");
-    assert.equal(entry.displayName, "DeepSeek-Flash");
+    assert.equal(entry.key, "gfmodel");
+    assert.equal(entry.displayName, "GLM-5.3-Flash");
     assert.equal(entry.maxInputTokens, 1_000_000);
+    assert.equal(catalog.entryOf("deepseek-v4-flash"), null, "已出池的 4.0 不在目录里");
   });
 });
 
@@ -313,7 +318,7 @@ describe("7. 推理请求体", () => {
   const body = () =>
     upstream.buildRequestBody(
       {
-        model: "deepseek-v4-flash",
+        model: "glm-5.3-flash",
         messages: [
           { role: "system", content: "你是助手" },
           { role: "user", content: "你好" },
