@@ -260,9 +260,23 @@ export function buildChatBody(req: Record<string, unknown>, upstreamModel: strin
 export function fetchModels(credential: any): Promise<Record<string, unknown>>;
 export function resolveConfig(data: Record<string, unknown>, fallback?: Config): Config;
 
+// 可选钩子（共享层只在渠道声明时才调用）：
+/** 判定「非 401/403 的响应」是否也算鉴权失败（如 codearts 的 400 + APIG.0602）。 */
+export function isAuthFailure?(status: number, body: string): boolean;
+/** 判定流内错误帧是否为「排队」语义（如 qoder 的 10605），触发等待 + 重开上游。 */
+export function isQueueError?(frame: Record<string, unknown>): boolean;
+
 // 仅当 WIRE === "custom" 时需要：
 export function newTranslator(): StreamTranslator;
 ```
+
+**两个可选钩子的语义**（实现细节见 `POOL-ARCHITECTURE.md` §2.4）：
+
+- `isAuthFailure(status, body)`：只对 **4xx 且非 401/403** 的响应调用；返回 true 时网关按
+  401/403 同路径处理（刷新 token → 换池内账号）。用于上游不用标准状态码表达凭据失效的渠道。
+- `isQueueError(frame)`：只在**响应头发出前**对翻译器产出的错误帧调用；返回 true 时网关
+  按帧里的 `retryAfterSeconds`（封顶 10s）退避后重开上游重试，总时长上限 5 分钟。
+  已吐过内容帧则不重试（避免重复内容）。未声明的渠道照旧把错误帧透传给客户端。
 
 **`WIRE` 怎么选**：
 

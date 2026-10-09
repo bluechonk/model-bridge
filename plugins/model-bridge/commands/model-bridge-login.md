@@ -10,3 +10,5 @@ skills: model-bridge-gateway
   `workbuddy`，在 `workbuddy.ai` 用 `workbuddyai` —— 选错渠道会一直等授权超时。
   （`--realm` 仅为兼容保留，两条渠道都忽略它。）
 - 强制重登加 `--force`。登录是唯一需要用户动手的步骤。
+- 微信扫码：`model-bridge login --channel loomy --wechat`（仅 loomy 支持；打开授权页 →
+  手机扫码确认，未绑手机号时同样需要 `LOOMY_PHONE` / `LOOMY_SMS_CODE` 环境变量）。

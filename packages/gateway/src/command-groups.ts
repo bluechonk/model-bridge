@@ -38,6 +38,8 @@ export interface CommandContext {
   failIfUnclaimed: boolean;
   /** `model list` / `<cid> models` 的 `--refresh`：强制重拉上游目录。 */
   refresh: boolean;
+  /** `login --wechat`：微信扫码登录（渠道声明 loginWechat 才支持）。 */
+  wechat: boolean;
   lines: number;
   workspace?: string;
 }
@@ -397,7 +399,7 @@ export async function runChannelCommand(
     case "status":
       return daemon.status({ cid, json: ctx.json, addr: ctx.addr, uiPort: ctx.uiPort });
     case "login":
-      return headless.runLogin({ cid, json: ctx.json, realm: ctx.realm, force: ctx.force });
+      return headless.runLogin({ cid, json: ctx.json, realm: ctx.realm, force: ctx.force, wechat: ctx.wechat });
     case "models":
       return listLocalModels(channel, ctx.json, ctx.refresh);
     case "billing":

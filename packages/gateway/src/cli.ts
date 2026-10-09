@@ -64,6 +64,7 @@ ${verbLines.join("\n")}
   --wait <seconds>          启动健康等待秒数（默认 8）
   --lines <n>               logs 显示行数（默认 40）
   --realm <名>              login 的登录域（渠道自定义；单域渠道忽略）
+  --wechat                  login：微信扫码登录（仅声明该方式的渠道，如 loomy）
   --channel <cid>           只操作该渠道（等价把 <cid> 写成第一个参数）
   --refresh                 model refresh / <cid> models：强制重拉上游目录；
                             model usage：立刻重查各渠道账单额度（失败即报错退出）
@@ -161,6 +162,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         all: { type: "boolean" },
         force: { type: "boolean" },
         refresh: { type: "boolean" },
+        wechat: { type: "boolean" },
         strict: { type: "boolean" },
         "ensure-login": { type: "boolean" },
         "force-login": { type: "boolean" },
@@ -200,6 +202,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     realm: strOpt(o, "realm") ?? "auto",
     force: boolOpt(o, "force"),
     refresh: boolOpt(o, "refresh"),
+    wechat: boolOpt(o, "wechat"),
     statusOnly: boolOpt(o, "status"),
     dailyOnly: boolOpt(o, "daily-only"),
     failIfUnclaimed: boolOpt(o, "fail-if-unclaimed"),
@@ -246,6 +249,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         force: boolOpt(o, "force"),
         json: boolOpt(o, "json"),
         realm: strOpt(o, "realm") ?? "auto",
+        wechat: boolOpt(o, "wechat"),
       });
 
     case "start":

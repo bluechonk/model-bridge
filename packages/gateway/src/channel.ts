@@ -143,6 +143,17 @@ export interface UpstreamModule {
   resolveConfig(data: Record<string, unknown>, fallback?: any): any;
   /** 仅 `WIRE === "custom"` 时需要。 */
   newTranslator(): StreamTranslator;
+  /**
+   * 可选：判定**流内错误帧**是否为「排队」语义（上游还在处理，稍后可重发）。
+   *
+   * 背景：有些上游对过载/排队不拒绝连接，而是回 HTTP 200 + SSE 里投递一个
+   * 业务错误帧（如 qoder 的 `code:"10605"` + `retryAfterSeconds`）。共享层在
+   * **尚未向客户端写出任何字节**时收到这类帧会等待并重开上游重试；声明本钩子的
+   * 渠道才能触发该行为，未声明的渠道照旧把错误帧透传给客户端。
+   *
+   * ⚠ 只在响应头发出前调用；返回 true 且已吐过字节时不会重试（避免重复内容）。
+   */
+  isQueueError?(frame: Record<string, unknown>): boolean;
 }
 
 /** 渠道 `catalog.ts` 需要提供的接口。 */
