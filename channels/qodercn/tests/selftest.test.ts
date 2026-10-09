@@ -244,6 +244,32 @@ describe("5. SSE 信封解包", () => {
     assert.ok(out.includes('"content":"OK"'), out);
   });
 
+  it("统计帧（既无 choices 也无 usage）必须跳过，不能透传", () => {
+    // Qoder 的流里会混进这种帧；原样透传会让 OpenAI 客户端校验失败
+    // （ZCode 报 Type validation failed: expected array, received undefined）
+    const out = feedAll([
+      envelope({ firstTokenDuration: 185, totalDuration: 926, serverDuration: 296 }),
+    ]);
+    assert.equal(out, "", "统计帧必须丢弃");
+  });
+
+  it("裸的统计帧（没套信封）也必须丢弃", () => {
+    const out = feedAll(['data: {"firstTokenDuration":136,"totalDuration":678,"serverDuration":94}\n\n']);
+    assert.equal(out, "", "裸统计帧同样要丢弃");
+  });
+
+  it("usage-only 帧要透传（有 usage 就算 chunk）", () => {
+    const out = feedAll([
+      envelope({ usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } }),
+    ]);
+    assert.ok(out.includes("prompt_tokens"), out);
+  });
+
+  it("choices 为空数组也算 chunk（结束帧）", () => {
+    const out = feedAll([envelope({ choices: [] })]);
+    assert.ok(out.includes('"choices":[]'), out);
+  });
+
   it("非信封帧（有些渠道直发标准 chunk）原样透传", () => {
     const out = feedAll(['data: {"choices":[{"delta":{"content":"x"}}]}\n\n']);
     assert.ok(out.includes('"content":"x"'), out);
