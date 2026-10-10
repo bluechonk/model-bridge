@@ -1,5 +1,5 @@
 /**
- * 命令分组：`model-bridge <cid> <动词>` 与 `model-bridge model <子命令>`。
+ * 命令分组：`mb <cid> <动词>` 与 `mb model <子命令>`。
  *
  * 设计取向（对应「像 playwright-cli 那样有子命令」的诉求）：
  * - **网关生命周期是仓库级的**：`start/stop/restart/status/logs/serve` 不带渠道，
@@ -328,6 +328,55 @@ export async function listChannels(json: boolean, force = false): Promise<number
   return failures > 0 ? 1 : 0;
 }
 
+/**
+ * `login list`：列出**可以登录哪些渠道**与各自的登录状态（只读，不需要网关）。
+ *
+ * - 口径与 `status` 的逐渠道凭证探测一致：`cred.load()` 成功 = 已登录
+ *   （渠道知识零新增 —— 这里只调渠道自己的 `cred.load()`，不解释凭证内容）。
+ * - 输出里只带 `uid` 这类不透明的身份标识，不回显手机号/昵称等个人信息。
+ */
+export async function listLogins(json: boolean): Promise<number> {
+  const list = channels();
+  if (list.length === 0) {
+    console.error("没有渠道被注册（入口忘了 import 渠道包？）");
+    return 2;
+  }
+  const identityOf = (cred: unknown): string => {
+    if (!cred || typeof cred !== "object") return "";
+    const record = cred as Record<string, unknown>;
+    for (const key of ["uid", "userid", "userId"]) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return "";
+  };
+  const rows = list.map((channel) => {
+    const cid = channel.config.cid;
+    let loggedIn = false;
+    let uid = "";
+    try {
+      uid = identityOf(runInChannel(cid, () => channel.cred.load()));
+      loggedIn = true;
+    } catch {
+      loggedIn = false;
+    }
+    return { cid, display: channel.upstream.DISPLAY_NAME, logged_in: loggedIn, uid };
+  });
+
+  if (json) {
+    console.log(JSON.stringify(rows, null, 2));
+    return 0;
+  }
+  const logged = rows.filter((r) => r.logged_in).length;
+  console.log(`${list.length} 个渠道可登录（已登录 ${logged} 个，未登录 ${list.length - logged} 个）：`);
+  for (const row of rows) {
+    const status = row.logged_in ? `已登录${row.uid ? `  uid=${row.uid}` : ""}` : "未登录";
+    console.log(`  ${row.cid.padEnd(12)} ${row.display.padEnd(18)} ${status}`);
+  }
+  console.log("登录某个渠道：`mb <cid> login`（详见 `mb login --help` 与插件 /model-bridge-login）。");
+  return 0;
+}
+
 /** `model <list|show <cid>|usage|refresh [cid]>`。 */
 export async function runModelGroup(args: string[], ctx: CommandContext): Promise<number> {
   const sub = args[0] ?? "list";
@@ -385,7 +434,7 @@ export async function showPoolUsage(json: boolean, force = false): Promise<numbe
   return listPoolModels(json);
 }
 
-/** `model-bridge <cid> <动词> [参数]`。 */
+/** `mb <cid> <动词> [参数]`。 */
 export async function runChannelCommand(
   cid: string,
   args: string[],
@@ -430,14 +479,14 @@ export async function runChannelCommand(
     case "stop":
     case "restart":
       console.error(
-        `网关是**仓库级**的：\`model-bridge ${verb}\` 管的是服务全部渠道的那个网关。\n` +
+        `网关是**仓库级**的：\`mb ${verb}\` 管的是服务全部渠道的那个网关。\n` +
           `只想跑 ${cid} 一个渠道调试，用 \`node channels/${cid}/dist/cli.js ${verb}\`（独立端口）。`,
       );
       return 2;
     default:
       console.error(
         `未知动词: ${verb}\n` +
-          `用法: model-bridge <cid> <动词>；可用动词: ${CHANNEL_VERBS.map(([v]) => v).join(" / ")}`,
+          `用法: mb <cid> <动词>；可用动词: ${CHANNEL_VERBS.map(([v]) => v).join(" / ")}`,
       );
       return 2;
   }
