@@ -90,10 +90,28 @@ channels/<cid>/
 | 测试 | `node:test` + `node:assert/strict` |
 | UUID / 哈希 / 编解码 | `node:crypto`、`Buffer` |
 
-`devDependencies` 只允许 `typescript` 与 `@types/node`。
+`devDependencies` 只允许 `typescript`、`@types/node`，以及 `packages/cli` 的
+`esbuild`（仅用于发布构建，见 §2.1）。
 
 **例外**：若渠道协议**必须**某个第三方库，才可加入 `dependencies`，并在 README 与
 代码注释里说明「为什么不能零依赖」。共享包本身**必须零第三方依赖**。
+
+### 2.1 发布构建：单文件 bundle（`packages/cli/scripts/bundle.mjs`）
+
+`packages/cli` 是**唯一可全局安装/发布的单元**。它的运行时依赖是 workspace 软链
+（`catpaw-bridge` → `channels/catpaw`），直接 `npm i -g` 会因软链断裂而失败。
+因此 `npm run build` 在 `tsc -b` 之后追加一步 esbuild 打包：从唯一聚合点
+`src/cli.ts` 沿静态 import 把 cli + gateway + 全部渠道内联成
+`dist/cli.bundle.js`（带 shebang），`bin` 指向它，tarball 自包含。
+
+约束：
+
+- 渠道源码保持全静态 ESM import（无运行时动态加载渠道包），bundle 才能收干净；
+- cline / loomy / trae / workbuddy(ai) 的 `models.json` 随包快照由 loader 在构建期
+  内联（bundle 后 `import.meta.url` 相对路径失效，机制必须保真）；
+- daemon 重启守护进程用 `process.argv[1]`（当前入口），bundle 形态下天然正确；
+  回退分支（`node -e` 等异常启动方式）在 bundle 下同样失效，属已知限制
+  （见 `daemon.ts` 的 `cliEntry()`）。
 
 ---
 

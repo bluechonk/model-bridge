@@ -1,39 +1,25 @@
 {
   "name": "@model-bridge/cli",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "仓库级入口：注册全部渠道，暴露统一的 model-bridge CLI（模型池路由 + 账号池）",
   "engines": {
     "node": ">=22.6"
   },
   "bin": {
-    "model-bridge": "./dist/cli.js"
+    "model-bridge": "./dist/cli.bundle.js"
   },
   "files": [
-    "dist"
+    "dist/cli.bundle.js"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.json",
+    "build": "tsc -b tsconfig.json && node scripts/bundle.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test tests/*.test.ts"
   },
-  "dependencies": {
-    "@model-bridge/gateway": "*",
-    "catpaw-bridge": "*",
-    "cline-bridge": "*",
-    "codearts-bridge": "*",
-    "lobsterai-bridge": "*",
-    "loomy-bridge": "*",
-    "qoder-bridge": "*",
-    "raccoon-bridge": "*",
-    "trae-bridge": "*",
-    "workbuddy-bridge": "*",
-    "workbuddyai-bridge": "*",
-    "qodercn-bridge": "*"
-  },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.2"
   },
   "license": "MIT"

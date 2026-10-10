@@ -208,12 +208,14 @@ export function killTree(pid: number): void {
 /**
  * 守护进程要重新执行的入口脚本。
  *
- * ⚠ 必须是**当前进程的入口**（`process.argv[1]`），不能是本包内的 `cli.js`：
- * 各 bridge 的 bin 与仓库级入口都是「先注册渠道，再调 `main()`」，而共享包的
+ * ⚠ 必须是**当前进程的入口**（`process.argv[1]`），不能是共享包内的 `cli.js`：
+ * 仓库级 bin 与各 bridge 的 bin 都是「先注册渠道，再调 `main()`」，而共享包的
  * `cli.js` 只是一组导出、没有自带入口调用 —— 重跑它会立刻退出（守护进程永远起不来）。
  * 重跑自己才能带上与父进程一致的渠道集合。
  *
- * 回退（argv[1] 不是可执行的 JS，如 `node -e`）：本包 cli.js，由调用方接受失败。
+ * 回退（argv[1] 不是可执行的 JS，如 `node -e`）：本模块同目录的 `cli.js`，由调用方接受失败。
+ * 注意 bundle 形态下该回退同样失效（bundle 里没有独立 cli.js）——但回退只在异常启动方式
+ * （非文件入口）下触发，属已知限制。
  */
 function cliEntry(): string {
   const entry = process.argv[1];
