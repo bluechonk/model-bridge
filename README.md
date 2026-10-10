@@ -16,7 +16,7 @@
 
 ```
 packages/gateway/    共享层（网关 / 守护 / 路径 / 渠道注册表，不含任何渠道知识）
-packages/cli/        仓库级入口（bin model-bridge，注册全部渠道后交给共享 CLI）
+packages/cli/        仓库级入口（bin mb / model-bridge，注册全部渠道后交给共享 CLI）
 channels/<cid>/      一个渠道 = 一个池子（只实现 cred / upstream / catalog / billing）
 plugins/model-bridge/  唯一的 ZCode 插件
 docs/                全部文档（索引见 docs/README.md）
@@ -43,7 +43,7 @@ node packages/cli/dist/cli.js <cid> login        # 登录某个渠道（浏览�
 ```bash
 cd packages/cli && npm pack      # 产出 tarball（仅 bundle + package.json）
 npm i -g ./model-bridge-cli-*.tgz   # 或 npm i -g <git 地址>/packages/cli
-model-bridge model list          # 任意目录直接可用（别名 mb 等价）
+mb model list          # 任意目录直接可用（全名 model-bridge 等价）
 ```
 
 注意：bundle 形态下陈旧构建检测（`status` 的 stale_build）找不到工作区根，会退化为
@@ -58,7 +58,7 @@ model-bridge model list          # 任意目录直接可用（别名 mb 等价�
 | 契约与规范（改代码前必读） | [docs/CONTRACT-TS.md](docs/CONTRACT-TS.md) |
 | 公共模型池怎么选渠道 | [docs/POOL-ARCHITECTURE.md](docs/POOL-ARCHITECTURE.md) |
 | 存储落点规范 | [docs/STORAGE-CONVENTION.md](docs/STORAGE-CONVENTION.md) |
-| 某个渠道怎么用 | `plugins/model-bridge/commands/model-bridge-<cid>.md` |
+| 某个渠道怎么用 | [docs/bridges/&lt;cid&gt;.md](docs/bridges/)（如 `docs/bridges/qoder.md`） |
 | 某个上游的协议细节 | `docs/protocols/<cid>/PROTOCOL.md` |
 
 ## 约定

@@ -3,12 +3,15 @@ description: 账号池：一个渠道下多个账号的查看、切换、新增�
 skills: model-bridge-gateway
 ---
 
-账号池按渠道分文件保存，用 `model-bridge accounts` 管理。
+账号池按渠道分文件保存，用 `mb accounts` 管理。
 
-- `model-bridge accounts`（可加 `--channel <cid>` / `--json`）—— 列出各渠道池子：key、备注、健康度、uid、到期
-- `model-bridge accounts add --channel <cid>` —— **走该渠道的登录流程**（浏览器授权），成功后自动入池并设为生效
-- `model-bridge accounts use <key> --channel <cid>` —— 切换生效账号（把池内那份复制回 `credentials.json`）
-- `model-bridge accounts remove <key> [--channel <cid>]` —— 从池子删除；**删的是生效账号时会同时登出**
+- `mb accounts`（可加 `--channel <cid>` / `--json`）—— 列出各渠道池子：key、备注、健康度、uid、到期
+- `mb accounts add --channel <cid>` —— **走该渠道的登录流程**（浏览器授权），成功后自动入池并设为生效
+- `mb accounts use <key> --channel <cid>` —— 切换生效账号（把池内那份复制回 `credentials.json`）
+- `mb accounts remove <key> [--channel <cid>]` —— 从池子删除；**删的是生效账号时会同时登出**
+
+**交互约定**：`add` / `use` / `remove` 都必须指定渠道与账号 —— 用户没给全时，先 `mb accounts`
+看有哪些渠道与账号，再用 `ask_user_query` 让用户选（`remove` 是破坏性操作，执行前必须确认）。
 
 要点（向用户解释时照此说）：
 
