@@ -302,6 +302,110 @@ describe("上游 HTTP 200 + 流内业务错误帧（非排队）", () => {
   });
 });
 
+describe("排队探测消费掉的帧一个都不能丢（回归）", () => {
+  // 症状：ZCode 报 `model.tool_input.normalize_failed`（Bash 工具参数 JSON 语法错误）
+  // —— tool_call 的 arguments 分片在流中被吞掉一段，拼出来就是坏 JSON。
+  // 两个丢帧向量都出在 `consumeQueueProbe` 退出点（qoder/qodercn 专用路径）：
+  //   A. 同一 TCP 块里多帧，探测在第一帧（内容）处 return，同块剩余帧被丢；
+  //   B. 翻译器缓冲里的**半行**随探测实例一起丢弃，转发层换了新实例接不上残行，整帧丢失。
+  let root = "";
+  let upstream: Awaited<ReturnType<typeof fakeUpstreamFrameSplit>>;
+  let gw: gateway.RunningGateway;
+  const logs: string[] = [];
+
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), "mb-frame-split-"));
+    process.env["MODEL_BRIDGE_HOME"] = root;
+    upstream = await fakeUpstreamFrameSplit();
+    process.env["MB_TEST_UPSTREAM"] = upstream.url;
+
+    clearChannels();
+    setChannel(makeChannel());
+    mkdirSync(paths.channelDir(CID), { recursive: true });
+    writeFileSync(
+      paths.credentialsPath(CID),
+      JSON.stringify({ accessToken: "tok-q", uid: "u-q", domain: "" }, null, 2),
+      "utf8",
+    );
+    gw = await gateway.start("127.0.0.1:0", { logger: (m) => logs.push(m) });
+  });
+
+  after(async () => {
+    await gw?.close().catch(() => {});
+    await new Promise<void>((r) => upstream.server.close(() => r()));
+    delete process.env["MB_TEST_UPSTREAM"];
+    delete process.env["MODEL_BRIDGE_HOME"];
+    clearChannels();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("流式：同块多帧 + 跨块半行，三段内容都要到客户端", async () => {
+    const { status, text } = await chat(gw.addr, true);
+    assert.equal(status, 200, `流式应当成功（日志: ${logs.join(" | ")}）`);
+    for (const part of ["AAA", "BBB", "CCC"]) {
+      assert.ok(text.includes(part), `内容 ${part} 不能丢（实际: ${text.slice(0, 400)}）`);
+    }
+  });
+
+  it("非流式：聚合结果同样不能缺段", async () => {
+    const { status, text } = await chat(gw.addr, false);
+    assert.equal(status, 200, `非流式应当成功（日志: ${logs.join(" | ")}）`);
+    const payload = JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = payload.choices?.[0]?.message?.content ?? "";
+    for (const part of ["AAA", "BBB", "CCC"]) {
+      assert.ok(content.includes(part), `聚合内容 ${part} 不能丢（实际: ${content}）`);
+    }
+  });
+});
+
+/**
+ * 假上游：把多个信封塞进**同一个 TCP 块**，并在第二帧中间切成两半跨块发送。
+ *
+ * - 块 1 = 帧1 完整 + 帧2 前半（探测在第一帧处停下，帧2 前半留在翻译器缓冲里）
+ * - 块 2 = 帧2 后半 + 帧3 完整
+ * - 块 3 = finish 帧 + [DONE]
+ *
+ * 间隔 40ms 是为了让块边界在真网络/undici 下稳定成立。
+ */
+async function fakeUpstreamFrameSplit(): Promise<{ server: Server; url: string }> {
+  const env = (payload: Record<string, unknown>): string =>
+    `data:${JSON.stringify({ headers: {}, body: JSON.stringify(payload), statusCodeValue: 200 })}\n\n`;
+  const chunk = (content: string): Record<string, unknown> => ({
+    id: "c",
+    model: "m",
+    created: 1,
+    choices: [{ index: 0, delta: { content }, finish_reason: null }],
+  });
+  const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+  const server = createServer((req, res) => {
+    req.resume();
+    req.on("end", async () => {
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      const e1 = env(chunk("AAA"));
+      const e2 = env(chunk("BBB"));
+      const e3 = env(chunk("CCC"));
+      const done = env({
+        id: "c",
+        model: "m",
+        created: 1,
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+      });
+      const half = Math.floor(e2.length / 2);
+      res.write(e1 + e2.slice(0, half)); // 同块多帧 + 半行
+      await sleep(40);
+      res.write(e2.slice(half) + e3); // 残行收尾 + 第三帧
+      await sleep(40);
+      res.write(done + "data:[DONE]\n\n");
+      res.end();
+    });
+  });
+  const port = await new Promise<number>((resolve) => {
+    server.listen(0, "127.0.0.1", () => resolve((server.address() as { port: number }).port));
+  });
+  return { server, url: `http://127.0.0.1:${port}` };
+}
+
 /** 假上游：恒回 HTTP 200 + 一个流内业务错误帧（非排队），然后结束。 */
 async function fakeUpstreamError(): Promise<{ server: Server; url: string }> {
   const server = createServer((req, res) => {

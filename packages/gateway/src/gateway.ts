@@ -42,6 +42,7 @@ import {
   getChannel,
   type Channel,
   type Credential,
+  type StreamTranslator,
   type UpstreamConfig,
 } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
@@ -257,6 +258,7 @@ async function relayStream(
   logger: (m: string) => void,
   channel: Channel,
   cid?: string,
+  resumeTranslator?: StreamTranslator,
 ): Promise<void> {
   if (!isCustomWire(channel)) {
     await sseStream.relay(res, upstreamBody, contentType, cid);
@@ -264,7 +266,9 @@ async function relayStream(
   }
 
   const { upstream } = channel;
-  const translator = upstream.newTranslator();
+  // ⚠ 排队探测可能已用同一实例读了一段：必须接着用同一个。换新实例会把
+  //   旧实例缓冲里的**半行**丢掉，残行收尾时整帧解析失败被丢弃（实测：tool_call 参数损坏）。
+  const translator = resumeTranslator ?? upstream.newTranslator();
   const reader = upstreamBody.getReader();
   try {
     for (;;) {
@@ -301,11 +305,13 @@ async function collectAsOpenAiSse(
   upstreamBody: ReadableStream<Uint8Array>,
   channel: Channel,
   cid?: string,
+  resumeTranslator?: StreamTranslator,
 ): Promise<Buffer> {
   if (!isCustomWire(channel)) return sseStream.readAll(upstreamBody, cid);
 
   const { upstream } = channel;
-  const translator = upstream.newTranslator();
+  // ⚠ 与 relayStream 同理：探测用过的实例必须接着用，半行缓冲不能丢。
+  const translator = resumeTranslator ?? upstream.newTranslator();
   const reader = upstreamBody.getReader();
   const out: Buffer[] = [];
   try {
@@ -337,99 +343,91 @@ interface QueueProbe {
   queued: boolean;
   /** 上游建议的等待秒数（从排队帧解析；没有就不给）。 */
   delayMs?: number;
-  /** 已产出的**内容帧**（OpenAI SSE 字节）。非空 = 已有实质输出，不能再重试。 */
-  contentFrames: Buffer[];
   /**
-   * 探测消费掉的**非排队错误帧**（`data: {"error":…}`）。
-   * 必须交回调用方转发/回报 —— 吞掉就会退化成空响应（非流式尤甚）。
+   * 探测消费掉、必须交回调用方**按原序**转发的帧（内容帧 + 非排队错误帧）。
+   * 一个都不能丢 —— 吞掉就是流中缺段、非流式空响应（见本文件「排队探测」注释）。
    */
-  errorFrames: Buffer[];
+  frames: Buffer[];
+  /** 是否已见到内容帧（见到 = 响应是真实的，排队重试必须停）。 */
+  hasContent: boolean;
   /** 排队帧里解析到的 retryAfterSeconds 原文（日志用）。 */
   rawDelaySec?: number;
+  /**
+   * 探测用的翻译器实例。它的行缓冲里可能还剩**半行**（跨 TCP 块的帧前缀），
+   * 转发阶段必须接着用同一实例，换新实例会把半行前缀丢掉、残行整帧解析失败。
+   */
+  translator: StreamTranslator;
 }
 
 /**
  * 消费上游流做「排队探测」：**不向客户端写任何字节**。
  *
  * 翻译器逐帧处理：
- * - 内容帧（`data:` 且非 error）→ 记入 `contentFrames`，立即停止（有内容就不能重试）
+ * - 内容帧（`data:` 且非 error）→ 记入 `frames` 并停止探测（有内容就不能重试），
+ *   **但同一块里紧随其后的帧也要一并收走**（TCP 合并发送时一块可能有多帧）
  * - 错误帧 → 问渠道 `isQueueError`：是排队就记下延迟并继续等下一帧；
- *   否则记入 `errorFrames` 后停止（交回调用方，不能吞）
+ *   否则记入 `frames` 后停止探测（交回调用方，不能吞）
  * - 流结束仍无内容也无排队 → `queued: false`（正常完成或普通错误）
  *
  * ⚠ 只在 `relayUpstream` **之前**调用：一旦开始向客户端写字节，本函数就没意义了。
+ * ⚠ 返回的 `translator` 必须交给转发层接着用（半行缓冲在里面）。
  */
 async function consumeQueueProbe(
   upstreamBody: ReadableStream<Uint8Array>,
   channel: Channel,
   cid?: string,
+  translator: StreamTranslator = channel.upstream.newTranslator(),
 ): Promise<QueueProbe> {
-  const translator = channel.upstream.newTranslator();
   const reader = upstreamBody.getReader();
-  const probe: QueueProbe = { queued: false, contentFrames: [], errorFrames: [] };
+  const probe: QueueProbe = { queued: false, frames: [], hasContent: false, translator };
+  /** 已决定停止探测：同块剩余帧只收不判（丢了就是流中缺段）。 */
+  let stopped = false;
+  const take = (frame: Buffer | string): void => {
+    const buf = asBuffer(frame);
+    if (stopped) {
+      probe.frames.push(buf);
+      return;
+    }
+    const text = buf.toString("utf8");
+    // 错误帧形如 `data: {"error":{...}}`
+    const isErrorFrame = /^data: /.test(text) && /"error"\s*:/.test(text);
+    if (!isErrorFrame) {
+      probe.frames.push(buf);
+      probe.hasContent = true;
+      stopped = true;
+      return;
+    }
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(text.slice("data: ".length).trim()) as Record<string, unknown>;
+    } catch {
+      probe.frames.push(buf); // 判不了就转发（丢帧比转发危险）
+      stopped = true;
+      return;
+    }
+    if (channel.upstream.isQueueError?.(payload)) {
+      probe.queued = true;
+      const errObj = payload["error"] as { code?: unknown; message?: unknown } | undefined;
+      const m = /retryAfterSeconds\D+(\d+)/i.exec(String(errObj?.message ?? ""));
+      if (m) {
+        const sec = Number.parseInt(m[1]!, 10);
+        probe.rawDelaySec = sec;
+        probe.delayMs = Math.max(1_000, sec * 1000);
+      }
+      return; // 排队帧本身不转发，继续读后续帧
+    }
+    probe.frames.push(buf);
+    stopped = true; // 非排队错误帧：停止探测，交回调用方转发/回报
+  };
+
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      for (const frame of translator.feed(Buffer.from(value))) {
-        const buf = asBuffer(frame);
-        const text = buf.toString("utf8");
-        // 错误帧形如 `data: {"error":{...}}`
-        const isErrorFrame = /^data: /.test(text) && /"error"\s*:/.test(text);
-        if (isErrorFrame) {
-          let payload: Record<string, unknown>;
-          try {
-            payload = JSON.parse(text.slice("data: ".length).trim()) as Record<string, unknown>;
-          } catch {
-            continue;
-          }
-          if (channel.upstream.isQueueError?.(payload)) {
-            probe.queued = true;
-            const errObj = payload["error"] as { code?: unknown; message?: unknown } | undefined;
-            const msg = String(errObj?.message ?? "");
-            const m = /retryAfterSeconds\D+(\d+)/i.exec(msg);
-            if (m) {
-              const sec = Number.parseInt(m[1]!, 10);
-              probe.rawDelaySec = sec;
-              probe.delayMs = Math.max(1_000, sec * 1000);
-            }
-            continue; // 排队帧不算内容，继续读后续帧
-          }
-          // 非排队的错误帧：记下来停止探测（交回调用方转发/回报）
-          probe.errorFrames.push(buf);
-          return probe;
-        }
-        probe.contentFrames.push(buf);
-        return probe; // 已有内容 → 不能重试
-      }
+      for (const frame of translator.feed(Buffer.from(value))) take(frame);
+      if (stopped) return probe;
     }
-    for (const frame of translator.finish()) {
-      const buf = asBuffer(frame);
-      const text = buf.toString("utf8");
-      if (/^data: /.test(text) && /"error"\s*:/.test(text)) {
-        let payload: Record<string, unknown>;
-        try {
-          payload = JSON.parse(text.slice("data: ".length).trim()) as Record<string, unknown>;
-        } catch {
-          continue;
-        }
-        if (channel.upstream.isQueueError?.(payload)) {
-          probe.queued = true;
-          const errObj = payload["error"] as { code?: unknown; message?: unknown } | undefined;
-          const m = /retryAfterSeconds\D+(\d+)/i.exec(String(errObj?.message ?? ""));
-          if (m) {
-            const sec = Number.parseInt(m[1]!, 10);
-            probe.rawDelaySec = sec;
-            probe.delayMs = Math.max(1_000, sec * 1000);
-          }
-        } else {
-          probe.errorFrames.push(buf);
-        }
-        continue;
-      }
-      probe.contentFrames.push(buf);
-      return probe;
-    }
+    for (const frame of translator.finish()) take(frame);
   } finally {
     // ⚠ 必须 releaseLock（不是 cancel）：流可能还没读完就提前返回（发现内容/普通错误），
     // 此时 cancel 会抛「ReadableStream is locked」；releaseLock 后调用方才能安全地
@@ -668,16 +666,21 @@ async function handleChat(
     // 排队重试：渠道声明了 isQueueError 且上游回了排队帧（HTTP 200 + 流内业务错误）
     // → 按 retryAfterSeconds 退避后重开上游，直到出内容或预算耗尽。
     // ⚠ 只在**响应头发出前**做：一旦开始向客户端写字节就不能再换请求。
-    // 探测消费掉的内容帧记在 `pendingFrames`，转发前先写给客户端（不能丢）。
+    // ⚠ 探测消费掉的帧按原序记在 `pendingFrames`，转发前先写给客户端；
+    //    探测用的翻译器（半行缓冲）也要交给转发层接续 —— 两者丢一个就是流中缺段。
     const pendingFrames: Buffer[] = [];
     let queuedOut = false;
+    let probeTranslator: StreamTranslator | undefined;
     if (isCustomWire(channel) && channel.upstream.isQueueError) {
       const startedAt = Date.now();
       for (;;) {
-        const probe = await inChannel(channel, () => consumeQueueProbe(call.body!, channel, cid));
-        if (!probe.queued || probe.contentFrames.length > 0) {
-          // 探测消费掉的帧一个都不能丢：内容帧是响应前缀，错误帧要转发/回报
-          pendingFrames.push(...probe.contentFrames, ...probe.errorFrames);
+        // 每次探测用新翻译器（换流后旧缓冲作废）；成功那次的实例要传给转发层
+        const translator = channel.upstream.newTranslator();
+        const probe = await inChannel(channel, () => consumeQueueProbe(call.body!, channel, cid, translator));
+        if (!probe.queued || probe.hasContent) {
+          // 探测消费掉的帧一个都不能丢：按原序交回转发
+          pendingFrames.push(...probe.frames);
+          probeTranslator = translator;
           break;
         }
         const elapsed = Date.now() - startedAt;
@@ -720,7 +723,7 @@ async function handleChat(
     // 上游收下了这次请求 → 该渠道可用（清冷却）→ 交给转发层，池路由到此为止。
     noteSuccess(cid);
     markActiveHealth("ok", cid);
-    await relayUpstream(res, channel, cid, call, wantStream, opts.logger, pendingFrames, queuedOut);
+    await relayUpstream(res, channel, cid, call, wantStream, opts.logger, pendingFrames, queuedOut, probeTranslator);
     return;
   }
 
@@ -758,6 +761,7 @@ async function relayUpstream(
   logger: (m: string) => void,
   pendingFrames: Buffer[] = [],
   queuedOut = false,
+  probeTranslator?: StreamTranslator,
 ): Promise<void> {
   const streamBody = call.body;
   if (!streamBody) {
@@ -775,7 +779,7 @@ async function relayUpstream(
       // 错误帧）与流剩余部分拼起来聚合。
       const buf = Buffer.concat([
         ...pendingFrames,
-        await inChannel(channel, () => collectAsOpenAiSse(streamBody, channel, cid)),
+        await inChannel(channel, () => collectAsOpenAiSse(streamBody, channel, cid, probeTranslator)),
       ]);
       // 排队耗尽且零内容：给客户端一个明确的错误，而不是空 completion
       if (queuedOut && buf.length === 0) {
@@ -822,7 +826,7 @@ async function relayUpstream(
     return;
   }
   await inChannel(channel, () =>
-    relayStream(res, streamBody, call.headers.get("content-type") ?? "", logger, channel, cid),
+    relayStream(res, streamBody, call.headers.get("content-type") ?? "", logger, channel, cid, probeTranslator),
   );
 }
 
