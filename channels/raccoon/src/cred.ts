@@ -428,7 +428,10 @@ export async function login(baseUrlOverride?: string, options: LoginOptions = {}
   const timeoutMs = options.timeoutMs ?? LOGIN_TIMEOUT_MS;
 
   const state = newLoginState();
-  onUrl?.(authorizeUrl(state, baseUrlOverride));
+  const url = authorizeUrl(state, baseUrlOverride);
+  onUrl?.(url);
+  // 打开浏览器（打不开不影响登录：URL 已打印，可手动复制；测试用 RACCOON_NO_BROWSER=1 关掉）
+  if (process.env["RACCOON_NO_BROWSER"] !== "1") sharedLogin.openBrowser(url);
   onStatus?.(
     "Log in with WeChat / SMS / password in the browser; then paste the callback url (office-raccoon://auth/callback?...) back here",
   );

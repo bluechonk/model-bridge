@@ -5,8 +5,8 @@
  *  1. 手机号 **AES-128-CFB** 加密（密钥 16 字节 ⇒ aes-128-cfb；输出 base64(iv‖密文)）
  *  2. 凭据：**JWT `exp` 回退**（只读 `expires_at` 会让过期判定恒为 false）、
  *     `expires_at` 优先、老凭据补 `device_id` 并写回、损坏容忍
- *  3. 扫码登录流（**code 本地生成**）：`logging` 不中断、`canceled` 换新码、
- *     异常降级 `pending`、缺 token 的 `success` 视为未完成
+ *  3. 网页登录（授权码链路）：授权 URL 参数（官方同款）、回调 URL 校验（伪造 host /
+ *     state 不匹配拒绝）、换码落盘；`/login/mp` 死链不再使用（回归）
  *  4. 续期：只回 access_token 时**保留旧 refresh_token**；200003 / 401 是终态
  *  5. 请求体：`extra_body.thinking` 是**唯一**思考通道（`reasoning_effort` 被接受但无效）、
  *     `max_tokens` 安全整数、`tools` 在顶层
@@ -14,7 +14,7 @@
  *  7. 模型目录：兜底表、**tags 不是图片能力契约**（白名单覆盖）、**1 倍也要显示倍率**、
  *     远端 `name` 才是模型 id
  *  8. 额度：余额只读（**从不触碰写端点**）、缺 `available_points` 不显示成 0、
- *     登录奖励幂等（`granted`）、**没有每日签到端点**
+ *     登录奖励幂等（`granted`）、**每日签到 = setting_info 触发 + 账单核对**
  *  9. 端到端网关（假上游 + 真实网关）：流式/非流式、思考通道、错误路径
  *
  * 数据目录用 RACCOON_HOME 指向临时目录，绝不碰真实凭据。
@@ -29,6 +29,7 @@ import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "raccoon-selftest-"));
 process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["RACCOON_NO_BROWSER"] = "1"; // 测试里绝不真开浏览器
 
 const PHONE = "13800138000";
 
