@@ -9,7 +9,7 @@
  */
 
 import { spawn, execFile } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -580,7 +580,10 @@ export function logs(lines = 40, json = false, cid?: string): number {
     else console.log(`[${name}] ${payload.error}`);
     return 1;
   }
-  const tail = text.split("\n").slice(-lines);
+  // 末尾换行会 split 出一个空元素，先去掉一个再切，行数才是「真正的行」；
+  // 且 `slice(-0)` 等于 `slice(0)`（负零退化为 0）会打印**整个文件**——必须显式判零
+  const body = text.endsWith("\n") ? text.slice(0, -1) : text;
+  const tail = lines > 0 && body !== "" ? body.split("\n").slice(-lines) : [];
   if (json) {
     console.log(JSON.stringify({ ok: true, log: scope.logPath(), lines: tail }));
   } else {
@@ -588,4 +591,64 @@ export function logs(lines = 40, json = false, cid?: string): number {
     console.log(tail.join("\n"));
   }
   return 0;
+}
+
+/**
+ * 从 `offset` 起读文件新增内容，只取**完整行**（截到最后一个换行符）。
+ *
+ * 半行不输出：写入方可能正写到一半（含多字节字符的前几字节），提前解码会得到乱码；
+ * UTF-8 里 `0x0A` 不会出现在多字节序列内部，按换行切永远切在字符边界上。
+ * 文件被截断/轮转（size < offset）时从 0 重读，避免偏移量失效后永久失明。
+ */
+export function readAppended(path: string, offset: number): { text: string; offset: number } {
+  let size: number;
+  try {
+    size = statSync(path).size;
+  } catch {
+    return { text: "", offset }; // 文件暂时不在（刚轮转）：保持偏移等它回来
+  }
+  if (size < offset) offset = 0;
+  if (size === offset) return { text: "", offset };
+  const len = size - offset;
+  const buf = Buffer.alloc(len);
+  try {
+    const fd = openSync(path, "r");
+    try {
+      readSync(fd, buf, 0, len, offset);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return { text: "", offset };
+  }
+  const nl = buf.lastIndexOf(0x0a);
+  if (nl === -1) return { text: "", offset };
+  return { text: buf.subarray(0, nl + 1).toString("utf8"), offset: offset + nl + 1 };
+}
+
+/** 跟随轮询间隔（毫秒）。250ms 下肉眼接近实时，开销可忽略。 */
+const FOLLOW_INTERVAL_MS = 250;
+
+/**
+ * `logs --follow`：先打尾部 N 行，再持续输出新增内容，Ctrl+C 退出。
+ * 语义对齐 `tail -f` / `docker logs -f`；只读文件，不碰网关进程。
+ */
+export async function followLogs(lines = 40, json = false, cid?: string): Promise<number> {
+  const path = scopeOf(cid).logPath();
+  const code = logs(lines, json, cid);
+  if (code !== 0) return code; // 日志不存在：直接给快照的报错语义
+  let offset = statSync(path).size;
+  return await new Promise<number>((resolve) => {
+    const timer = setInterval(() => {
+      const r = readAppended(path, offset);
+      offset = r.offset;
+      if (r.text) process.stdout.write(r.text);
+    }, FOLLOW_INTERVAL_MS);
+    const stop = (): void => {
+      clearInterval(timer);
+      resolve(0);
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
 }

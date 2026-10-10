@@ -247,6 +247,15 @@ describe("1. 常见命令与帮助", () => {
     assert.equal(r.code, 2);
     assert.ok(r.err.includes("未知命令"));
   });
+
+  it("logs --lines 0 不打印历史行（回归：slice(-0) 曾把整个日志打出来）", async () => {
+    writeFileSync(join(root, "gateway.log"), "老日志甲\n老日志乙\n", "utf8");
+    const zero = await run(["logs", "--lines", "0"]);
+    assert.equal(zero.code, 0, zero.err);
+    assert.ok(!zero.out.includes("老日志甲") && !zero.out.includes("老日志乙"), `0 行不该有内容：${zero.out}`);
+    const one = await run(["logs", "--lines", "1"]);
+    assert.ok(one.out.includes("老日志乙") && !one.out.includes("老日志甲"), `只留最后一行：${one.out}`);
+  });
 });
 
 describe("2. 模型池（model 分组）", () => {
