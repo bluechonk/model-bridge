@@ -7,7 +7,8 @@
     "node": ">=22.6"
   },
   "bin": {
-    "model-bridge": "./dist/cli.bundle.js"
+    "model-bridge": "./dist/cli.bundle.js",
+    "mb": "./dist/cli.bundle.js"
   },
   "files": [
     "dist/cli.bundle.js"

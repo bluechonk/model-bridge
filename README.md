@@ -43,7 +43,7 @@ node packages/cli/dist/cli.js <cid> login        # 登录某个渠道（浏览�
 ```bash
 cd packages/cli && npm pack      # 产出 tarball（仅 bundle + package.json）
 npm i -g ./model-bridge-cli-*.tgz   # 或 npm i -g <git 地址>/packages/cli
-model-bridge model list          # 任意目录直接可用
+model-bridge model list          # 任意目录直接可用（别名 mb 等价）
 ```
 
 注意：bundle 形态下陈旧构建检测（`status` 的 stale_build）找不到工作区根，会退化为
