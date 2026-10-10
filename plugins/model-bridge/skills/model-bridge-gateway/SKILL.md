@@ -52,7 +52,7 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `model-bridge channels` | **渠道视角**：每个渠道各自贡献了池内哪些模型 |
 | `model-bridge status`（`--json`） | 网关健康、逐渠道登录状态、守护 PID、凭证、auto_start |
 | `model-bridge start` | 守护式启动（幂等；失败默认只报告，`--strict` 才非零退出） |
-| `model-bridge stop` / `restart` | 停 / 重启守护实例（不碰第三方进程） |
+| `model-bridge stop` / `restart` | 停 / 重启守护实例（不碰第三方进程；成功停止会在日志留 `stop` 记录） |
 | `model-bridge models` | 查**运行中的网关**暴露的模型 id（网关没起会失败；恒为那两个） |
 | `model-bridge login --channel <cid>` | 无窗口登录：stdout 给出授权链接，用户浏览器授权后自动保存 |
 | `model-bridge logs`（`--lines N`，`-f` 跟随） | 网关日志尾部（排障第一步）；`-f` 持续输出新日志 |

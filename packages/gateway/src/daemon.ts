@@ -9,7 +9,7 @@
  */
 
 import { spawn, execFile } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -181,28 +181,41 @@ function readPid(scope: Scope): number {
   }
 }
 
-/** 结束进程及其子进程（node 的孙进程一并处理）。 */
-export function killTree(pid: number): void {
+/**
+ * 结束进程及其子进程（node 的孙进程一并处理）。
+ *
+ * ⚠ win32 的 taskkill 是**异步**的：发出去就返回会让紧随其后的 `start()` 探到
+ *   「还活着的旧进程」→ 报「已在运行」却不换代码（实测踩过：`restart` 声称成功，
+ *   端口上跑的还是旧进程）。所以这里必须**等进程真的死掉**再返回。
+ *
+ * @returns 进程已死（含本来就不存在）→ true；仍在存活 → false。
+ */
+export async function killTree(pid: number): Promise<boolean> {
+  const waitDead = async (): Promise<boolean> => {
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      if (!pidAlive(pid)) return true;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return !pidAlive(pid);
+  };
+
   if (process.platform === "win32") {
     execFile("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, () => {});
-    return;
+    return waitDead();
   }
   try {
     process.kill(pid, "SIGTERM");
   } catch {
-    return;
+    return true; // 本来就不存在
   }
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
-    if (!pidAlive(pid)) return;
-    const shared = new SharedArrayBuffer(4);
-    Atomics.wait(new Int32Array(shared), 0, 0, 100);
-  }
+  if (await waitDead()) return true;
   try {
     process.kill(pid, "SIGKILL");
   } catch {
     /* 已退出 */
   }
+  return waitDead();
 }
 
 /**
@@ -270,9 +283,9 @@ export async function start(options: StartOptions = {}): Promise<number> {
   const pid = readPid(scope);
   if (pid && pidAlive(pid)) {
     log(`结束不健康的守护实例 (PID ${pid})...`);
-    killTree(pid);
-    const shared = new SharedArrayBuffer(4);
-    Atomics.wait(new Int32Array(shared), 0, 0, 500);
+    const dead = await killTree(pid);
+    if (dead) recordStop(scope, pid);
+    else log(`警告：旧实例 (PID ${pid}) 未能结束，新实例可能无法绑定端口`);
   }
   try {
     unlinkSync(scope.pidPath());
@@ -324,6 +337,21 @@ export async function start(options: StartOptions = {}): Promise<number> {
   return strict ? 1 : 0;
 }
 
+/**
+ * 追加一行终止记录到该 scope 的日志。
+ *
+ * 日志平时只有**网关子进程自己**写的 start/ready（stdout 重定向），进程被 kill 后
+ * 没有机会留遗言——stop 侧不补这一行，时间线上就永远没有"下线"痕迹，
+ * 手动停与崩溃在同一条日志里分不出来。必须等进程死透再写（避免与临终输出交错）。
+ */
+function recordStop(scope: Scope, pid: number): void {
+  try {
+    appendFileSync(scope.logPath(), `${JSON.stringify({ event: "stop", pid })}\n`, "utf8");
+  } catch {
+    /* 日志不可写不影响停止本身 */
+  }
+}
+
 /** 停止守护式网关（只管理有 PID 文件的实例，不碰第三方进程）。 */
 export async function stop(options: { quiet?: boolean; addr?: string; cid?: string } = {}): Promise<number> {
   const { quiet = false } = options;
@@ -342,7 +370,13 @@ export async function stop(options: { quiet?: boolean; addr?: string; cid?: stri
     log("网关未在运行");
     return 0;
   }
-  killTree(pid);
+  const dead = await killTree(pid);
+  if (!dead) {
+    // 进程还活着就不能声称「已停止」：留着 PID 文件，下一次 stop 还能再试
+    log(`未能停止网关 (PID ${pid})：进程仍存活（可能权限不足），请手动结束`);
+    return 1;
+  }
+  recordStop(scope, pid);
   try {
     unlinkSync(scope.pidPath());
   } catch {
