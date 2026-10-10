@@ -168,13 +168,17 @@ export async function foreignServiceOnPort(addr: string = defaultAddr()): Promis
   }
 }
 
-function pidAlive(pid: number): boolean {
+export function pidAlive(pid: number): boolean {
   if (pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    // 只有 ESRCH（进程确实不存在）算「已死」。EPERM（权限不足）等
+    // 其他错误恰恰说明进程对象还在 —— 保守按「活着」处理，否则
+    // stop 会把杀不掉的进程误报成已停（实测踩过：stop 报成功、
+    // 进程照常占着端口服务）。
+    return (err as NodeJS.ErrnoException)?.code !== "ESRCH";
   }
 }
 
@@ -212,8 +216,10 @@ export async function killTree(pid: number): Promise<boolean> {
   }
   try {
     process.kill(pid, "SIGTERM");
-  } catch {
-    return true; // 本来就不存在
+  } catch (err) {
+    // 同 pidAlive：只有「确实不存在」才算已死；权限错误等
+    // 说明进程还活着，交给 waitDead 去验证
+    if ((err as NodeJS.ErrnoException)?.code === "ESRCH") return true;
   }
   if (await waitDead()) return true;
   try {
@@ -382,9 +388,12 @@ export async function stop(options: { quiet?: boolean; addr?: string; cid?: stri
     return 0;
   }
   const dead = await killTree(pid);
-  if (!dead) {
+  // 二次验证：taskkill 异步竞态下 waitDead 可能误报「已死」——
+  // 进程对象还在、或端口仍在被本网关监听，都不能声称停止
+  // （实测踩过：stop 报成功、删了 PID 文件，进程照常服务）
+  if (!dead || pidAlive(pid) || (await gatewayHealthy(options.addr ?? defaultAddr(options.cid)))) {
     // 进程还活着就不能声称「已停止」：留着 PID 文件，下一次 stop 还能再试
-    log(`未能停止网关 (PID ${pid})：进程仍存活（可能权限不足），请手动结束`);
+    log(`未能停止网关 (PID ${pid})：进程或端口仍在运行，请手动结束`);
     return 1;
   }
   recordStop(scope, pid);
@@ -399,7 +408,8 @@ export async function stop(options: { quiet?: boolean; addr?: string; cid?: stri
 
 /** 重启守护式网关（stop + start；换配置/升级后用）。 */
 export async function restart(options: StartOptions = {}): Promise<number> {
-  await stop({ quiet: true, ...(options.cid !== undefined ? { cid: options.cid } : {}) });
+  const stopped = await stop({ quiet: true, ...(options.cid !== undefined ? { cid: options.cid } : {}) });
+  if (stopped !== 0) return stopped; // 停掉失败就别起：省得空等后报端口占用
   // 等端口完全释放再拉起
   await new Promise((r) => setTimeout(r, 800));
   return start(options);

@@ -39,7 +39,7 @@ describe("stop：终止记录写入日志", () => {
       writeFileSync(pidPath, String(dummy.pid), "utf8");
       writeFileSync(logPath, `{"event":"ready","gateway":"http://127.0.0.1:8787"}\n`, "utf8");
 
-      const code = await stop({ quiet: true });
+      const code = await stop({ quiet: true, addr: "127.0.0.1:1" });
       assert.equal(code, 0, "stop 应成功");
       assert.ok(!existsSync(pidPath), "PID 文件应被清除");
       const lines = readFileSync(logPath, "utf8").trimEnd().split("\n");
@@ -62,7 +62,7 @@ describe("stop：终止记录写入日志", () => {
     writeFileSync(pidPath, String(gonePid), "utf8");
     writeFileSync(logPath, "", "utf8");
 
-    const code = await stop({ quiet: true });
+    const code = await stop({ quiet: true, addr: "127.0.0.1:1" });
     assert.equal(code, 0, "已死的实例按已停止处理");
     const last = readFileSync(logPath, "utf8").trim();
     assert.ok(last.includes(`"event":"stop"`), `日志应有终止记录：${last}`);
