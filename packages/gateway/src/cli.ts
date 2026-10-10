@@ -39,8 +39,8 @@ export function usage(): string {
   logs                      查看网关日志尾部
   serve                     前台无窗口运行（不守护；守护进程内部也用它）
 
-模型池（对外只有 3 个模型，请求落到哪家渠道由网关按账单已用量决定）:
-  model list                池视图：3 个模型 → 候选渠道 + 已用量 + 冷却状态
+模型池（对外只有 2 个模型，请求落到哪家渠道由网关按账单已用量决定）:
+  model list                池视图：2 个模型 → 候选渠道 + 已用量 + 冷却状态
   model show <cid>          某个渠道贡献了池内哪些模型
   model usage [--refresh]   池账本；--refresh 立刻重查各渠道账单额度
   model refresh [cid]       强制重拉上游模型**目录**并记到本地（可只刷一个渠道）
@@ -87,7 +87,7 @@ ${verbLines.join("\n")}
 
 示例:
   ${cid} start                          # 起网关（守护式，幂等）
-  ${cid} model list                     # 池视图：3 个模型分别会先落到哪家
+  ${cid} model list                     # 池视图：2 个模型分别会先落到哪家
   ${cid} model usage --refresh          # 立刻重查各渠道账单额度并写进账本
   ${cid} model show catpaw              # catpaw 贡献了池内哪些模型
   ${cid} model refresh                  # 强制重拉全部渠道的模型**目录**（记到本地）
