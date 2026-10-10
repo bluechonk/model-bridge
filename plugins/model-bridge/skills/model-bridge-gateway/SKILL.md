@@ -1,12 +1,12 @@
 ---
 name: model-bridge-gateway
-description: Manage and troubleshoot the local multi-channel model-pool gateway with the model-bridge CLI (channels, status, start, stop, login, models, credits, paths).
+description: Manage and troubleshoot the local multi-channel model-pool gateway with the mb CLI (channels, status, start, stop, login, models, credits, paths).
 ---
 
 # 模型池网关管理
 
 当用户想启动/登录/检查/排障本地模型池网关，或问"模型走的是哪个后端""凭证放哪了""池子里有哪些模型"时
-使用本技能。所有操作通过 `model-bridge` 命令行完成（会话启动时插件 hook 通常已自动挂载网关）。
+使用本技能。所有操作通过 `mb` 命令行完成（会话启动时插件 hook 通常已自动挂载网关）。
 
 ## 背景事实
 
@@ -40,49 +40,55 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
   **同一时间只用一个账号**（轮询/失败转移属后续策略层）。删生效账号 = 同时登出。
 - 让 ZCode 用上这个网关需要**用户**在设置里加 provider（插件注册不了 provider）：类型
   `openai-chat-completions`、baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型名从
-  `/v1/models`（或 `model-bridge model list`）里取那两个池 id。不要替用户改
+  `/v1/models`（或 `mb model list`）里取那两个池 id。不要替用户改
   `~/.zcode/v2/provider_config.json`。
 
 ## 命令速查
 
 | 命令 | 作用 |
 | --- | --- |
-| `model-bridge model list` | **池视图**：两个模型 → 候选渠道 + 账单已用量 + 冷却（顺序即路由顺序） |
-| `model-bridge model usage [--refresh]` | 池账本；`--refresh` 立刻重查各渠道账单额度 |
-| `model-bridge channels` | **渠道视角**：每个渠道各自贡献了池内哪些模型 |
-| `model-bridge status`（`--json`） | 网关健康、逐渠道登录状态、守护 PID、凭证、auto_start |
-| `model-bridge start` | 守护式启动（幂等；失败默认只报告，`--strict` 才非零退出） |
-| `model-bridge stop` / `restart` | 停 / 重启守护实例（不碰第三方进程；成功停止会在日志留 `stop` 记录） |
-| `model-bridge models` | 查**运行中的网关**暴露的模型 id（网关没起会失败；恒为那两个） |
-| `model-bridge login --channel <cid>` | 无窗口登录：stdout 给出授权链接，用户浏览器授权后自动保存 |
-| `model-bridge logs`（`--lines N`，`-f` 跟随） | 网关日志尾部（排障第一步）；`-f` 持续输出新日志 |
-| `model-bridge credits` | 账号剩余额度（只读，不经网关，不消耗额度） |
-| `model-bridge paths`（`--all`） | 存储落点与文件（只读） |
-| `model-bridge accounts`（`--channel`） | **账号池**：列出账号 / `use <key>` / `add` / `remove <key>` |
-| `model-bridge model show <cid>` | 该渠道贡献了池内哪些模型 |
-| `model-bridge <cid> login` | 登录该渠道（等价 `login --channel <cid>`） |
-| `/model-bridge-<cid>` | **每个渠道一份速查 command**：该渠道的登录方式 / 模型映射 / 特有约束 / 排障提示（如 `/model-bridge-qoder`、`/model-bridge-codearts`） |
-| `model-bridge <cid> billing` | 该渠道额度 / 账单（别名 `credits`） |
-| `model-bridge <cid> checkin` | 该渠道签到 / 领奖励（`--status` 只查不领、`--daily-only` 跳过一次性） |
-| `model-bridge checkin --status` | **今天签没签**（上游 → 本地台账 → 未知；末尾给 N/M 摘要） |
+| `mb model list` | **池视图**：两个模型 → 候选渠道 + 账单已用量 + 冷却（顺序即路由顺序） |
+| `mb model usage [--refresh]` | 池账本；`--refresh` 立刻重查各渠道账单额度 |
+| `mb channels` | **渠道视角**：每个渠道各自贡献了池内哪些模型 |
+| `mb status`（`--json`） | 网关健康、逐渠道登录状态、守护 PID、凭证、auto_start |
+| `mb start` | 守护式启动（幂等；失败默认只报告，`--strict` 才非零退出） |
+| `mb stop` / `restart` | 停 / 重启守护实例（不碰第三方进程；成功停止会在日志留 `stop` 记录） |
+| `mb models` | 查**运行中的网关**暴露的模型 id（网关没起会失败；恒为那两个） |
+| `mb login --channel <cid>` | 无窗口登录：stdout 给出授权链接，用户浏览器授权后自动保存 |
+| `mb logs`（`--lines N`，`-f` 跟随） | 网关日志尾部（排障第一步）；`-f` 持续输出新日志 |
+| `mb credits` | 账号剩余额度（只读，不经网关，不消耗额度） |
+| `mb paths`（`--all`） | 存储落点与文件（只读） |
+| `mb accounts`（`--channel`） | **账号池**：列出账号 / `use <key>` / `add` / `remove <key>` |
+| `mb model show <cid>` | 该渠道贡献了池内哪些模型 |
+| `mb <cid> login` | 登录该渠道（等价 `login --channel <cid>`） |
+| `mb <cid> billing` | 该渠道额度 / 账单（别名 `credits`） |
+| `mb <cid> checkin` | 该渠道签到 / 领奖励（`--status` 只查不领、`--daily-only` 跳过一次性） |
+| `mb checkin --status` | **今天签没签**（上游 → 本地台账 → 未知；末尾给 N/M 摘要） |
 
 **命令形态**：网关生命周期（`start/stop/restart/status/logs`）是**仓库级**的，不带渠道；
-「对某个渠道做点什么」写成 `<cid> <动词>`（如 `model-bridge trae login`、`model-bridge trae billing`、
-`model-bridge trae checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
+「对某个渠道做点什么」写成 `<cid> <动词>`（如 `mb trae login`、`mb trae billing`、
+`mb trae checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
+
+**没有 per-channel command**：命令都是跨渠道的（`/model-bridge-login`、`/model-bridge-credits`、
+`/model-bridge-checkin`、`/model-bridge-models` 等）。凡动作要落到某个渠道、而用户没指明时：
+先跑只读命令（`mb status --json` / `mb channels` / `mb checkin --status`）拿渠道清单与现状 →
+用 **`ask_user_query`** 让用户选（标注已登录/未登录，给「全部」选项）→ 再执行；
+**不要替用户决定**，写操作（`checkin`、`accounts remove`）执行前必须确认。
 
 `checkin` 对**所有**渠道口径统一：有端点的真查真领（codearts / lobsterai / loomy / raccoon / trae / qoder / qodercn），没端点的返回渠道自己的一句说明（workbuddy / workbuddyai / catpaw / cline —— 上游自动发奖励）。
 「没有端点」不是故障、退出码仍为 0；只有查询/领取**抛错**（未登录等）才非零。
 
 ## 标准流程
 
-1. 先 `model-bridge status --json` 判断现状。
-2. 网关不可达：`model-bridge start` → 再 `status`；仍失败看 `model-bridge logs`。
-3. 某渠道未登录：`model-bridge login --channel <cid>`，把授权链接原样展示给用户并请其授权；
-   不要并发重复跑。国内版与国际版是**两个渠道**：账号在 `codebuddy.ai` 用 `workbuddy`，
+1. 先 `mb status --json` 判断现状。
+2. 网关不可达：`mb start` → 再 `status`；仍失败看 `mb logs`。
+3. 某渠道未登录：先用 `ask_user_query` 让用户选渠道（列未登录的，别替他决定）→
+   `mb login --channel <cid>`，把授权链接原样展示给用户并请其授权；不要并发重复跑。
+   国内版与国际版是**两个渠道**：账号在 `codebuddy.ai` 用 `workbuddy`，
    在 `workbuddy.ai` 用 `workbuddyai` —— 选错渠道会一直等授权超时。
-4. 「有哪些模型可用」→ `model-bridge channels`（不需要网关）。
-5. 「凭证/配置放哪」→ `model-bridge paths --all`；「有几个账号 / 换账号」→ `model-bridge accounts`。
-6. 用户要求停掉 → `model-bridge stop`；端口被第三方占用时如实报告，让用户自行处理。
+4. 「有哪些模型可用」→ `mb model list`（池视图）；`mb channels`（渠道视角，不需要网关）。
+5. 「凭证/配置放哪」→ `mb paths --all`；「有几个账号 / 换账号」→ `mb accounts`。
+6. 用户要求停掉 → `mb stop`；端口被第三方占用时如实报告，让用户自行处理。
 
 ## 排障要点
 
@@ -90,5 +96,5 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 - 上游 502 / `code=11128`：多为 token 失效 → 重新登录该渠道；提示词指纹由引擎自动改写。
 - 池子为空：未登录、或该渠道上游目录拉取失败（以 `status` 的逐渠道提示为准）。
 - `400 unknown_model`：模型名不是池内两个字面量（旧的 `<cid>/<模型>` 形态已移除，对照
-  `model-bridge model list`）；`503 not_authenticated`：候选渠道都没登录。
+  `mb model list`）；`503 not_authenticated`：候选渠道都没登录。
 - `auto_start` 在 `~/.model-bridge/prefs.json`（仓库级；单渠道在 `~/.model-bridge/<cid>/prefs.json`）。
