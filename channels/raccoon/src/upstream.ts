@@ -28,13 +28,14 @@ import { chmod, rename, writeFile } from "node:fs/promises";
 
 import { ensureDir, upstreamPath } from "@model-bridge/gateway";
 
-export { DEFAULT_BASE_URL, AUTH_PREFIX, LLM_PREFIX, POINTS_PREFIX, DESKTOP_PREFIX, CLIENT_PLATFORM, CLIENT_VERSION, USER_AGENT } from "./cred.js";
+export { DEFAULT_BASE_URL, AUTH_PREFIX, LLM_PREFIX, POINTS_PREFIX, DESKTOP_PREFIX, CLIENT_PLATFORM, CLIENT_VERSION, USER_AGENT, EXCHANGE_PATH, AUTHORIZATION_CODE_NOT_FOUND } from "./cred.js";
 import {
   AUTH_PREFIX,
   CLIENT_PLATFORM,
   CLIENT_VERSION,
   DEFAULT_BASE_URL,
   DESKTOP_PREFIX,
+  EXCHANGE_PATH,
   LLM_PREFIX,
   POINTS_PREFIX,
   USER_AGENT,
@@ -128,9 +129,26 @@ export function billsUrl(cfg?: Config): string {
   return `${base(cfg)}${POINTS_PREFIX}/bills?paging.limit=50&paging.offset=0`;
 }
 
-/** 桌面端登录奖励端点（**platform 必需**）。 */
+/** 桌面端登录奖励端点（**platform 必需**；一次性新手奖励，不是每日签到）。 */
 export function loginGrantUrl(cfg?: Config): string {
   return `${base(cfg)}${DESKTOP_PREFIX}/login/points/grant`;
+}
+
+/** 授权码换凭证端点（网页登录第二步；body `{authorization_code}`）。 */
+export function exchangeCodeUrl(cfg?: Config): string {
+  return `${base(cfg)}${EXCHANGE_PATH}`;
+}
+
+/**
+ * 每日积分触发器（`GET`，**platform 必需**）。
+ *
+ * 官方桌面端每次启动都会打这个接口，服务端据此**按天幂等**发放每日积分
+ * —— 它才是「签到」的真正触发点（发放在服务端完成，账单是权威结果）。
+ */
+export const SETTING_INFO_PATH = "/api/web/office/v3/setting_info";
+
+export function settingInfoUrl(cfg?: Config): string {
+  return `${base(cfg)}${SETTING_INFO_PATH}`;
 }
 
 /** 用户信息端点。 */

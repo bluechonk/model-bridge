@@ -1,5 +1,6 @@
 /**
- * Raccoon（商汤小浣熊）认证：手机号 AES-128-CFB 加密、扫码/短信登录、续期与凭据持久化。
+ * Raccoon（商汤小浣熊）认证：手机号 AES-128-CFB 加密、网页登录（授权码）/短信登录、
+ * 续期与凭据持久化。
  *
  * ## 本模块承载的渠道知识（每条都是实测结论，见 docs/protocols/raccoon/PROTOCOL.md）
  *
@@ -8,10 +9,13 @@
  *    `100003 params_encryted_error`。
  *    ⚠ 零依赖：用 `node:crypto` 的 `createCipheriv("aes-128-cfb", …)`（CFB128）；
  *    密钥是 16 字节，写成 `aes-256-cfb` 会因长度不足而抛错。
- * 2. **扫码 code 本地生成**（`randomBytes(16).toString("hex")`，32 位 hex）：
- *    官方那条 `office-raccoon://auth/callback` 自定义协议回调本插件（宿主侧 Node
- *    进程）**收不到**，且 `/code/authorize` 的回调地址是写死的。实测任意自造 code
- *    都被接受并进入 `pending`。
+ * 2. **网页登录走 `/code/authorize` 授权码链路**（官方桌面端
+ *    `electron/main/desktopLogin.js` 同款）：`login_source=desktop` +
+ *    `appname=办公小浣熊客户端` → 登录成功回调 `office-raccoon://auth/callback?code=…`
+ *    → `POST …/login_with_authorization_code` 换 token。回调由**用户把整条 URL
+ *    粘贴回来**（本插件是宿主机里的普通 Node 进程，注册不了自定义协议）。
+ *    ⚠ 别用 `/login/mp?code=…` 那条：它只给**官方手机 App 扫码**用，网页端没有该
+ *    路由，浏览器打开是死链（真机踩过）。
  * 3. **过期时间取值优先级**：`expires_at`（显式）→ **JWT 的 `exp`**（本地 base64url
  *    解码 payload，**只解码不验签**）。回退到 JWT 是**必需的**：老凭据/手工导入的
  *    凭据可能没有 `expires_at`，只读它会让过期判定**恒为 false** → `refreshAll`
@@ -19,13 +23,14 @@
  * 4. **续期只返回新的 access_token 时必须保留旧 refresh_token** ——
  *    否则续期一次就把账号变成不可续期。HTTP 401 **或** `code === 200003` 是终态
  *    （提示重新登录，**不重试**）。
- * 5. **`nickname` 是服务端自动生成的默认名**（实测 `RaccoonAva`），微信扫码**不回传
- *    微信昵称** —— 多账号消歧要靠 `phone`（`uid` 优先 `user_id`，其次 `phone`）。
+ * 5. **`nickname` 是服务端自动生成的默认名**（实测 `RaccoonAva`），登录**不回传**
+ *    用户昵称 —— 多账号消歧要靠 `phone`（`uid` 优先 `user_id`，其次 `phone`）。
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline";
 
 import { credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
 
@@ -37,11 +42,15 @@ export const LLM_PREFIX = "/api/web/llm/v2";
 export const POINTS_PREFIX = "/api/web/points/v1";
 export const DESKTOP_PREFIX = "/api/web/desktop/v1";
 
-export const QR_LOGIN_PATH = `${AUTH_PREFIX}/login_with_qrcode_code`;
 export const SEND_SMS_PATH = `${AUTH_PREFIX}/send_sms`;
 export const LOGIN_WITH_SMS_PATH = `${AUTH_PREFIX}/login_with_sms`;
 export const REFRESH_PATH = `${AUTH_PREFIX}/refresh`;
 export const USER_INFO_PATH = `${AUTH_PREFIX}/user_info`;
+/** 授权码换凭证（网页登录第二步）。 */
+export const EXCHANGE_PATH = `${AUTH_PREFIX}/login_with_authorization_code`;
+
+/** 上游约定：授权码不存在 / 已过期 / 已消费（换码时按终态处理）。 */
+export const AUTHORIZATION_CODE_NOT_FOUND = 200035;
 
 /** 客户端身份（`X-Client-Platform` 猜错会被拒）。 */
 export const CLIENT_PLATFORM = "desktop-windows";
@@ -54,12 +63,21 @@ export const PHONE_CIPHER_SECRET = Buffer.from("senseraccoon2023", "utf8");
 /** access_token 寿命约 3 小时（实测 `exp - nbf = 10805s`），提前 300s 视为需要续期。 */
 export const TOKEN_REFRESH_WINDOW_SECONDS = 300;
 
-export const QR_POLL_INTERVAL_MS = 2_000;
+/** 等待用户完成网页登录（粘贴回调）的时限。 */
 export const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 
-/** 扫码承载的登录页（内容 = 二维码）。 */
-export const LOGIN_PAGE_BASE = "https://xiaohuanxiong.com/login/mp";
-export const LOGIN_PAGE_APPNAME = "商汤小浣熊官网";
+// ── 网页登录（授权码）常量 ────────────────────────────────────────────────────
+
+/** 授权页路径（官方桌面端同款）。 */
+export const AUTHORIZE_PATH = "/code/authorize";
+/** 官方桌面端上报的登录来源。 */
+export const AUTHORIZE_LOGIN_SOURCE = "desktop";
+/** 官方桌面端上报的客户端名（**不是** 网站自己的「小浣熊官网」）。 */
+export const AUTHORIZE_APPNAME = "办公小浣熊客户端";
+/** 回调深链（官方客户端注册的自定义协议；我们靠用户粘贴回收）。 */
+export const CALLBACK_SCHEME = "office-raccoon";
+export const CALLBACK_HOST = "auth";
+export const CALLBACK_PATH = "/callback";
 
 const HTTP_TIMEOUT_MS = 60_000;
 const NOT_LOGGED_IN_MSG = "No usable credential found, run `raccoon login` first";
@@ -265,57 +283,192 @@ async function apiCall(
   return { status: resp.status, code, payload: record, data };
 }
 
-// ── 扫码登录 ──────────────────────────────────────────────────────────────────
+// ── 网页登录（授权码） ────────────────────────────────────────────────────────
 
 export interface LoginOptions {
   onUrl?: (url: string) => void;
   onStatus?: (message: string) => void;
-  /** 仅供测试：注入 sleep；否则真每 2 秒一次。 */
-  sleep?: (ms: number) => Promise<void>;
-  /** 仅供测试：缩短轮询/超时。 */
-  pollIntervalMs?: number;
+  /**
+   * 回调 URL 的来源。优先级：本字段 → 环境变量 `RACCOON_LOGIN_CALLBACK` → stdin。
+   * 正式 CLI 不传（提示用户粘贴）；测试与脚本用它注入。
+   */
+  callback?: string | (() => Promise<string>);
+  /** 等待回调的时限（默认 5 分钟）。 */
   timeoutMs?: number;
 }
 
-export type QrStatus = "pending" | "logging" | "canceled" | "success";
-
-/** 扫码登录页 URL（内容即二维码）。⚠ code 本地随机生成。 */
-export function loginPageUrl(code: string): string {
-  return `${LOGIN_PAGE_BASE}?code=${code}&appname=${encodeURIComponent(LOGIN_PAGE_APPNAME)}`;
+/** 一次登录的 state（32 位 hex）；回调时逐字比对，防「别人的 code 换进你的账号」。 */
+export function newLoginState(): string {
+  return randomHex32();
 }
 
 /**
- * 单次扫码轮询。
+ * 授权页 URL（官方桌面端「网页登录」入口，实测自 `electron/main/desktopLogin.js`）。
  *
- * ⚠ **任何异常都降级为 `pending`**：轮询是 2 秒一次的循环，偶发失败不应中断整个
- * 登录流程；而把未知状态误判成 `success` 会让流程拿到空 token 后卡死，
- * 误判成 `canceled` 则会让用户正在扫码的二维码被无故刷新。
- * ⚠ `success` 缺 token 也视为**未完成**。
+ * ⚠ 不要用 `/login/mp?code=…`：那条只给**官方手机 App 扫码**用，网页端没有该路由，
+ * 浏览器打开是死链（真机踩过，见 docs/protocols/raccoon/PROTOCOL.md §2.4）。
+ * 我们额外带 `state`（官方不带）；参考实现（agent2api / xiaohuanxiong2api）同样带。
  */
-export async function pollQrOnce(
-  code: string,
-  baseOverride?: string,
-): Promise<{ status: QrStatus; accessToken: string; refreshToken: string; officeIdentity: string }> {
+export function authorizeUrl(state: string, baseOverride?: string): string {
+  const url = new URL(AUTHORIZE_PATH, baseUrl(baseOverride));
+  url.searchParams.set("login_source", AUTHORIZE_LOGIN_SOURCE);
+  url.searchParams.set("appname", AUTHORIZE_APPNAME);
+  url.searchParams.set("state", state);
+  return url.toString();
+}
+
+/** 回调 URL 不合法（协议/主机/路径不对、缺 code、state 不匹配）。 */
+export class LoginCallbackError extends Error {
+  override name = "LoginCallbackError";
+}
+
+export interface LoginCallback {
+  code: string;
+  /** 是否逐字校验过 state（裸 code 兜底路径与「回调没带 state」均为 false）。 */
+  stateVerified: boolean;
+}
+
+/**
+ * 解析回调 URL：`office-raccoon://auth/callback?code=…&state=…`。
+ *
+ * 逐项比对 scheme/host/path —— 不能前缀匹配（`office-raccoon://auth/callback@evil`
+ * 会被前缀放行）。state 的处置：带且不等 → 拒绝（这条回调不属于本次登录）；
+ * 没带 → 放行但标记未校验（官方页面的回调形态可能不带 state）。
+ * 兜底：整段文本不是 URL 但像授权码时按裸 code 处理（stateVerified=false）。
+ */
+export function parseLoginCallback(raw: string, expectedState = ""): LoginCallback {
+  const text = (raw ?? "").trim();
+  if (!text) throw new LoginCallbackError("empty callback");
+  let url: URL;
   try {
-    const result = await apiCall(`${baseUrl(baseOverride)}${QR_LOGIN_PATH}`, {
-      method: "POST",
-      headers: headers(EMPTY_CREDENTIALS, { jsonBody: true }),
-      body: JSON.stringify({ qrcode_code: code }),
-    });
-    const raw = str(result.data["status"]);
-    const status: QrStatus =
-      raw === "logging" || raw === "canceled" || raw === "success" ? raw : "pending";
-    const officeIdentity = str(result.data["office_identity"]);
-    if (status !== "success") return { status, accessToken: "", refreshToken: "", officeIdentity };
-    const accessToken = str(result.data["access_token"]);
-    const refreshToken = str(result.data["refresh_token"]);
-    if (!accessToken || !refreshToken) {
-      return { status: "pending", accessToken: "", refreshToken: "", officeIdentity };
-    }
-    return { status: "success", accessToken, refreshToken, officeIdentity };
+    url = new URL(text);
   } catch {
-    return { status: "pending", accessToken: "", refreshToken: "", officeIdentity: "" };
+    if (/^[A-Za-z0-9._~-]{6,}$/.test(text)) return { code: text, stateVerified: false };
+    throw new LoginCallbackError(`not a callback url: ${text.slice(0, 120)}`);
   }
+  if (url.protocol !== `${CALLBACK_SCHEME}:`) {
+    throw new LoginCallbackError(`unexpected scheme: ${url.protocol}`);
+  }
+  if (url.hostname.toLowerCase() !== CALLBACK_HOST) {
+    throw new LoginCallbackError(`unexpected callback host: ${url.hostname}`);
+  }
+  if (url.pathname !== CALLBACK_PATH) {
+    throw new LoginCallbackError(`unexpected callback path: ${url.pathname}`);
+  }
+  const code = (url.searchParams.get("code") ?? "").trim();
+  if (!code) throw new LoginCallbackError("callback has no code");
+  const state = (url.searchParams.get("state") ?? "").trim();
+  if (expectedState && state && state !== expectedState) {
+    throw new LoginCallbackError("state mismatch: the callback belongs to another login attempt");
+  }
+  return { code, stateVerified: Boolean(expectedState && state === expectedState) };
+}
+
+/** 从 stdin 读一行（提示写 stderr —— `--json` 时 stdout 要保持干净的 JSON 流）。 */
+function readLineFromStdin(prompt: string): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    let settled = false;
+    rl.question(prompt, (answer) => {
+      settled = true;
+      rl.close();
+      resolve(answer);
+    });
+    rl.once("close", () => {
+      if (!settled) reject(new Error("stdin closed before a callback url was provided"));
+    });
+  });
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${what} timed out after ${Math.round(ms / 1000)}s`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e: unknown) => {
+        clearTimeout(timer);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      },
+    );
+  });
+}
+
+/** 取回调 URL：注入值 → 环境变量 → stdin 粘贴。 */
+async function resolveCallback(options: LoginOptions, timeoutMs: number): Promise<string> {
+  const injected = options.callback;
+  if (typeof injected === "string" && injected.trim()) return injected.trim();
+  if (typeof injected === "function") {
+    return withTimeout(injected(), timeoutMs, "waiting for login callback");
+  }
+  const env = (process.env["RACCOON_LOGIN_CALLBACK"] ?? "").trim();
+  if (env) return env;
+  if (process.stdin.isTTY || !process.stdin.readableEnded) {
+    return withTimeout(
+      readLineFromStdin("Paste the full callback url from the browser, then press Enter:\n> "),
+      timeoutMs,
+      "waiting for pasted callback",
+    );
+  }
+  throw new Error(
+    "no callback provided and stdin is not interactive; run login in a terminal or set RACCOON_LOGIN_CALLBACK",
+  );
+}
+
+/**
+ * 网页登录：授权页 → 用户登录 → 回收回调 URL → 授权码换凭证。
+ *
+ * 回调回收方式见 `resolveCallback`（本插件注册不了 `office-raccoon://` 自定义协议，
+ * 所以由用户把地址栏里的整条 URL 粘贴回来 —— 与参考实现 agent2api 的 Docker 形态一致）。
+ */
+export async function login(baseUrlOverride?: string, options: LoginOptions = {}): Promise<Credentials> {
+  const { onUrl, onStatus } = options;
+  const timeoutMs = options.timeoutMs ?? LOGIN_TIMEOUT_MS;
+
+  const state = newLoginState();
+  onUrl?.(authorizeUrl(state, baseUrlOverride));
+  onStatus?.(
+    "Log in with WeChat / SMS / password in the browser; then paste the callback url (office-raccoon://auth/callback?...) back here",
+  );
+
+  const raw = await resolveCallback(options, timeoutMs);
+  const parsed = parseLoginCallback(raw, state);
+  if (!parsed.stateVerified) {
+    onStatus?.("callback state not verified (missing state in callback); proceeding");
+  }
+
+  const result = await apiCall(`${baseUrl(baseUrlOverride)}${EXCHANGE_PATH}`, {
+    method: "POST",
+    headers: headers(EMPTY_CREDENTIALS, { jsonBody: true }),
+    body: JSON.stringify({ authorization_code: parsed.code }),
+  });
+  if (result.code === AUTHORIZATION_CODE_NOT_FOUND) {
+    throw new Error("authorization code expired or already consumed; please run login again");
+  }
+  if (result.code !== 0) {
+    throw new Error(`Code exchange failed: code=${result.code} ${envelopeMessage(result.payload)}`);
+  }
+  const accessToken = str(result.data["access_token"]);
+  const refreshToken = str(result.data["refresh_token"]);
+  if (!accessToken || !refreshToken) throw new Error("Code exchange response has no tokens");
+
+  let c = credentialsFromLogin(accessToken, refreshToken, result.data, "raccoon-web");
+  // 昵称/手机号只用于展示：补一次 user_info（失败不影响登录）
+  try {
+    const info = await fetchUserInfo(c, baseUrlOverride);
+    c = {
+      ...c,
+      phone: str(info["phone"]) || c.phone,
+      nickname: str(info["name"]) || c.nickname, // 服务端 name 是自动生成的默认名
+      officeIdentity: c.officeIdentity || str(info["office_identity"]),
+    };
+  } catch {
+    /* 失败不影响登录 */
+  }
+  await save(c);
+  return c;
 }
 
 function credentialsFromLogin(
@@ -340,63 +493,6 @@ function credentialsFromLogin(
     obtainedAt: nowIso(),
     source,
   };
-}
-
-/**
- * 微信扫码登录（**自行生成 code + 自行轮询**，不走官方自定义协议回调）。
- *
- * - `logging` → 带 `expired_at`（二维码有效期）：**不中断**，继续等
- * - `canceled` → **换一个新 code**（否则用户扫到死码）
- * - 其余（含异常）→ 继续轮询
- */
-export async function login(baseUrlOverride?: string, options: LoginOptions = {}): Promise<Credentials> {
-  const { onUrl, onStatus } = options;
-  const pollMs = options.pollIntervalMs ?? QR_POLL_INTERVAL_MS;
-  const timeoutMs = options.timeoutMs ?? LOGIN_TIMEOUT_MS;
-  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-
-  let code = randomHex32();
-  onUrl?.(loginPageUrl(code));
-  onStatus?.("Scan with WeChat to log in (QR code valid for ~5 minutes)");
-
-  const deadline = Date.now() + timeoutMs;
-  let scanned = false;
-  while (Date.now() < deadline) {
-    const frame = await pollQrOnce(code, baseUrlOverride);
-    if (frame.status === "success") {
-      let c = credentialsFromLogin(
-        frame.accessToken,
-        frame.refreshToken,
-        { office_identity: frame.officeIdentity },
-        "raccoon-qrcode",
-      );
-      // 昵称/手机号只用于展示：补一次 user_info（失败不影响登录）
-      try {
-        const info = await fetchUserInfo(c, baseUrlOverride);
-        c = {
-          ...c,
-          phone: str(info["phone"]) || c.phone,
-          nickname: str(info["name"]) || c.nickname, // 服务端 name 是自动生成的默认名
-          officeIdentity: c.officeIdentity || str(info["office_identity"]),
-        };
-      } catch {
-        /* 失败不影响登录 */
-      }
-      await save(c);
-      return c;
-    }
-    if (frame.status === "logging" && !scanned) {
-      onStatus?.("QR code scanned, confirm on your phone");
-      scanned = true;
-    } else if (frame.status === "canceled") {
-      code = randomHex32();
-      onUrl?.(loginPageUrl(code)); // 换新码：否则用户扫到死码
-      onStatus?.("QR code canceled, refreshed a new one");
-      scanned = false;
-    }
-    await sleep(pollMs);
-  }
-  throw new Error("QR login timed out, please run raccoon login again");
 }
 
 /** 短信登录：`send_sms`（需阿里云滑块 captcha_param）→ `login_with_sms`。 */

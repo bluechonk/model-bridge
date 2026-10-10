@@ -5,3 +5,4 @@ __pycache__/
 .planning/
 .ruff_cache/
 .commandcode/
+reference/

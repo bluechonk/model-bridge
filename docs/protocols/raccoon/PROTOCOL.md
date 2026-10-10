@@ -17,24 +17,25 @@ RACCOON_DESKTOP_PREFIX = '/api/web/desktop/v1'
 
 | 用途 | 方法 | 完整 URL | 认证 |
 |---|---|---|---|
-| 微信扫码轮询 | POST | `/api/web/auth/v1/login_with_qrcode_code` | 无 |
+| 授权页（网页登录第一步，官方桌面端同款） | GET | `/code/authorize?login_source=desktop&appname=办公小浣熊客户端&state=<32位hex>` | 无 |
+| 授权码换凭证（网页登录第二步） | POST | `/api/web/auth/v1/login_with_authorization_code` | 无 |
 | 发短信验证码 | POST | `/api/web/auth/v1/send_sms` | 无 |
 | 短信登录 | POST | `/api/web/auth/v1/login_with_sms` | 无 |
-| 授权码登录（官方链路，**本插件不走**） | POST | `/api/web/auth/v1/login_with_authorization_code` | 无 |
 | 续期 | POST | `/api/web/auth/v1/refresh` | 无（body 带 refresh_token） |
 | 用户信息 | GET | `/api/web/auth/v1/user_info` | Bearer |
 | 对话 | POST | `/api/web/llm/v2/chat/completions` | Bearer |
 | 模型目录 | GET | `/api/web/llm/v2/model_catalog` | Bearer |
 | 积分余额 | GET | `/api/web/points/v1/balance` | Bearer |
-| 账单（查奖励是否已领） | GET | `/api/web/points/v1/bills?paging.limit=50&paging.offset=0` | Bearer |
+| 账单（查奖励是否已领 / 今日入账） | GET | `/api/web/points/v1/bills?paging.limit=50&paging.offset=0` | Bearer |
 | 登录奖励（一次性） | POST | `/api/web/desktop/v1/login/points/grant` | Bearer + `X-Client-Platform` |
-| 扫码承载的登录页 | GET | `https://xiaohuanxiong.com/login/mp?code=<32位hex>&appname=商汤小浣熊官网` | 无 |
+| 每日积分触发器（签到） | GET | `/api/web/office/v3/setting_info` | Bearer + `X-Client-Platform` |
 
 **关键常量**：
 - `RACCOON_REQUEST_TIMEOUT_MS = 60_000`
-- `RACCOON_QR_POLL_INTERVAL_MS = 2_000`
-- `RACCOON_LOGIN_TIMEOUT_MS = 5 * 60 * 1000`
+- `RACCOON_LOGIN_TIMEOUT_MS = 5 * 60 * 1000`（等待用户完成网页登录并粘贴回调）
 - `RACCOON_TOKEN_REFRESH_WINDOW_SECONDS = 300`（access_token 寿命约 3 小时，实测 `exp - nbf = 10805s`）
+- 授权页参数：`login_source = 'desktop'`、`appname = '办公小浣熊客户端'`
+- 回调深链：`office-raccoon://auth/callback?code=…&state=…`；换码失败业务码 `200035`
 - `clientPlatform = 'desktop-windows'`、`clientVersion = 'v1.0.35'`、
  `userAgent = 'Raccoon Work/1.0.35 (Windows)'`
 
@@ -61,11 +62,11 @@ RACCOON_DESKTOP_PREFIX = '/api/web/desktop/v1'
 `X-Client-Platform` 对 `desktop/v1/login/points/grant` **必需**
 （依据主进程 `desktopDeviceIdentity.js` 的 `resolveDesktopClientPlatform`，`win32` → `desktop-windows`）。猜错会被拒。
 
-**对话请求的头是内联构造的**（raccoon-adapter.ts:425-432），只含
+**对话请求的头是内联构造的**（upstream.ts），只含
 `Accept` / `Content-Type` / `Authorization` / `X-Org-Code` / `X-Raccoon-Language` / `X-Client-Platform`
 （**不含** `X-Client-Version` 与 `X-Client-Device-ID`）。
 
-**模型目录请求也是内联的**（raccoon-auth.ts:484-489），只含
+**模型目录请求也是内联的**（upstream.ts），只含
 `Accept` / `Authorization` / `X-Org-Code` / `X-Raccoon-Language`（**不含** platform）。
 
 ### 2.2 凭据字段（raccoon.ts:78-106）
@@ -77,7 +78,7 @@ RACCOON_DESKTOP_PREFIX = '/api/web/desktop/v1'
 | `expires_at` | 否 | **毫秒时间戳字符串**，由 JWT 的 exp 推算 |
 | `office_identity` | 否 | `personal` 或组织码 |
 | `user_id` | 否 | 用户 id |
-| `nickname` | 否 |  服务端的 `name` 是**自动生成的默认名**（实测 `RaccoonAva`），微信扫码**不回传微信昵称** |
+| `nickname` | 否 |  服务端的 `name` 是**自动生成的默认名**（实测 `RaccoonAva`），登录**不回传用户昵称** |
 | `phone` | 否 | 绑定/注册的手机号，用于**多账号消歧** |
 | `device_id` | 否 | 设备指纹（32 位 hex） |
 
@@ -111,32 +112,32 @@ mode  = CFB, padding = NoPadding
 
 **不加密的后果**：`send_sms` 回 `100003 params_encryted_error`。
 
-### 2.4 登录流程 A：微信扫码
+### 2.4 登录流程 A：网页登录（授权码，官方桌面端同款）
 
-**code 由客户端本地随机生成**（实测任意自造 code 都被接受并进入 `pending`），
-完全绕开官方那条 `office-raccoon://auth/callback` 自定义协议回调
-—— 那是本插件（宿主侧 Node 进程）无法接收的。
+官方桌面端 `electron/main/desktopLogin.js` 的链路（本插件照搬；另两个开源实现
+agent2api / xiaohuanxiong2api 同构）：
 
 ```
-code = randomBytes(16).toString('hex')          # 32 位小写 hex = 16 字节随机
-二维码内容 = https://xiaohuanxiong.com/login/mp?code=<code>&appname=商汤小浣熊官网
-
-轮询：
-POST https://xiaohuanxiong.com/api/web/auth/v1/login_with_qrcode_code
+① 浏览器打开授权页（官方参数：login_source=desktop + appname=办公小浣熊客户端）：
+   https://xiaohuanxiong.com/code/authorize?login_source=desktop&appname=办公小浣熊客户端&state=<32位hex>
+   （官方不带 state；我们带，并在回调时逐字比对）
+② 用户在页面上用微信 / 验证码 / 密码登录成功
+   → 页面跳转自定义协议回调：office-raccoon://auth/callback?code=…&state=…
+③ 换凭证：
+POST https://xiaohuanxiong.com/api/web/auth/v1/login_with_authorization_code
 Content-Type: application/json
-body: { "qrcode_code": "<32位hex>" }
-→ { code: 0, message, details, data: { status, expired_at?, access_token?, refresh_token? } }
+body: { "authorization_code": "<回调里的 code>" }
+→ { code: 0, data: { access_token, refresh_token, office_identity, office_org_name, office_org_role } }
+   失败：HTTP 400 + { "code": 200035, "message": "authorization_code_not_found_error" }（终态：码已失效/已消费）
 ```
 
-**状态值**：`pending` / `logging` / `canceled` / `success`
-- `logging` → 带 `expired_at`（二维码有效期）
-- `success` → 带 `access_token` / `refresh_token`；
-  **缺 token 的 success 视为未完成**
--  **任何异常都降级为 `pending`**：轮询是 2 秒一次的循环，偶发失败不应中断整个登录流程；
- 而把未知状态误判成 `success` 会让流程拿到空 token 后卡死，
- 误判成 `canceled` 则会让用户正在扫码的二维码被无故刷新
+**回调怎么回收**：本插件是宿主机里的普通 Node 进程，注册不了
+`office-raccoon://` 自定义协议 → **提示用户把地址栏里的整条回调 URL 粘贴回来**
+（与 agent2api 的 Docker 形态一致；也可用环境变量 `RACCOON_LOGIN_CALLBACK` 注入）。
 
-轮询间隔 2_000 ms。
+**为什么不用 `/login/mp?code=…`**：那条是**官方手机 App 扫码**专用（官方桌面端的
+二维码、网站自己的微信登录二维码都用它），但网页端**没有该路由** —— 真实浏览器
+打开只会落到 SPA 兜底页，是死链（真机踩过）。授权码链路才是「浏览器里能走通」的那条。
 
 ### 2.5 登录流程 B：短信验证码
 
@@ -199,22 +200,13 @@ GET https://xiaohuanxiong.com/api/web/auth/v1/user_info
 `nickname` 取的是远端的 `name`，而**它是服务端自动生成的默认名**，
 故多账号消歧要靠 `phone`。
 
-### 2.9 本地登录页（raccoon-login-page.ts）
+### 2.9 本插件的登录交互（非上游协议，供实现对照）
 
-```
-GET  /raccoon/login       → 弹窗页：Tab 切换「微信扫码 / 短信登录」
-GET  /raccoon/poll        → 前端轮询登录状态（宿主侧持有 qrcode_code）
-POST /raccoon/sms/send    → 提交手机号 + 阿里云 captcha_param
-POST /raccoon/sms/verify  → 提交验证码完成登录
-```
+**没有本地登录页**：`mb raccoon login` 直接打印授权页 URL（见 §2.4），用户在浏览器里
+完成登录后，把地址栏里的整条回调 URL 粘贴回终端；非交互场景可用环境变量
+`RACCOON_LOGIN_CALLBACK` 注入回调 URL。
 
-- 绑 `127.0.0.1` 随机端口，超时 5 分钟
-- **职责边界（安全约束）**：宿主侧持有全部敏感状态（`qrcode_code`、手机号、凭据）；
- 页面侧只做展示与表单提交，**不知道** `phoneCipherSecret`、token 等秘密
-- 二维码由**宿主侧**生成 SVG 内联进 HTML（零依赖 QR 实现：byte 模式 + 纠错等级 M + 版本 1–10，
- 上限 213 字节）
-- `canceled` 时换一个新 code
-- 手机号本地校验：`/^1[3-9]\d{9}$/`
+手机号本地校验：`/^1[3-9]\d{9}$/`；短信登录是备用链路（`send_sms` + `login_with_sms`）。
 
 ---
 
@@ -251,7 +243,7 @@ X-Raccoon-Language: zh
 X-Client-Platform: desktop-windows
 ```
 
-### 3.3  思考控制的完整实测结论（raccoon-product.ts:25-71）
+### 3.3  思考控制的完整实测结论（upstream.ts 的 buildChatBody）
 
 **唯一有效通道是 `extra_body.thinking.type`**（Anthropic 风格对象），
 服务端报错原文确认其枚举：
@@ -455,18 +447,33 @@ def raccoon_supports_image(model_id, tags):
 
 ## 6. 额度查询
 
-### 6.1 三个来源的语义（raccoon-credits.ts:4-25，关键）
+### 6.1 三个来源的语义（关键）
 
 | 来源 | 金额 | 触发方式 | 本模块 |
 |---|---|---|---|
 | 新人注册礼包 | 3000 | 注册时服务端自动发放 | 不涉及 |
-| 桌面端登录奖励 | 3000 | `POST …/login/points/grant` |  实现 |
-| 每日积分发放 | 300 | **服务端按日自动发放，无端点** |  不实现 |
+| 每日积分发放 | 300 | `GET /api/web/office/v3/setting_info`（按天幂等） | 签到（触发 + 账单核对） |
+| 桌面端登录奖励 | 3000 | `POST …/login/points/grant`（幂等一次性） | 导出备用（不与签到混跑） |
 
-**每日 300 没有签到端点** —— 实测该账号 13:30 注册、13:31 就收到 `daily_grant` 账单
-（`biz_type: 'daily_grant'`）。故**不能**把它实现成签到按钮。
+**签到 = 触发 + 核对两步**：`setting_info` 只是**触发器**（官方桌面端每次启动都打，
+服务端按天幂等发放）；「今天有没有领到」以**账单**为准 —— 存在 `biz_type: 'daily_grant'`
+（或任何 `points > 0` 且日期为今天的记录）才算入账。只看触发器会把「服务端没发」
+误报成签到成功。
 
-### 6.2 查余额（**只读**）
+**「今天」按北京时间（UTC+8）**：上游自然日即 UTC+8 零点，跟机器时区走会让海外 /
+容器部署把 16 小时的账单认成昨天（参考实现 agent2api 为此专门定了北京时间口径）。
+
+### 6.2 每日积分触发器（签到）
+
+```
+GET https://xiaohuanxiong.com/api/web/office/v3/setting_info
+（需 Bearer + X-Client-Platform；响应里的 point_grant_popups / point_grant_toast 是发放通知）
+```
+
+- 官方桌面端启动即调用；**按天幂等**（重复调用不会重复入账）
+- 实测：未授权直接调该端点回 `401 authorization_empty_error`（端点存在性已验证）
+
+### 6.3 查余额（**只读**）
 
 ```
 GET https://xiaohuanxiong.com/api/web/points/v1/balance
@@ -479,7 +486,7 @@ GET https://xiaohuanxiong.com/api/web/points/v1/balance
  `会员积分`（`monthly_points`，**仅 > 0 时才加**）/ `充值积分`（`topup_points`）
 -  在「打开面板」这类高频路径上**绝不**触碰写端点
 
-### 6.3 登录奖励（一次性，幂等）
+### 6.4 登录奖励（一次性，幂等）
 
 ```
 POST https://xiaohuanxiong.com/api/web/desktop/v1/login/points/grant
@@ -493,7 +500,7 @@ POST https://xiaohuanxiong.com/api/web/desktop/v1/login/points/grant
 - 默认额度 `RACCOON_LOGIN_REWARD_POINTS = 3000`
 - 本函数**不抛错**
 
-### 6.4 查询奖励是否已领
+### 6.5 查询奖励是否已领
 
 ```
 GET https://xiaohuanxiong.com/api/web/points/v1/bills?paging.limit=50&paging.offset=0
@@ -507,7 +514,7 @@ GET https://xiaohuanxiong.com/api/web/points/v1/bills?paging.limit=50&paging.off
 **服务端没有单独的奖励状态端点**，故只能查账单明细。
 查询失败时保守返回 `claimed: false`。
 
-### 6.5 业务信封（raccoon-oauth.ts:62-73）
+### 6.6 业务信封（cred.ts 的 envelopeMessage）
 
 ```python
 code = record.code if isinstance(record.code, int) else (status if status >= 400 else 0)
@@ -521,11 +528,12 @@ code = record.code if isinstance(record.code, int) else (status if status >= 400
 
 ## 7. 特殊机制
 
-- **登录链路不可复用官方桌面端**（raccoon.ts:11-20）：它靠
- `office-raccoon://auth/callback` 自定义协议回调，而本插件是宿主侧 Node 进程，收不到；
- 且 `/code/authorize` 页面的回调地址是**写死的**。故改为「客户端本地生成 code + 自行轮询」
+- **登录走官方授权码链路，但回调靠用户粘贴**：官方桌面端靠
+ `office-raccoon://auth/callback` 自定义协议回调，本插件是宿主侧 Node 进程、注册不了
+ 该协议 → **提示用户把地址栏里的整条回调 URL 粘贴回来**（与 agent2api 的 Docker 形态
+ 一致）。浏览器登录页本身用官方同款 `/code/authorize`（见 §2.4）
 - **凭据不读客户端任何文件**：凭据存插件自有的 `ctx.credentials`
-- **账号昵称修复（raccoon-auth.ts:560-618）**：启动时主动补一次：
+- **账号昵称修复（cred.ts 的 syncProfile）**：启动时主动补一次：
  读凭据 → 缺 `phone` 就拉一次 `user_info` 补上 → 重算昵称并写回账号池。
  语义约束：**幂等**、**失败不阻塞启动**、**不发写请求**
 - **账号池有效期回写（本 provider 是这套逻辑的原产地）**：
@@ -536,5 +544,3 @@ code = record.code if isinstance(record.code, int) else (status if status >= 400
  —— raccoon 的 access_token 寿命约 3 小时
 - **`refreshAll` 只按 `refreshable` 过滤，绝不看 `enabled`**
 - **`refreshAccountCredential(refName)` 只读写传入的 ref**
-- **本地二维码实现**：自实现 byte 模式 + 纠错等级 M + 版本 1–10
- （内容上限 213 字节），超出容量时**抛错**，渲染成内联 SVG

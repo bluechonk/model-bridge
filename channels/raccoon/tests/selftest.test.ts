@@ -45,10 +45,16 @@ function fakeJwt(exp?: number, claims: Record<string, unknown> = {}): string {
 }
 
 interface FakeState {
-  qrCalls: number;
+  exchangeCalls: number;
   refreshCalls: number;
   grantCalls: number;
   grantMode: string;
+  settingCalls: number;
+  settingHeaders: Record<string, string | string[] | undefined>;
+  /** 账单里是否含「今天（北京时间）」的每日入账。 */
+  billsDailyToday: boolean;
+  /** 账单接口模式：ok / fail。 */
+  billsMode: string;
   chatHeaders: Record<string, string | string[] | undefined>;
   chatBody: Record<string, unknown> | null;
   sentModels: number;
@@ -60,10 +66,14 @@ interface FakeState {
 }
 
 const st: FakeState = {
-  qrCalls: 0,
+  exchangeCalls: 0,
   refreshCalls: 0,
   grantCalls: 0,
   grantMode: "sequence",
+  settingCalls: 0,
+  settingHeaders: {},
+  billsDailyToday: true,
+  billsMode: "ok",
   chatHeaders: {},
   chatBody: null,
   sentModels: 0,
@@ -103,31 +113,21 @@ function handleFake(req: IncomingMessage, res: import("node:http").ServerRespons
     const path = url.pathname;
     const futureExp = Math.floor(Date.now() / 1000) + 3600;
 
-    if (path === cred.QR_LOGIN_PATH) {
-      st.qrCalls += 1;
-      const call = st.qrCalls;
-      if (call === 1) {
-        json(res, 200, { code: 0, data: { status: "logging", expired_at: 1_700_000_000 } });
+    if (path === cred.EXCHANGE_PATH) {
+      st.exchangeCalls += 1;
+      const body = JSON.parse(raw || "{}") as Record<string, unknown>;
+      const code = String(body["authorization_code"] ?? "");
+      if (code === "expired-code") {
+        json(res, 200, { code: cred.AUTHORIZATION_CODE_NOT_FOUND, message: "authorization code not found" });
         return;
       }
-      if (call === 2) {
-        json(res, 200, { code: 0, data: { status: "canceled" } });
-        return;
-      }
-      if (call === 3) {
-        // 偶发失败必须降级为 pending，不能中断整个登录流程
-        json(res, 500, { code: 0, message: "boom" });
-        return;
-      }
-      if (call === 4) {
-        // 缺 token 的 success 视为未完成
-        json(res, 200, { code: 0, data: { status: "success" } });
+      if (code === "bad-code") {
+        json(res, 200, { code: 100001, message: "boom" });
         return;
       }
       json(res, 200, {
         code: 0,
         data: {
-          status: "success",
           access_token: fakeJwt(futureExp, { sub: "u-1" }),
           refresh_token: "rt-1",
           office_identity: "personal",
@@ -238,12 +238,29 @@ function handleFake(req: IncomingMessage, res: import("node:http").ServerRespons
       return;
     }
     if (path === "/api/web/points/v1/bills") {
-      const items = st.billsWithReward
+      if (st.billsMode === "fail") {
+        json(res, 500, { code: 500, message: "bills down" });
+        return;
+      }
+      const items: Array<Record<string, unknown>> = st.billsWithReward
         ? [{ biz_type: "reward_grant", event_name: "桌面端登录奖励", points: 3000 }]
         : // 「新人注册礼包」也是 reward_grant → 不能只看 biz_type
           [{ biz_type: "reward_grant", event_name: "新人注册礼包", points: 3000 }];
-      items.push({ biz_type: "daily_grant", event_name: "每日积分", points: 300 });
+      if (st.billsDailyToday) {
+        // 「今天」按北京时间（UTC+8）：与实现的 beijingToday() 同口径
+        const beijingNow = new Date(Date.now() + 8 * 3600_000).toISOString();
+        items.push({ biz_type: "daily_grant", event_name: "每日积分", points: 300, created_at: beijingNow });
+      }
       json(res, 200, { code: 0, data: { items } });
+      return;
+    }
+    if (path === upstream.SETTING_INFO_PATH) {
+      st.settingCalls += 1;
+      st.settingHeaders = { ...req.headers };
+      json(res, 200, {
+        code: 0,
+        data: { point_grant_popups: [{ points: 300 }], point_grant_toast: null },
+      });
       return;
     }
     if (path === "/api/web/desktop/v1/login/points/grant") {
@@ -458,43 +475,89 @@ describe("3. 凭据：过期判定与落盘", () => {
   });
 });
 
-// ── 4. 扫码登录 ───────────────────────────────────────────────────────────────
+// ── 4. 网页登录（授权码） ──────────────────────────────────────────────────────
 
-describe("4. 扫码登录（code 本地生成 / canceled 换码 / 异常降级）", () => {
-  it("轮询到 success，落盘 uid/office_identity/expires_at，login 页 URL 本地生成", async () => {
-    st.qrCalls = 0;
+describe("4. 网页登录（授权 URL / 回调校验 / 换码）", () => {
+  it("authorizeUrl：官方同款参数（login_source=desktop + appname=办公小浣熊客户端 + state）", () => {
+    const state = "a".repeat(32);
+    const u = new URL(cred.authorizeUrl(state, fakeBase()));
+    assert.equal(u.pathname, "/code/authorize");
+    assert.equal(u.searchParams.get("login_source"), "desktop");
+    assert.equal(u.searchParams.get("appname"), "办公小浣熊客户端");
+    assert.equal(u.searchParams.get("state"), state);
+    // ⚠ 回归：不能再用 /login/mp?code=… —— 那条只给官方手机 App 扫码用，网页端是死链
+    assert.ok(!cred.authorizeUrl(state, fakeBase()).includes("/login/mp"));
+  });
+
+  it("parseLoginCallback：非法形态/state 不匹配拒绝；缺 state 放行但标记未校验", () => {
+    const state = "b".repeat(32);
+    assert.deepEqual(
+      cred.parseLoginCallback(`office-raccoon://auth/callback?code=c1&state=${state}`, state),
+      { code: "c1", stateVerified: true },
+    );
+    // 前缀匹配会放行伪造 host → 必须逐项比对 scheme/host/path
+    assert.throws(
+      () => cred.parseLoginCallback("office-raccoon://auth/callback@evil.com?code=c1", state),
+      cred.LoginCallbackError,
+    );
+    assert.throws(
+      () => cred.parseLoginCallback(`https://evil.com/callback?code=c1&state=${state}`, state),
+      cred.LoginCallbackError,
+    );
+    assert.throws(
+      () => cred.parseLoginCallback(`office-raccoon://auth/other?code=c1&state=${state}`, state),
+      cred.LoginCallbackError,
+    );
+    assert.throws(
+      () => cred.parseLoginCallback(`office-raccoon://auth/callback?state=${state}`, state),
+      /no code/,
+    );
+    assert.throws(
+      () =>
+        cred.parseLoginCallback(`office-raccoon://auth/callback?code=c1&state=${"x".repeat(32)}`, state),
+      /state mismatch/,
+    );
+    // 官方回调形态可能不带 state → 放行但标记未校验
+    assert.deepEqual(cred.parseLoginCallback("office-raccoon://auth/callback?code=c2", state), {
+      code: "c2",
+      stateVerified: false,
+    });
+    // 裸授权码兜底
+    assert.deepEqual(cred.parseLoginCallback("deadbeefcafe", state), { code: "deadbeefcafe", stateVerified: false });
+  });
+
+  it("login：回调换码成功 → 落盘 uid/office_identity/expires_at", async () => {
+    st.exchangeCalls = 0;
     const seenUrls: string[] = [];
-    const statuses: string[] = [];
     const c = await cred.login(fakeBase(), {
       onUrl: (u) => seenUrls.push(u),
-      onStatus: (m) => statuses.push(m),
-      sleep: async () => {},
-      pollIntervalMs: 0,
+      callback: "office-raccoon://auth/callback?code=good-code",
       timeoutMs: 5000,
     });
-    assert.equal(st.qrCalls, 5, "含 1 次 500 重试与 1 次空 token");
-    // 只比 payload，不比整个 JWT 串：假上游签发用的 now 与这里重算的 now 可能跨过 1 秒边界
-    // （曾因此偶发失败）。exp 允许 ±1s 误差。
-    const payload = JSON.parse(
-      Buffer.from(c.accessToken.split(".")[1]!, "base64url").toString("utf8"),
-    ) as { sub: string; exp: number };
-    assert.equal(payload.sub, "u-1");
-    assert.ok(
-      Math.abs(payload.exp - (Math.floor(Date.now() / 1000) + 3600)) <= 1,
-      `exp 应为签发时刻 +3600s，实际 ${payload.exp}`,
-    );
+    assert.equal(st.exchangeCalls, 1, "授权码只换一次");
+    assert.equal(new URL(seenUrls[0]!).pathname, "/code/authorize", "onUrl 给的是授权页");
     assert.equal(c.refreshToken, "rt-1");
     assert.equal(c.officeIdentity, "personal");
     assert.equal(c.uid, "u-1", "uid 取 user_id（而非自动 nickname）");
+    assert.equal(c.source, "raccoon-web");
     assert.ok(Number(c.expiresAt) > Date.now(), "expires_at 由 JWT 推算（毫秒时间戳，未来时刻）");
     assert.equal(cred.load().accessToken, c.accessToken, "从磁盘可读回");
-    const first = seenUrls[0]!;
-    const code = first.split("code=")[1]!.split("&")[0]!;
-    assert.equal(code.length, 32, "本地 code 是 32 位 hex");
-    assert.ok(first.startsWith("https://xiaohuanxiong.com/login/mp?code="));
-    assert.ok(first.includes("appname=%E5%95%86%E6%B1%A4%E5%B0%8F%E6%B5%A3%E7%86%8A%E5%AE%98%E7%BD%91"));
-    assert.equal(new Set(seenUrls).size >= 2, true, "canceled 后换了新 code");
-    assert.ok(statuses.some((s) => s.includes("scanned")), "logging 阶段有进度输出");
+  });
+
+  it("login：授权码过期（200035）/ 其他失败 → 明确报错，不误报成功", async () => {
+    await assert.rejects(
+      () =>
+        cred.login(fakeBase(), {
+          callback: "office-raccoon://auth/callback?code=expired-code",
+          timeoutMs: 5000,
+        }),
+      /expired or already consumed/,
+    );
+    await assert.rejects(
+      () =>
+        cred.login(fakeBase(), { callback: "office-raccoon://auth/callback?code=bad-code", timeoutMs: 5000 }),
+      /Code exchange failed/,
+    );
   });
 });
 
@@ -807,7 +870,7 @@ describe("10. 模型目录：远端优先与缓存", () => {
 
 // ── 11. 额度 ─────────────────────────────────────────────────────────────────
 
-describe("11. 额度：余额只读 / 登录奖励幂等 / 没有每日签到", () => {
+describe("11. 额度：余额只读 / 登录奖励幂等 / 每日签到（触发+核对）", () => {
   it("查额度从不触碰写端点；各池分开作 package", async () => {
     await saveFakeCreds();
     st.grantCalls = 0;
@@ -868,10 +931,46 @@ describe("11. 额度：余额只读 / 登录奖励幂等 / 没有每日签到", 
     assert.ok(third.error);
   });
 
-  it("没有「每日签到」端点（服务端按日自动发放）", () => {
-    const api = billing as unknown as Record<string, unknown>;
-    assert.equal(api["claimDaily"], undefined);
-    assert.equal(api["checkin"], undefined);
+  it("每日签到：触发 setting_info（platform 头）→ 账单核对今日入账", async () => {
+    await saveFakeCreds();
+    st.settingCalls = 0;
+    st.settingHeaders = {};
+    st.billsDailyToday = true;
+    const outcome = await billing.signin.claim();
+    assert.equal(outcome.ok, true, `应当签到成功：${outcome.summary}`);
+    assert.match(outcome.summary, /今日已入账/);
+    assert.equal(st.settingCalls, 1, "触发一次 setting_info");
+    assert.equal(st.settingHeaders["x-client-platform"], "desktop-windows", "platform 必需");
+  });
+
+  it("每日签到：账单没入账 → ok=false（不能只信触发器）", async () => {
+    await saveFakeCreds();
+    st.billsDailyToday = false;
+    const outcome = await billing.signin.claim();
+    assert.equal(outcome.ok, false, "触发器返回 200 但账单无入账 → 不能报成功");
+    assert.match(outcome.summary, /未见入账/);
+    st.billsDailyToday = true;
+  });
+
+  it("signin.status：已入账 / 未入账 / 查询失败(不知道) 三态", async () => {
+    await saveFakeCreds();
+    st.billsDailyToday = true;
+    const done = await billing.signin.status();
+    assert.equal(done.claimedToday, true);
+    assert.equal(done.claimable, false);
+    assert.equal(done.daily, true);
+
+    st.billsDailyToday = false;
+    const pending = await billing.signin.status();
+    assert.equal(pending.claimedToday, false);
+    assert.equal(pending.claimable, true);
+
+    st.billsMode = "fail";
+    const unknown = await billing.signin.status();
+    assert.equal(unknown.claimedToday, null, "查不到 ≠ 没领");
+    assert.equal(unknown.claimable, null);
+    st.billsMode = "ok";
+    st.billsDailyToday = true;
   });
 
   it("未登录 → NotLoggedInError", async () => {
