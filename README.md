@@ -26,7 +26,7 @@ docs/                全部文档（索引见 docs/README.md）
 
 ```bash
 npm install          # 装工作区依赖
-npm run build        # 全仓编译（tsc -b，按依赖图增量）
+npm run build        # 全仓编译（tsc -b + cli 单文件 bundle）
 npm test             # 校验器 + 全部包的测试
 
 node packages/cli/dist/cli.js start              # 启动网关（守护式，端口 8787）
@@ -34,6 +34,20 @@ node packages/cli/dist/cli.js model list         # 池视图：两个模型分�
 node packages/cli/dist/cli.js channels           # 渠道视角：每个渠道贡献了什么
 node packages/cli/dist/cli.js <cid> login        # 登录某个渠道（浏览器授权）
 ```
+
+### 全局安装 CLI
+
+`packages/cli` 构建后是自包含的单文件 bundle（`dist/cli.bundle.js`，内联 gateway
+与全部渠道），可脱离本仓库安装：
+
+```bash
+cd packages/cli && npm pack      # 产出 tarball（仅 bundle + package.json）
+npm i -g ./model-bridge-cli-*.tgz   # 或 npm i -g <git 地址>/packages/cli
+model-bridge model list          # 任意目录直接可用
+```
+
+注意：bundle 形态下陈旧构建检测（`status` 的 stale_build）找不到工作区根，会退化为
+不报告——这是已知限制，不影响网关功能。
 
 ## 文档
 
