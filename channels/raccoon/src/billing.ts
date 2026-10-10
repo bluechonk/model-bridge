@@ -1,18 +1,21 @@
 /**
- * Raccoon 额度：只读余额、登录奖励（一次性幂等）与「查奖励是否已领」。
+ * Raccoon 额度：只读余额、每日签到（积分发放触发 + 账单核对）与登录奖励。
  *
- * ## 本模块承载的渠道知识（raccoon-credits.ts:4-25）
+ * ## 本模块承载的渠道知识（实测 + 参考实现 agent2api 交叉验证）
  *
  * | 来源 | 金额 | 触发方式 | 本模块 |
  * |---|---|---|---|
  * | 新人注册礼包 | 3000 | 注册时服务端自动发放 | 不涉及 |
- * | 桌面端登录奖励 | 3000 | `POST …/login/points/grant` | ✅ 实现 |
- * | 每日积分发放 | 300 | **服务端按日自动发放，无端点** | ❌ **不实现** |
+ * | 每日积分发放 | 300 | **`GET /api/web/office/v3/setting_info`**（按天幂等） | ✅ 签到 |
+ * | 桌面端登录奖励 | 3000 | `POST …/login/points/grant`（幂等一次性） | 导出备用 |
  *
- * ⚠ **每日 300 没有签到端点**：实测该账号 13:30 注册、13:31 就收到 `daily_grant`
- * 账单（`biz_type: 'daily_grant'`）。故**不能**把它实现成签到按钮。
+ * ⚠ **签到 = 触发 + 核对两步**：`setting_info` 只是触发器（官方桌面端每次启动都打，
+ * 服务端按天幂等发放）；「今天有没有领到」以**账单**（`points>0` 且日期=今天）为准
+ * —— 只信触发器会把「服务端没发」误报成签到成功。
+ * ⚠ **「今天」按北京时间**（上游自然日即 UTC+8 零点）：跟机器时区走会让海外/容器
+ * 部署把 16 小时的账单认成昨天，「今日积分」与「今天已签」整体错位。
  * ⚠ **登录奖励不是每日签到**：该端点是**幂等一次性**的，幂等判据是 `granted`
- * （`false` → `already-claimed`，**不是** `claimed`）。
+ * （`false` → `already-claimed`，**不是** `claimed`）；不与每日签到混跑。
  * ⚠ **「查不到」不能显示成 0**：`available_points` 缺失即抛 `CreditsError`。
  * ⚠ **在「打开面板」这类高频路径上绝不触碰写端点**。
  */
@@ -232,6 +235,76 @@ export interface RewardResult {
   error?: string;
 }
 
+// ── 每日签到（setting_info 触发 + 账单核对）────────────────────────────────────
+
+/** 上游自然日 = 北京时间（UTC+8）—— 不跟机器时区走，见模块头注释。 */
+function beijingToday(): string {
+  return new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+}
+
+interface DailyGrant {
+  name: string;
+  points: number;
+  at: string;
+}
+
+/**
+ * 账单里**今天（北京时间）**入账的积分发放（`points > 0`）。
+ *
+ * ⚠ 账单接口是慢接口（实测约 9 秒），用独立超时；失败**抛错**
+ * （由调用方决定怎么显示 —— 「查不到」不能显示成「没领」）。
+ */
+async function todayGrants(c: cred.Credentials): Promise<DailyGrant[]> {
+  const cfg = upstream.loadConfig()[0];
+  const result = await getJson(upstream.billsUrl(cfg), c, false, 25_000);
+  if (result.status === 401 || result.status === 403 || result.code === 200003) {
+    throw new cred.NotLoggedInError("Raccoon rejected the access token (401/403 or code 200003)");
+  }
+  // ⚠ HTTP 状态也是判据：网关错误页可能带 `code: 0`（不能只看业务码）
+  if (result.status >= 400 || result.code !== 0) {
+    throw new CreditsError(`Bills query failed: HTTP ${result.status} code=${result.code} ${result.message}`);
+  }
+  const items = result.data["items"];
+  if (!Array.isArray(items)) return [];
+  const today = beijingToday();
+  const out: DailyGrant[] = [];
+  for (const item of items) {
+    if (!isRecord(item)) continue;
+    const points = num(item["points"]);
+    if (points === null || points <= 0) continue;
+    const createdAt = typeof item["created_at"] === "string" ? item["created_at"] : "";
+    if (createdAt.slice(0, 10) !== today) continue;
+    out.push({
+      name: typeof item["event_name"] === "string" ? item["event_name"] : "积分发放",
+      points,
+      at: createdAt.replace("T", " ").slice(11, 19),
+    });
+  }
+  return out;
+}
+
+/**
+ * 触发每日积分发放（**按天幂等**）：`GET setting_info`（platform 头必需）。
+ *
+ * 官方桌面端每次启动都会打这个接口；发放由服务端完成，本函数的返回值只是
+ * 发放通知（`point_grant_popups` / `point_grant_toast`），**不是**结果判据。
+ */
+export async function triggerDailyGrant(c?: cred.Credentials): Promise<Record<string, unknown>> {
+  const credential = c ?? cred.load();
+  const cfg = upstream.loadConfig()[0];
+  const result = await getJson(upstream.settingInfoUrl(cfg), credential, true, 25_000);
+  if (result.status === 401 || result.status === 403 || result.code === 200003) {
+    throw new cred.NotLoggedInError("Raccoon rejected the access token (401/403 or code 200003)");
+  }
+  if (result.status >= 400 || result.code !== 0) {
+    throw new CreditsError(`setting_info failed: HTTP ${result.status} code=${result.code} ${result.message}`);
+  }
+  return {
+    popups: result.data["point_grant_popups"] ?? null,
+    toast: result.data["point_grant_toast"] ?? null,
+  };
+}
+
 /**
  * 领取桌面端登录奖励（**幂等一次性**，不是每日签到）。
  *
@@ -285,40 +358,83 @@ export async function claimLoginReward(c?: cred.Credentials): Promise<RewardResu
 // ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
 
 import type { SigninModule } from "@model-bridge/gateway";
+
 /**
- * 签到 / 领取能力（`<cid> checkin`）。
+ * 每日签到（`<cid> checkin`）。
  *
- * ⚠ 上游**不是每日签到**：`daily_grant` 由服务端自动发；这里是一笔**一次性**的
- * 「登录奖励」，幂等判据是 `granted`（见 docs/protocols/raccoon/PROTOCOL.md）。
- * 所以 summary 里点明「一次性」，别让用户以为是每天能领。
+ * 语义对齐上游真实链路：**触发**（`setting_info`，按天幂等）+ **核对**（账单里
+ * 今天有没有入账）。`ok` 的口径是「今日积分确有入账」—— 重复签到不会重复入账，
+ * 账单里看得到就算领到（与参考实现 agent2api 的 `claim_daily_grant` 一致）。
  */
 export const signin: SigninModule = {
   async status() {
-    cred.load(); // 未登录时抛 NotLoggedInError：别把"没登录"显示成"可领"
-    const claimed = await loginRewardClaimed();
-    // ⚠ `loginRewardClaimed()` 查询失败**也**返回 false（它自己文档里写明"保守返回"），
-    // 所以 false 只能表示"没查到领取记录"——既可能真没领过、也可能查询失败。
-    // 故 claimable 用 null（"不知道"），不能报 true（那是虚假承诺）。
+    const c = cred.load(); // 未登录时抛 NotLoggedInError：别把"没登录"显示成"可领"
+    let grants: DailyGrant[];
+    try {
+      grants = await todayGrants(c);
+    } catch (err) {
+      // 查不到 ≠ 没领 —— 报「不知道」，不报「可领」
+      return {
+        claimable: null,
+        claimedToday: null,
+        daily: true,
+        summary: `账单查询失败，今日是否已签未知（${String(err)}）`,
+      };
+    }
+    const total = grants.reduce((sum, g) => sum + g.points, 0);
+    if (grants.length > 0) {
+      return {
+        claimable: false,
+        claimedToday: true,
+        daily: true,
+        summary: `今日已入账 ${total} 积分（${grants.map((g) => `${g.name} +${g.points}`).join("、")}）`,
+        items: grants.map((g) => ({ name: g.name, points: g.points, at: g.at })),
+      };
+    }
     return {
-      claimable: claimed ? false : null,
-      // 一次性奖励：没有"今天"这个概念 → 共享层不会套"今日是否签到过"的话术
-      daily: false,
-      summary: claimed
-        ? "登录奖励已领过（一次性，非每日）"
-        : "没查到登录奖励记录（可能可领、也可能查询失败；checkin 会尝试领，上游幂等）",
+      claimable: true,
+      claimedToday: false,
+      daily: true,
+      summary: "今日还没有入账记录（checkin 会触发一次发放；上游按天幂等，重复执行不会重复入账）",
     };
   },
   async claim() {
-    const r = await claimLoginReward();
+    let c: cred.Credentials;
+    try {
+      c = cred.load();
+    } catch (err) {
+      return { ok: false, summary: String(err) };
+    }
+    // ① 触发发放（按天幂等）
+    let notify: Record<string, unknown>;
+    try {
+      notify = await triggerDailyGrant(c);
+    } catch (err) {
+      return { ok: false, summary: `触发发放失败: ${String(err)}`, detail: { error: String(err) } };
+    }
+    // ② 账单核对（权威结果）
+    let grants: DailyGrant[];
+    try {
+      grants = await todayGrants(c);
+    } catch (err) {
+      return {
+        ok: false,
+        summary: `已触发发放，但账单核对失败（暂时无法确认入账）: ${String(err)}`,
+        detail: { notify },
+      };
+    }
+    if (grants.length === 0) {
+      return {
+        ok: false,
+        summary: "已触发发放，但今日账单暂未见入账（稍后可再看账单）",
+        detail: { notify },
+      };
+    }
+    const total = grants.reduce((sum, g) => sum + g.points, 0);
     return {
-      ok: r.status === "claimed",
-      summary:
-        r.status === "claimed"
-          ? `领取成功${r.points > 0 ? `，+${r.points}` : ""}`
-          : r.status === "already-claimed"
-            ? "已领过（一次性奖励）"
-            : `领取失败: ${r.error ?? r.status}`,
-      detail: r,
+      ok: true,
+      summary: `签到成功，今日已入账 ${total} 积分`,
+      detail: { notify, grants },
     };
   },
 };

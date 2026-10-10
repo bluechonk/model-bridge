@@ -14,13 +14,16 @@ Raccoon（商汤）的本地 OpenAI Chat Completion 透明代理网关（**TypeS
 ## 快速开始
 
 ```bash
-uv sync
-uv run raccoon serve --json    # 前台无窗口运行
-uv run raccoon login --json    # 无窗口登录：输出授权链接
-uv tool install .            # 全局安装后用 raccoon 直接调用
-raccoon start                  # 守护式启动（幂等）
-raccoon status / models / credits / stop
+node channels/raccoon/dist/cli.js login    # 无窗口登录：打印授权链接，粘贴回调 URL 完成
+mb raccoon login                           # 仓库级入口等价写法
+node channels/raccoon/dist/cli.js serve    # 前台无窗口运行（单渠道）
+mb start                                   # 守护式启动（幂等，仓库级网关）
+mb status / model list / raccoon credits / raccoon checkin
 ```
+
+> **登录两步**：打开打印出的 `/code/authorize` 授权页用微信/验证码/密码登录 →
+> 把浏览器地址栏里的整条 `office-raccoon://auth/callback?…` URL 粘贴回终端。
+> 细节见 [PROTOCOL.md §2.4](../protocols/raccoon/PROTOCOL.md)。
 
 ## 状态 API 与 ZCode 插件
 
