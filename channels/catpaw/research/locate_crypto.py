@@ -1,4 +1,4 @@
-"""Phase 4 —— 加密识别（Encryption Identification）（移植自 phase4-encryption-id）。
+"""Phase 4 —— 加密识别（Encryption Identification）。
 
 目标：不看运行时内存，只在磁盘上把"token 是怎么被加密的"读出来。
 
@@ -6,7 +6,7 @@
 asar 不压缩，JavaScript 是明文（压缩成一行的 minified 代码），
 所以按字节 `find` 就能定位到实现，再把命中点前后各截一段作为证据。
 
-实测命中（见 docs/phase4-encryption-id/RUN-LOG.md）：
+实测命中（见 docs/protocols/catpaw/PROTOCOL.md 的结论速览）：
   - `StorageService` 名称 + `catpaw-desk-token-v2` 盐串
   - 密钥派生：sha256(`${machineId}:catpaw-desk-token-v2`)
   - 加密：     aes-256-gcm，base64(iv ‖ tag ‖ ct)

@@ -1,7 +1,7 @@
 # 端到端数据流
 
 本文用一张图把"登录态从哪来、怎么加密落盘、怎么被解出来、又怎么被用于上游调用"讲清楚。
-所有路径均来自 [phase1](phase1-reconnaissance/RUN-LOG.md) / [phase2](phase2-data-collection/RUN-LOG.md) 的实测。
+所有路径均为实测结论（证据分级见 [FINDINGS.md](FINDINGS.md)）。
 
 ---
 

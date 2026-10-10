@@ -1,7 +1,7 @@
 # 结论汇总（FINDINGS）
 
 本文把所有实测与代码读取得到的结论集中在一处，逐条标注证据等级。
-原始输出见各阶段 RUN-LOG；证据等级定义见 [PROTOCOL.md](PROTOCOL.md#证据等级约定)。
+证据等级定义见 [PROTOCOL.md](PROTOCOL.md#证据等级约定)。
 
 ---
 
@@ -187,4 +187,4 @@ function re(encoded) {
 | 上游 `model-types` 的字段全集 | 只覆盖归一化时用到的字段；真实请求已跑通，字段全集仍未穷举 |
 | `round.messages` 总量是否有独立上限 | 未找到：user 单条撑到 10 万字符仍 200 `[实测]`（2026-10-08） |
 | `systemPromptOverride` 上限的服务端实现依据 | 边界已二分实测，但"字符 vs 字节"无法从外部区分到更细粒度；按 `escaped_length()` 取保守口径 |
-| 旧版 CatPawAI（VSCode 系）线路 | 本机未安装，见 [APPENDIX-legacy-lines.md](APPENDIX-legacy-lines.md)（来源为第三方参考实现） |
+| 旧版 CatPawAI（VSCode 系）线路 | 本机未安装，未做分析；旧线路已不在使用，不再保留第三方参考实现对照 |

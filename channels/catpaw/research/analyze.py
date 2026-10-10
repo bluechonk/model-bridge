@@ -1,4 +1,4 @@
-"""Phase 3 —— 格式分析（Format Analysis）（移植自 phase3-format-analysis）。
+"""Phase 3 —— 格式分析（Format Analysis）。
 
 目标：把 `ssoTokenEnc` 当成一个黑盒字节串来量。产出可被证伪的结构结论：
 
