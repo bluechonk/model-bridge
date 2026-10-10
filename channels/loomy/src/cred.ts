@@ -21,6 +21,7 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline";
 
 import { credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
 import * as upstream from "./upstream.js";
@@ -682,23 +683,90 @@ export async function save(c: Credentials): Promise<void> {
 
 // ── 登录（短信）/ 续期（探测）──────────────────────────────────────────────────
 
-export interface LoginOptions {
-  onUrl?: (url: string) => void;
-  onStatus?: (message: string) => void;
+/** 登录方式。 */
+export type LoginMethod = "sms" | "wechat";
+
+/** 登录选项：两端（短信 / 微信扫码）的等待参数共用；`method` 可显式指定。 */
+export interface LoginOptions extends WechatWaitOptions {
+  /**
+   * 登录方式。不给时：交互终端里**弹菜单让用户选**；非交互（`serve` 重试、
+   * 管道）按 `defaultLoginMethod()` 自动选（短信环境变量齐 → sms，否则 wechat）。
+   */
+  method?: LoginMethod;
+}
+
+/** 非交互时的默认方式：短信环境变量齐 → `sms`（自动化）；否则 `wechat`（唯一可交互完成的路径）。 */
+export function defaultLoginMethod(env: NodeJS.ProcessEnv = process.env): LoginMethod {
+  return env[PHONE_ENV] && env[SMS_CODE_ENV] ? "sms" : "wechat";
+}
+
+/** 菜单输入的解析结果：`"default"` = 空输入用默认；`"invalid"` = 认不出的输入。 */
+export type MethodChoice = LoginMethod | "default" | "invalid";
+
+/** 解析菜单输入（英文别名也认，便于自动化）。 */
+export function parseLoginMethodChoice(raw: string): MethodChoice {
+  const text = raw.trim().toLowerCase();
+  if (text === "") return "default";
+  if (text === "1" || text === "sms") return "sms";
+  if (text === "2" || text === "wechat" || text === "wx") return "wechat";
+  return "invalid";
+}
+
+/** 交互式选择登录方式（菜单写 stderr —— `--json` 时 stdout 要保持干净的 JSON 流）。 */
+async function chooseLoginMethodInteractively(defaultMethod: LoginMethod): Promise<LoginMethod> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stderr,
+    terminal: Boolean(process.stdin.isTTY),
+  });
+  process.stderr.write(
+    [
+      "Select login method:",
+      `  1) SMS code${process.env[PHONE_ENV] && process.env[SMS_CODE_ENV] ? "" : ` (needs env vars ${PHONE_ENV} / ${SMS_CODE_ENV})`}`,
+      "  2) WeChat QR code (scan with WeChat)",
+      `Choice [1/2] (default: ${defaultMethod === "sms" ? 1 : 2}): `,
+    ].join("\n") + "\n",
+  );
+  for await (const line of rl) {
+    const choice = parseLoginMethodChoice(line);
+    if (choice === "invalid") {
+      process.stderr.write("Invalid choice: enter 1 (SMS) or 2 (WeChat).\n");
+      continue;
+    }
+    rl.close();
+    return choice === "default" ? defaultMethod : choice;
+  }
+  return defaultMethod; // EOF（stdin 关闭）：用默认
 }
 
 /**
- * 短信验证码登录（无窗口工程没有输入框，手机号/验证码走环境变量）。
+ * 默认登录：交互式弹菜单选短信 / 微信；非交互按环境变量自动选。
+ *
+ * - 选 1（短信）：`LOOMY_PHONE` + `LOOMY_SMS_CODE` 必须给齐（无窗口工程没有输入框）
+ * - 选 2（微信）：扫码授权（未绑手机号时绑定环节仍需上述两个环境变量）
+ *
+ * ⚠ 别在非交互路径上直接报「缺环境变量」：`serve` 的重试登录也调到这里，
+ *   报错会让重试完全无路可走（真机踩过）。
  *
  * 登录成功后立即调 `POST /points/first-login`（每日额度初始化），**失败仅 warn**。
  */
 export async function login(baseUrl?: string, options: LoginOptions = {}): Promise<Credentials> {
   const { onStatus } = options;
+  const method =
+    options.method ??
+    (process.stdin.isTTY ? await chooseLoginMethodInteractively(defaultLoginMethod()) : defaultLoginMethod());
+
+  if (method === "wechat") {
+    onStatus?.("using WeChat QR login");
+    return loginWechat(baseUrl, options);
+  }
+
   const phone = process.env[PHONE_ENV] ?? "";
   const smsCode = process.env[SMS_CODE_ENV] ?? "";
   if (!phone || !smsCode) {
     throw new Error(
-      `SMS login requires env vars ${PHONE_ENV} (11-digit phone) and ${SMS_CODE_ENV} (6-digit code)`,
+      `SMS login requires env vars ${PHONE_ENV} (11-digit phone) and ${SMS_CODE_ENV} (6-digit code); ` +
+        "set both and re-run, or re-run and choose 2 for WeChat QR login",
     );
   }
   onStatus?.(`sending SMS code to ${phone}...`);
