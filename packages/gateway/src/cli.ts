@@ -63,7 +63,7 @@ ${verbLines.join("\n")}
 选项:
   --addr <host:port>        网关监听地址（默认 ${defaultAddr()}）
   --ui-port <port>          控制台 API 端口（默认 ${defaultUiPort()}）
-  --wait <seconds>          启动健康等待秒数（默认 8）
+  --wait <seconds>          启动健康等待秒数（默认 12）
   --lines <n>               logs 显示行数（默认 40）
   -f, --follow              logs：持续输出新增日志（等价 tail -f / docker logs -f）
   --realm <名>              login 的登录域（渠道自定义；单域渠道忽略）

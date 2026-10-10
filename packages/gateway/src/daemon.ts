@@ -29,8 +29,14 @@ import * as paths from "./paths.js";
 import { baseUrlOf, displayBase } from "./portfree.js";
 import { detectStaleBuild, staleBuildHint } from "./stale-build.js";
 
-/** start 等待网关就绪的默认时长（毫秒）；hook 场景必须快进快出。 */
-export const DEFAULT_WAIT_MS = 8000;
+/**
+ * start 等待网关就绪的默认时长（毫秒）。
+ *
+ * ⚠ 冷启动实测 ~5s（11 个渠道初始化 + 启动探测），紧接构建/安装后机器忙时会超过 8s
+ * （实测踩过：8s 窗口超时误报「未就绪」，网关其实几百毫秒后就 ready 了）。
+ * 留出余量到 12s；hook 场景仍走 `--wait` 自己调小。
+ */
+export const DEFAULT_WAIT_MS = 12_000;
 const HEALTH_TIMEOUT_MS = 1500;
 
 /**
@@ -330,9 +336,14 @@ export async function start(options: StartOptions = {}): Promise<number> {
     await new Promise((r) => setTimeout(r, 250));
   }
 
+  // 边界保险：窗口内最后一次探测与截止时刻之间可能刚好错过 → 报告前再探一次
+  if (child.exitCode === null && (await gatewayHealthy(addr))) {
+    log(`网关已启动: ${baseUrlOf(addr)} (PID ${child.pid})`);
+    return 0;
+  }
   log(
-    `启动后 ${waitMs / 1000}s 内未就绪（PID ${child.pid}，日志 ${scope.logPath()}）；` +
-      `用 ${name} status 查看详情`,
+    `启动等待 ${waitMs / 1000}s 超时（PID ${child.pid}，日志 ${scope.logPath()}）；` +
+      `可能仍在启动中 —— 用 ${name} status 确认`,
   );
   return strict ? 1 : 0;
 }
