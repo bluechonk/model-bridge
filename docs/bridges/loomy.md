@@ -21,10 +21,11 @@ mb start                                # 守护式启动（幂等，仓库级�
 mb status / model list / loomy credits / loomy checkin
 ```
 
-> **登录菜单**（交互终端里弹出，英文）：`1) SMS code` 需环境变量 `LOOMY_PHONE` /
-> `LOOMY_SMS_CODE`；`2) WeChat QR code` 扫码授权（未绑手机号时绑定环节仍需上述两个环境变量）。
-> 非交互场景（脚本 / 网关「重试登录」）不弹菜单，按环境变量自动选：两个都设了走短信，
-> 否则走扫码；`mb loomy login --wechat` 也可直接指定扫码。
+> **登录菜单**（交互终端里弹出，英文）：`1) SMS code` —— 手机号与验证码都**当场输入**；
+> `2) WeChat QR code` —— 扫码授权（未绑手机号时绑定环节需手机号 + 验证码）。
+> 环境变量 `LOOMY_PHONE` / `LOOMY_SMS_CODE` **可选**：给了就作为预填 / 自动化路径
+> （非交互场景不弹菜单，按环境变量自动选；都没设则走扫码）。
+> `mb loomy login --wechat` 可直接指定扫码。
 
 ## 状态 API 与 ZCode 插件
 

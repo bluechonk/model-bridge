@@ -26,6 +26,9 @@ import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "loomy-selftest-"));
 process.env["MODEL_BRIDGE_HOME"] = HOME;
+// 固定为非交互：否则在真终端里跑 `npm test`，login() 会弹菜单/等信息输入而挂住。
+// 交互路径由 loginSmsInteractive + 脚本化 LinePrompt 直接测（不碰真实 stdin）。
+Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
 
 const SESSION = "0123456789abcdef0123456789abcdef"; // 32 位小写 hex（实测形态）
 const USERID = "123456789012345678"; // 18 位数字串（实测形态）
@@ -40,6 +43,7 @@ interface FakeState {
   pointsQuery: Record<string, string>;
   firstLoginMode: string;
   firstLoginCalls: number;
+  smsSendCalls: number;
   tasksMode: string;
   completeMode: string;
   completeKeys: string[];
@@ -60,6 +64,7 @@ const st: FakeState = {
   pointsQuery: {},
   firstLoginMode: "ok",
   firstLoginCalls: 0,
+  smsSendCalls: 0,
   tasksMode: "ok",
   completeMode: "ok",
   completeKeys: [],
@@ -120,6 +125,7 @@ function handleAccount(path: string, raw: string, headers: Record<string, string
   }
 
   if (path === cred.SEND_MSG_PATH) {
+    st.smsSendCalls += 1;
     json(res, 200, { code: "000000", desc: "success", data: { msgid: "msg-1" } });
     return;
   }
@@ -682,6 +688,57 @@ describe("6a. 短信登录", () => {
         assert.match(String(err), /choose 2 for WeChat/, "错误里要指出另一条出路");
         return true;
       },
+    );
+  });
+
+  it("手机号 / 验证码校验与规范化（纯函数）", () => {
+    assert.equal(cred.normalizePhone(" 138 0013-8000 "), "13800138000");
+    assert.equal(cred.isValidPhone("13800138000"), true);
+    assert.equal(cred.isValidPhone("12800138000"), false, "第二位必须是 3-9");
+    assert.equal(cred.isValidPhone("1380013800"), false, "必须 11 位");
+    assert.equal(cred.isValidSmsCode("123456"), true);
+    assert.equal(cred.isValidSmsCode("12345"), false);
+    assert.equal(cred.isValidSmsCode("abcdef"), false);
+  });
+
+  it("askUntilValid：非法重问、合法收手、EOF 返回 null", async () => {
+    const seq = ["x", "13800138000"];
+    const scripted = { ask: async (): Promise<string | null> => seq.shift() ?? null };
+    assert.equal(await cred.askUntilValid(scripted, "Phone: ", cred.isValidPhone, "bad"), "13800138000");
+
+    const eof = { ask: async (): Promise<string | null> => null };
+    assert.equal(await cred.askUntilValid(eof, "Phone: ", cred.isValidPhone, "bad"), null);
+  });
+
+  it("交互式短信登录：手机号与验证码当场输入（环境变量不再必需）", async () => {
+    st.firstLoginCalls = 0;
+    st.smsSendCalls = 0;
+    const asked: string[] = [];
+    const answers = ["13800138000", "246810"];
+    let sendsWhenCodeAsked = -1;
+    const prompt = {
+      ask: async (question: string): Promise<string | null> => {
+        asked.push(question);
+        if (question.includes("SMS code")) sendsWhenCodeAsked = st.smsSendCalls;
+        return answers.shift() ?? null;
+      },
+    };
+    const c = await cred.loginSmsInteractive(fakeBase(), prompt, { onStatus: () => {} });
+    assert.equal(c.accessToken, SESSION);
+    assert.equal(c.phone, "13800138000", "用的是当场输入的手机号");
+    assert.ok(asked.some((q) => q.includes("Phone number")), "先问手机号");
+    assert.ok(asked.some((q) => q.includes("SMS code")), "发码后再问验证码");
+    // 顺序回归：验证码**必须**在发码之后才问（曾因参数求值顺序颠倒而先问码）
+    assert.equal(sendsWhenCodeAsked, 1, "问验证码时短信已发出");
+    assert.equal(st.firstLoginCalls, 1, "登录后触发每日额度初始化");
+  });
+
+  it("交互式：非法输入重问；验证码一直不给（EOF）→ 明确中止", async () => {
+    const seq: Array<string | null> = ["123", "13800138000", "12", null];
+    const prompt = { ask: async (): Promise<string | null> => (seq.length ? (seq.shift() ?? null) : null) };
+    await assert.rejects(
+      () => cred.loginSmsInteractive(fakeBase(), prompt, { onStatus: () => {} }),
+      /no SMS code provided/,
     );
   });
 

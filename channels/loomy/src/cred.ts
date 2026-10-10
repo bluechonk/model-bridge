@@ -712,71 +712,196 @@ export function parseLoginMethodChoice(raw: string): MethodChoice {
   return "invalid";
 }
 
-/** 交互式选择登录方式（菜单写 stderr —— `--json` 时 stdout 要保持干净的 JSON 流）。 */
-async function chooseLoginMethodInteractively(defaultMethod: LoginMethod): Promise<LoginMethod> {
-  const rl = createInterface({
+/** 规范化手机号输入（容忍空格与连字符）。 */
+export function normalizePhone(raw: string): string {
+  return raw.replace(/[\s-]/g, "");
+}
+
+/** 中国大陆手机号：11 位、`1[3-9]` 开头。 */
+export function isValidPhone(raw: string): boolean {
+  return /^1[3-9]\d{9}$/.test(raw);
+}
+
+/** 短信验证码：6 位数字。 */
+export function isValidSmsCode(raw: string): boolean {
+  return /^\d{6}$/.test(raw);
+}
+
+/**
+ * 一行输入的抽象（提示写 stderr —— `--json` 时 stdout 要保持干净的 JSON 流）。
+ * EOF 返回 `null`（stdin 关闭 = 用户放弃）。
+ */
+export interface LinePrompt {
+  ask(prompt: string): Promise<string | null>;
+}
+
+/** stdin 实现（readline）。 */
+class StdinPrompt implements LinePrompt {
+  private readonly rl = createInterface({
     input: process.stdin,
     output: process.stderr,
     terminal: Boolean(process.stdin.isTTY),
   });
+  private readonly lines = this.rl[Symbol.asyncIterator]();
+
+  async ask(prompt: string): Promise<string | null> {
+    process.stderr.write(prompt);
+    const { value, done } = await this.lines.next();
+    return done ? null : String(value);
+  }
+
+  close(): void {
+    this.rl.close();
+  }
+}
+
+/** 反复追问直到输入合法；EOF（`null`）直接放弃。 */
+export async function askUntilValid(
+  prompt: LinePrompt,
+  question: string,
+  validate: (value: string) => boolean,
+  invalidHint: string,
+): Promise<string | null> {
+  for (;;) {
+    const raw = await prompt.ask(question);
+    if (raw === null) return null;
+    const value = raw.trim();
+    if (value && validate(value)) return value;
+    process.stderr.write(`${invalidHint}\n`);
+  }
+}
+
+/** 交互式选择登录方式。 */
+async function chooseLoginMethodInteractively(
+  defaultMethod: LoginMethod,
+  prompt: LinePrompt,
+  envComplete: boolean,
+): Promise<LoginMethod> {
   process.stderr.write(
     [
       "Select login method:",
-      `  1) SMS code${process.env[PHONE_ENV] && process.env[SMS_CODE_ENV] ? "" : ` (needs env vars ${PHONE_ENV} / ${SMS_CODE_ENV})`}`,
+      `  1) SMS code (${envComplete ? `using ${PHONE_ENV} / ${SMS_CODE_ENV} from env` : "type your phone number, then the code"})`,
       "  2) WeChat QR code (scan with WeChat)",
       `Choice [1/2] (default: ${defaultMethod === "sms" ? 1 : 2}): `,
     ].join("\n") + "\n",
   );
-  for await (const line of rl) {
+  for (;;) {
+    const line = await prompt.ask("");
+    if (line === null) return defaultMethod; // EOF：用默认
     const choice = parseLoginMethodChoice(line);
     if (choice === "invalid") {
       process.stderr.write("Invalid choice: enter 1 (SMS) or 2 (WeChat).\n");
       continue;
     }
-    rl.close();
     return choice === "default" ? defaultMethod : choice;
   }
-  return defaultMethod; // EOF（stdin 关闭）：用默认
 }
 
 /**
- * 默认登录：交互式弹菜单选短信 / 微信；非交互按环境变量自动选。
+ * 短信登录的公共尾段：**先发码 → 再取验证码 → 校验 → 每日额度初始化**。
  *
- * - 选 1（短信）：`LOOMY_PHONE` + `LOOMY_SMS_CODE` 必须给齐（无窗口工程没有输入框）
- * - 选 2（微信）：扫码授权（未绑手机号时绑定环节仍需上述两个环境变量）
- *
- * ⚠ 别在非交互路径上直接报「缺环境变量」：`serve` 的重试登录也调到这里，
- *   报错会让重试完全无路可走（真机踩过）。
- *
- * 登录成功后立即调 `POST /points/first-login`（每日额度初始化），**失败仅 warn**。
+ * ⚠ 顺序不能颠倒：验证码必须是**发出后**才问（把「取码」做成回调而不是调用前
+ * 求值的参数 —— 参数求值会让提示出现在发送之前，真机踩过）。
  */
-export async function login(baseUrl?: string, options: LoginOptions = {}): Promise<Credentials> {
-  const { onStatus } = options;
-  const method =
-    options.method ??
-    (process.stdin.isTTY ? await chooseLoginMethodInteractively(defaultLoginMethod()) : defaultLoginMethod());
-
-  if (method === "wechat") {
-    onStatus?.("using WeChat QR login");
-    return loginWechat(baseUrl, options);
-  }
-
-  const phone = process.env[PHONE_ENV] ?? "";
-  const smsCode = process.env[SMS_CODE_ENV] ?? "";
-  if (!phone || !smsCode) {
-    throw new Error(
-      `SMS login requires env vars ${PHONE_ENV} (11-digit phone) and ${SMS_CODE_ENV} (6-digit code); ` +
-        "set both and re-run, or re-run and choose 2 for WeChat QR login",
-    );
-  }
+async function smsLoginWith(
+  baseUrl: string | undefined,
+  phone: string,
+  codeProvider: () => Promise<string | null>,
+  onStatus?: (message: string) => void,
+): Promise<Credentials> {
   onStatus?.(`sending SMS code to ${phone}...`);
   const msgid = await sendSmsCode(phone, baseUrl);
+  const smsCode = await codeProvider();
+  if (!smsCode) throw new Error("login aborted: no SMS code provided (stdin closed)");
   onStatus?.("verifying SMS code...");
   const c = await verifySmsCode(phone, smsCode, msgid, baseUrl);
   await upstream.triggerFirstLogin(c).catch((err: unknown) => {
     onStatus?.(`daily quota init failed (does not affect login): ${String(err)}`);
   });
   return c;
+}
+
+/**
+ * 交互式短信登录：手机号与验证码都**当场输入**（无窗口工程不再要求环境变量）。
+ *
+ * 顺序：问手机号 → 发码 → 问验证码 → 换凭证。环境变量给了的值作为**预填**
+ * （不再追问那一项）；两处都 EOF（用户放弃）→ 抛错中止。
+ */
+export async function loginSmsInteractive(
+  baseUrl: string | undefined,
+  prompt: LinePrompt,
+  options: LoginOptions = {},
+): Promise<Credentials> {
+  const { onStatus } = options;
+  const envPhone = normalizePhone(process.env[PHONE_ENV] ?? "");
+  const envCode = (process.env[SMS_CODE_ENV] ?? "").trim();
+
+  const phone =
+    (isValidPhone(envPhone) ? envPhone : null) ??
+    (await askUntilValid(
+      prompt,
+      "Phone number (11 digits): ",
+      isValidPhone,
+      "Invalid phone number: expected 11 digits starting with 1.",
+    ));
+  if (!phone) throw new Error("login aborted: no phone number provided (stdin closed)");
+
+  return smsLoginWith(
+    baseUrl,
+    phone,
+    async () =>
+      isValidSmsCode(envCode)
+        ? envCode
+        : askUntilValid(prompt, "SMS code (6 digits): ", isValidSmsCode, "Invalid code: expected 6 digits."),
+    onStatus,
+  );
+}
+
+/**
+ * 默认登录：交互式弹菜单选短信 / 微信；非交互按环境变量自动选。
+ *
+ * - 选 1（短信）：手机号与验证码**当场输入**（环境变量可选预填）
+ * - 选 2（微信）：扫码授权（未绑手机号时绑定环节仍需手机号 + 验证码）
+ *
+ * ⚠ 别在非交互路径上直接报「缺环境变量」：`serve` 的重试登录也调到这里，
+ *   报错会让重试完全无路可走（真机踩过）——非交互时按环境变量自动选，选不成就明确报错。
+ *
+ * 登录成功后立即调 `POST /points/first-login`（每日额度初始化），**失败仅 warn**。
+ */
+export async function login(baseUrl?: string, options: LoginOptions = {}): Promise<Credentials> {
+  const { onStatus } = options;
+  const envPhone = (process.env[PHONE_ENV] ?? "").trim();
+  const envCode = (process.env[SMS_CODE_ENV] ?? "").trim();
+  const envComplete = Boolean(envPhone && envCode);
+
+  // 非交互（脚本 / 网关重试）：不弹菜单、不问输入，按环境变量定方式
+  if (!process.stdin.isTTY) {
+    const method = options.method ?? defaultLoginMethod();
+    if (method === "wechat") {
+      onStatus?.("using WeChat QR login");
+      return loginWechat(baseUrl, options);
+    }
+    if (!isValidPhone(normalizePhone(envPhone)) || !isValidSmsCode(envCode)) {
+      throw new Error(
+        `SMS login needs a phone number and code: run in a terminal to type them, or set ${PHONE_ENV} (11-digit phone) and ${SMS_CODE_ENV} (6-digit code); ` +
+          "or choose 2 for WeChat QR login (--wechat)",
+      );
+    }
+    return smsLoginWith(baseUrl, normalizePhone(envPhone), async () => envCode, onStatus);
+  }
+
+  const prompt = new StdinPrompt();
+  try {
+    const method =
+      options.method ?? (await chooseLoginMethodInteractively(defaultLoginMethod(), prompt, envComplete));
+    if (method === "wechat") {
+      onStatus?.("using WeChat QR login");
+      return await loginWechat(baseUrl, options);
+    }
+    return await loginSmsInteractive(baseUrl, prompt, options);
+  } finally {
+    prompt.close();
+  }
 }
 
 /**
