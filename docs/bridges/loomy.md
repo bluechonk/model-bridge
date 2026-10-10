@@ -14,14 +14,17 @@ Loomy（讯飞）的本地 OpenAI Chat Completion 透明代理网关（**TypeScr
 ## 快速开始
 
 ```bash
-uv sync
-uv run loomy serve --json    # 前台无窗口运行
-uv run loomy login --json    # 无窗口登录：短信验证码走环境变量（LOOMY_PHONE + LOOMY_SMS_CODE）
-uv run loomy login --wechat  # 微信扫码登录（未绑手机号时同样需要上述两个环境变量完成绑定）
-uv tool install .            # 全局安装后用 loomy 直接调用
-loomy start                  # 守护式启动（幂等）
-loomy status / models / credits / stop
+node channels/loomy/dist/cli.js login   # 交互式登录：菜单选 1) SMS code / 2) WeChat QR code
+mb loomy login                          # 仓库级入口等价写法
+node channels/loomy/dist/cli.js serve   # 前台无窗口运行（单渠道）
+mb start                                # 守护式启动（幂等，仓库级网关）
+mb status / model list / loomy credits / loomy checkin
 ```
+
+> **登录菜单**（交互终端里弹出，英文）：`1) SMS code` 需环境变量 `LOOMY_PHONE` /
+> `LOOMY_SMS_CODE`；`2) WeChat QR code` 扫码授权（未绑手机号时绑定环节仍需上述两个环境变量）。
+> 非交互场景（脚本 / 网关「重试登录」）不弹菜单，按环境变量自动选：两个都设了走短信，
+> 否则走扫码；`mb loomy login --wechat` 也可直接指定扫码。
 
 ## 状态 API 与 ZCode 插件
 

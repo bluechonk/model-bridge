@@ -663,7 +663,8 @@ describe("6a. 短信登录", () => {
     process.env[cred.SMS_CODE_ENV] = "654321";
     st.firstLoginCalls = 0;
     try {
-      const c2 = await cred.login(fakeBase(), { onStatus: () => {} });
+      // 显式选短信：测试**绝不能**走交互菜单（终端里会等输入）
+      const c2 = await cred.login(fakeBase(), { onStatus: () => {}, method: "sms" });
       assert.equal(cred.isExpired(c2), false);
     } finally {
       delete process.env[cred.PHONE_ENV];
@@ -673,8 +674,47 @@ describe("6a. 短信登录", () => {
     assert.equal(st.firstLoginCalls, 1, "两条登录路径都调 first-login");
   });
 
-  it("缺环境变量时给出可读报错（无窗口工程没有输入框）", async () => {
-    await assert.rejects(() => cred.login(fakeBase()), new RegExp(cred.PHONE_ENV));
+  it("选了短信但环境变量不齐 → 报错带两条出路（不能含糊）", async () => {
+    await assert.rejects(
+      () => cred.login(fakeBase(), { method: "sms" }),
+      (err: unknown) => {
+        assert.match(String(err), new RegExp(cred.PHONE_ENV));
+        assert.match(String(err), /choose 2 for WeChat/, "错误里要指出另一条出路");
+        return true;
+      },
+    );
+  });
+
+  it("显式选微信 → 走扫码链路（菜单选项 2）", async () => {
+    st.bindMode = 1; // 已绑手机号：扫码后直接 skip，不再需要短信环境变量
+    st.wechatFrames = ["window.wx_errcode=405;window.wx_code='wx-code-2nd';"];
+    st.firstLoginCalls = 0;
+    const statuses: string[] = [];
+    const urls: string[] = [];
+    const c = await cred.login(fakeBase(), {
+      onUrl: (u) => urls.push(u),
+      onStatus: (m) => statuses.push(m),
+      pollIntervalSec: 0,
+      method: "wechat",
+    });
+    assert.equal(c.accessToken, SESSION);
+    assert.equal(c.source, "loomy-wechat", "走的是微信链路");
+    assert.ok(statuses.some((s) => s.includes("using WeChat QR login")), "明示选中的是微信");
+    assert.ok(urls[0]!.includes("/connect/qrconnect?"), "给出授权页 URL");
+    assert.equal(st.firstLoginCalls, 1, "微信路径同样触发每日额度初始化");
+  });
+
+  it("菜单语义（纯函数）：默认方式按环境变量选；输入解析认数字与英文别名", () => {
+    const withEnv = { [cred.PHONE_ENV]: PHONE, [cred.SMS_CODE_ENV]: "123456" };
+    assert.equal(cred.defaultLoginMethod(withEnv), "sms", "环境变量齐 → 默认短信（自动化）");
+    assert.equal(cred.defaultLoginMethod({}), "wechat", "环境变量不齐 → 默认微信（唯一可交互完成的路径）");
+
+    assert.equal(cred.parseLoginMethodChoice("1"), "sms");
+    assert.equal(cred.parseLoginMethodChoice(" 2 "), "wechat");
+    assert.equal(cred.parseLoginMethodChoice("SMS"), "sms");
+    assert.equal(cred.parseLoginMethodChoice("wechat"), "wechat");
+    assert.equal(cred.parseLoginMethodChoice(""), "default", "空输入 → 用默认");
+    assert.equal(cred.parseLoginMethodChoice("3"), "invalid");
   });
 });
 
