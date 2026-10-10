@@ -26,8 +26,10 @@ docs/                全部文档
 | 契约与规范 | `docs/*.md` | 改代码前必读；索引见 `docs/README.md` |
 | 渠道协议规格 | `docs/protocols/<cid>/PROTOCOL.md` | 实测协议（实现的依据） |
 | 渠道说明 | `docs/bridges/<cid>.md` | 用法 / 存储 / 测试 |
-| 进度与调研 | `docs/journals/<cid>/` | `findings.md` / `progress.md` / `task_plan.md` |
-| 归档 | `docs/archive/` | 已废弃产物 |
+| 调研记录 | `docs/journals/<专题>/` | 仍有持续价值的调研（findings） |
+
+完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
+需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
 
 **唯一允许留在 `docs/` 之外的 `.md`**（工具或生态按固定路径加载，搬走即失效）：
 

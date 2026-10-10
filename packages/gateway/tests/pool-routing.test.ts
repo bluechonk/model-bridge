@@ -2,7 +2,7 @@
  * 公共模型池：**策略单元**（归一化匹配、候选收集、账本）。
  *
  * 端到端的请求路径见 `pool.test.ts`；这里只测纯逻辑与落盘，全部离线。
- * 归一化表里的每一条都取自各渠道的**实测目录写法**（见 docs/journals/pool/findings.md）。
+ * 归一化表里的每一条都取自各渠道的**实测目录写法**（见 docs/POOL-ARCHITECTURE.md §2）。
  */
 
 import assert from "node:assert/strict";

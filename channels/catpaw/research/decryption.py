@@ -1,4 +1,4 @@
-"""Phase 6 —— 解密验证（移植自 phase6-decryption）。
+"""Phase 6 —— 解密验证。
 
 端到端把 Phase 2~5 的结论串起来：
 

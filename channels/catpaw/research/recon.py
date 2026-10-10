@@ -1,4 +1,4 @@
-"""Phase 1 —— 侦察（Reconnaissance）（移植自 phase1-reconnaissance）。
+"""Phase 1 —— 侦察（Reconnaissance）。
 
 目标：在不碰任何凭据内容的前提下，先把"东西在哪"钉死。
 产出：安装目录、app.asar、Agent SDK、CLI 包、Electron userData 目录、

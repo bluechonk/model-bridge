@@ -48,6 +48,9 @@
 **待办**：按【开发规范】4 改为环境变量（先例：gemini 的 `CMDC_PAK_GOOGLE_*` 覆盖）。
 因与并行改造（日志英文化）占用同一批文件，待其收工后统一处理。
 
+> 复核（2026-10-10）：上述常量**仍未加环境变量覆盖**，待办仍然有效；日志英文化改造已完成
+> （`2819f91`），现在可以直接动这批文件了。
+
 ## gemini client secret 的历史重写（已执行）
 
 `GEMINI_DEFAULT_CLIENT_SECRET` 的原值曾出现在 4 处（2 条路径 × 2 个时代）：
@@ -56,7 +59,7 @@
 channels/gemini-bridge/src/cred.ts   (b12b786 时代)
 channels/gemini/src/cred.ts          (6114a72 时代)
 docs/protocols/gemini/PROTOCOL.md    (6114a72 时代)
-docs/archive/gemini/protocol/PROTOCOL.md  (现行)
+docs/archive/gemini/protocol/PROTOCOL.md  (重写后现行；该文件已随归档清理删除)
 ```
 
 **操作**：`uvx git-filter-repo --replace-text` 对全部提交做字面替换，随后强推。
@@ -91,11 +94,11 @@ docs/archive/gemini/protocol/PROTOCOL.md  (现行)
 
 | 规范 | 状态 |
 | --- | --- |
-| 1 文本一律 LF 入库 |  索引内 CRLF = 0 |
-| 2 项目必须有 `.gitattributes` |  已补根 `.gitattributes`（`7cb929d`） |
-| 3 严禁提交 accesskey / secret key 等 |  见上表，待处置 |
-| 4 敏感内容改环境变量 / 密钥服务 |  待处置 |
-| 5 提交前自查 + 误提交要撤销 / 轮换 / 清理历史 |  清理与重写已完成；**轮换待办** |
-| 6 注释中文 |  |
-| 9 日志英文 |  并行改造中 |
-| 流程 4 开发进程落档 docs |  本文 |
+| 1 文本一律 LF 入库 | 索引内 CRLF = 0 |
+| 2 项目必须有 `.gitattributes` | 已补根 `.gitattributes`（`7cb929d`） |
+| 3 严禁提交 accesskey / secret key 等 | 见上表，待处置 |
+| 4 敏感内容改环境变量 / 密钥服务 | 待处置（2026-10-10 复核仍未动） |
+| 5 提交前自查 + 误提交要撤销 / 轮换 / 清理历史 | 清理与重写已完成；**轮换待办** |
+| 6 注释中文 | 符合 |
+| 9 日志英文 | 已完成（`2819f91`） |
+| 流程 4 开发进程落档 docs | 本文 |
