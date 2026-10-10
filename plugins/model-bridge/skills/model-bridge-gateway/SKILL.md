@@ -55,6 +55,7 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `mb stop` / `restart` | 停 / 重启守护实例（不碰第三方进程；成功停止会在日志留 `stop` 记录） |
 | `mb models` | 查**运行中的网关**暴露的模型 id（网关没起会失败；恒为那两个） |
 | `mb login --channel <cid>` | 无窗口登录：stdout 给出授权链接，用户浏览器授权后自动保存 |
+| `mb login list` | **列出可登录的渠道与登录状态**（已登录/未登录 + uid；只读，不需要网关） |
 | `mb logs`（`--lines N`，`-f` 跟随） | 网关日志尾部（排障第一步）；`-f` 持续输出新日志 |
 | `mb credits` | 账号剩余额度（只读，不经网关，不消耗额度） |
 | `mb paths`（`--all`） | 存储落点与文件（只读） |
@@ -82,9 +83,9 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 
 1. 先 `mb status --json` 判断现状。
 2. 网关不可达：`mb start` → 再 `status`；仍失败看 `mb logs`。
-3. 某渠道未登录：先用 `ask_user_query` 让用户选渠道（列未登录的，别替他决定）→
-   `mb login --channel <cid>`，把授权链接原样展示给用户并请其授权；不要并发重复跑。
-   国内版与国际版是**两个渠道**：账号在 `codebuddy.ai` 用 `workbuddy`，
+3. 某渠道未登录：`mb login list` 看谁没登录 → 用 `ask_user_query` 让用户选渠道（列未登录的，
+   别替他决定）→ `mb login --channel <cid>`，把授权链接原样展示给用户并请其授权；
+   不要并发重复跑。国内版与国际版是**两个渠道**：账号在 `codebuddy.ai` 用 `workbuddy`，
    在 `workbuddy.ai` 用 `workbuddyai` —— 选错渠道会一直等授权超时。
 4. 「有哪些模型可用」→ `mb model list`（池视图）；`mb channels`（渠道视角，不需要网关）。
 5. 「凭证/配置放哪」→ `mb paths --all`；「有几个账号 / 换账号」→ `mb accounts`。

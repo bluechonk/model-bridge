@@ -7,8 +7,8 @@ skills: model-bridge-gateway
 
 `mb login` 作用于**全部渠道**。按下面的顺序做，不要跳步：
 
-1. **只读摸底**：`mb status --json` —— 取每个渠道的 `cid` 与登录状态；
-   或 `mb channels` 看渠道清单（11 个）。
+1. **只读摸底**：`mb login list` —— 一次列出 11 个渠道与登录状态（已登录/未登录 + uid）；
+   需要更多细节（网关健康、凭证落点）再 `mb status --json`。
 2. **让用户选**：用 `ask_user_query` 把渠道列给用户勾选（**重点列出未登录的**，已登录的
    标注「已登录」；给一个「全部未登录渠道」选项）。**不要替用户决定**，也不要一次登多个。
 3. **执行**：`mb <cid> login`（等价 `mb login --channel <cid>`）。把输出里的授权链接

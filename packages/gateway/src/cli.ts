@@ -23,7 +23,8 @@ import * as report from "./report.js";
 /** 生成当前渠道的帮助文本。 */
 export function usage(): string {
   const single = channelCount() === 1;
-  const cid = single ? getChannel().config.cid : "model-bridge";
+  // 仓库级入口的 bin 有 `model-bridge` / `mb` 两个名字，帮助里统一用短名 `mb`。
+  const cid = single ? getChannel().config.cid : "mb";
   const display = single ? getChannel().config.display : "多渠道路由（模型池）";
   const verbLines = CHANNEL_VERBS.map(([v, d]) => `  ${("<cid> " + v).padEnd(24)} ${d}`);
   return `${cid} — ${display} OpenAI Chat Completion 网关（无窗口运行，供 ZCode 插件驱动）
@@ -54,7 +55,8 @@ ${verbLines.join("\n")}
   accounts [...]            账号池（不加 <cid> 时跨渠道）
   credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
   checkin [--status]        签到 / 领奖励（不加 <cid> = 全部渠道；--status 只查不领、--daily-only 跳过一次性）
-  login                     登录（可加 --channel <cid>，等价 <cid> login）
+  login [list]              登录（可加 --channel <cid>，等价 <cid> login）；
+                            login list = 列出可登录的渠道与登录状态（只读，不需要网关）
   help                      显示本帮助（等价 -h / --help）
   version                   显示版本（等价 -v / --version）
 
@@ -104,7 +106,7 @@ ${verbLines.join("\n")}
 
 /** 打印版本：`<入口名> <版本>（N 个渠道；node vX）`。 */
 function printVersion(cid?: string): void {
-  const label = cid ?? (channelCount() === 1 ? getChannel().config.cid : "model-bridge");
+  const label = cid ?? (channelCount() === 1 ? getChannel().config.cid : "mb");
   console.log(`${label} ${version(cid)}（${channelCount()} 个渠道；node ${process.version}）`);
 }
 
@@ -222,7 +224,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
 
-  // ① 以渠道为第一参数：`model-bridge <cid> <动词>`
+  // ① 以渠道为第一参数：`mb <cid> <动词>`
   if (hasChannel(command)) {
     return groups.runChannelCommand(command, positionals.slice(1), ctx);
   }
@@ -246,6 +248,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       });
 
     case "login":
+      // `login list`：列出可登录的渠道与登录状态（只读）
+      if (positionals[1] === "list") return groups.listLogins(boolOpt(o, "json"));
       return headless.runLogin({
         ...(cid !== undefined ? { cid } : {}),
         force: boolOpt(o, "force"),

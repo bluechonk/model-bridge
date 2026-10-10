@@ -238,7 +238,7 @@ describe("1. 常见命令与帮助", () => {
     for (const argv of [["--version"], ["-v"], ["version"]]) {
       const r = await run(argv);
       assert.equal(r.code, 0, argv.join(" "));
-      assert.match(r.out, /^model-bridge \S+（2 个渠道；node v/, r.out);
+      assert.match(r.out, /^mb \S+（2 个渠道；node v/, r.out);
     }
   });
 
@@ -480,6 +480,32 @@ describe("3. <cid> <动词> 路由", () => {
     assert.equal(r.code, 0);
     assert.ok(r.out.includes('"event":"start"'), r.out);
     assert.ok(r.out.includes('"event":"done"'), r.out);
+  });
+
+  it("login list：列出可登录的渠道与登录状态（只读，--json 给脚本）", async () => {
+    // 清干净两个渠道的存储，保证起点是「都没登录」
+    rmSync(join(root, "alpha"), { recursive: true, force: true });
+    rmSync(join(root, "beta"), { recursive: true, force: true });
+
+    const before = await run(["login", "list"]);
+    assert.equal(before.code, 0);
+    assert.ok(before.out.includes("2 个渠道可登录（已登录 0 个，未登录 2 个）"), before.out);
+    assert.ok(before.out.includes("alpha") && before.out.includes("beta"), before.out);
+
+    // 登一个（假渠道的 login 会落盘）→ 列表应能反映
+    await run(["alpha", "login", "--json"]);
+    const after = await run(["login", "list", "--json"]);
+    assert.equal(after.code, 0);
+    const rows = JSON.parse(after.out) as Array<{ cid: string; logged_in: boolean; uid: string }>;
+    const alpha = rows.find((r) => r.cid === "alpha")!;
+    const beta = rows.find((r) => r.cid === "beta")!;
+    assert.equal(alpha.logged_in, true, "登录过的渠道要标已登录");
+    assert.equal(alpha.uid, "alpha-user", "已登录带 uid（不回显手机号/昵称等个人信息）");
+    assert.equal(beta.logged_in, false);
+
+    const text = await run(["login", "list"]);
+    assert.ok(text.out.includes("已登录 1 个，未登录 1 个"), text.out);
+    assert.ok(text.out.includes("mb <cid> login"), "末尾给登录提示");
   });
 
   it("<cid> 未知动词 → 2，并列出可用动词", async () => {
