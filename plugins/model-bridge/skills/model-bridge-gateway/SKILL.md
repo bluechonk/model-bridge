@@ -55,7 +55,7 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `model-bridge stop` / `restart` | 停 / 重启守护实例（不碰第三方进程） |
 | `model-bridge models` | 查**运行中的网关**暴露的模型 id（网关没起会失败；恒为那两个） |
 | `model-bridge login --channel <cid>` | 无窗口登录：stdout 给出授权链接，用户浏览器授权后自动保存 |
-| `model-bridge logs`（`--lines N`） | 网关日志尾部（排障第一步） |
+| `model-bridge logs`（`--lines N`，`-f` 跟随） | 网关日志尾部（排障第一步）；`-f` 持续输出新日志 |
 | `model-bridge credits` | 账号剩余额度（只读，不经网关，不消耗额度） |
 | `model-bridge paths`（`--all`） | 存储落点与文件（只读） |
 | `model-bridge accounts`（`--channel`） | **账号池**：列出账号 / `use <key>` / `add` / `remove <key>` |

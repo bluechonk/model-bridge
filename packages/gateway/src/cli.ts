@@ -36,7 +36,7 @@ export function usage(): string {
   stop                      停止守护式网关（读 PID 文件杀进程树，不碰第三方进程）
   restart                   重启守护式网关（stop + start）
   status                    聚合状态：网关健康、逐渠道登录状态、守护 PID、凭证
-  logs                      查看网关日志尾部
+  logs [-f]                 查看网关日志尾部；-f 持续输出新日志（Ctrl+C 退出）
   serve                     前台无窗口运行（不守护；守护进程内部也用它）
 
 模型池（对外只有 2 个模型，请求落到哪家渠道由网关按账单已用量决定）:
@@ -63,6 +63,7 @@ ${verbLines.join("\n")}
   --ui-port <port>          控制台 API 端口（默认 ${defaultUiPort()}）
   --wait <seconds>          启动健康等待秒数（默认 8）
   --lines <n>               logs 显示行数（默认 40）
+  -f, --follow              logs：持续输出新增日志（等价 tail -f / docker logs -f）
   --realm <名>              login 的登录域（渠道自定义；单域渠道忽略）
   --wechat                  login：微信扫码登录（仅声明该方式的渠道，如 loomy）
   --channel <cid>           只操作该渠道（等价把 <cid> 写成第一个参数）
@@ -168,6 +169,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         "force-login": { type: "boolean" },
         verbose: { type: "boolean" },
         "no-console": { type: "boolean" },
+        follow: { type: "boolean", short: "f" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
       },
@@ -299,7 +301,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return daemon.credits({ json: boolOpt(o, "json"), ...(cid !== undefined ? { cid } : {}) });
 
     case "logs":
-      return daemon.logs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"), cid);
+      return boolOpt(o, "follow")
+        ? daemon.followLogs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"), cid)
+        : daemon.logs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"), cid);
 
     case "paths":
       return report.runPaths({
