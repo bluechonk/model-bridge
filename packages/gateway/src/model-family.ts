@@ -23,18 +23,17 @@
  * | codearts / lobsterai | `deepseek-v4-flash` / `glm-5.3-flash` | id 里 |
  * | zcode | `GLM-5.3-Flash` | id 里 |
  * | raccoon | `sn-glm-5-3-flash` / `sn-deepseek-v4-1-flash` | id 里（带渠道前缀） |
- * | trae | `DeepSeek-V4-Flash-Official` | id 里 |
+ * | traecn | `DeepSeek-V4-Flash-Official` | id 里 |
  * | qoder | `dfmodel` / `gfmodel` / `qfmodel` | **只在展示名里**（DeepSeek-Flash / GLM-5.3-Flash） |
  * | workbuddyai | `deepseek-v4.1-flash` | id 里 |
- * | cline | `deepseek/deepseek-v4.1-flash` / `z-ai/glm-5.3-flash` | id 里（斜杠前缀） |
- *
+ *  *
  * ⇒ 只匹配 id 会漏掉 Qoder 那类「目录 key 当 id」的渠道，故两者都要看。
  *
  * ## 策略边界（改前必读）
  *
  * 两道闸门意味着**别家的 flash 型号也会被挡在池外** ——
  * `qwen3.8-flash`、`mimo-v2.6-flash`、`MiniMax-M3.1-Flash-Preview` 等都不再暴露；
- * 没有 deepseek / glm 产品的渠道（cline / qoder）池子会**变空**。
+ * 没有 deepseek / glm 产品的渠道（如 qoder）池子会**变空**。
  * 这是刻意的过滤，不是渠道坏了：底层目录 / `catalog.details()` 仍保留完整数据，
  * 只是 `/v1/models` 不放它们出来。
  *

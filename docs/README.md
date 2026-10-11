@@ -13,7 +13,7 @@
 > 包根指针 README、目录级 AGENTS.md 三类例外）。由 `tools/verify-docs.mjs` 在 `npm test` 里强制检查。
 
 > 各 `channels/<cid>/` 目录里只留一份**指针 README**（指向本目录），
-> 免得同一份说明散在 11 个子文件夹里各改一遍。
+> 免得同一份说明散在 10 个子文件夹里各改一遍。
 > 唯一例外：`channels/catpaw/AGENTS.md`（那是给工具读的目录级指令，必须留在原处）。
 
 > 已完成任务的过程记录（逐阶段 RUN-LOG、已结项的 task_plan/progress、已删除渠道的存档）
@@ -37,14 +37,13 @@
 | cid | 产品 | 规格 |
 | --- | --- | --- |
 | `catpaw` | CatPaw（美团妙手） | [PROTOCOL.md](./protocols/catpaw/PROTOCOL.md) —— 结论速览 + 方法论（见下） |
-| `cline` | Cline | [PROTOCOL.md](./protocols/cline/PROTOCOL.md) |
 | `codearts` | CodeArts（华为云） | [PROTOCOL.md](./protocols/codearts/PROTOCOL.md) |
 | `lobsterai` | LobsterAI（有道） | [PROTOCOL.md](./protocols/lobsterai/PROTOCOL.md) |
 | `loomy` | Loomy（讯飞） | [PROTOCOL.md](./protocols/loomy/PROTOCOL.md) |
 | `qoder` | Qoder（国际版 `qoder.com`） | [PROTOCOL.md](./protocols/qoder/PROTOCOL.md) |
 | `qodercn` | Qoder 国内版（`qoder.com.cn`） | 与 `qoder` **同一套协议**（仅域名/身份/模型目录不同），见 [PROTOCOL.md](./protocols/qoder/PROTOCOL.md) |
 | `raccoon` | Raccoon（商汤） | [PROTOCOL.md](./protocols/raccoon/PROTOCOL.md) |
-| `trae` | TRAE（字节） | [PROTOCOL.md](./protocols/trae/PROTOCOL.md) |
+| `traecn` | TRAE（字节，中国版） | [PROTOCOL.md](./protocols/traecn/PROTOCOL.md) |
 | `workbuddy` | WorkBuddy（国内版 CodeBuddy） | 与 `workbuddyai` **同一套插件端点协议**（无独立 PROTOCOL.md）；差异与用法见 [bridges/workbuddy.md](./bridges/workbuddy.md) |
 | `workbuddyai` | WorkBuddyAI（国际版） | [findings.md](./journals/workbuddyai/findings.md) —— 该渠道的协议事实记在调研笔记里（无独立 PROTOCOL.md） |
 
@@ -62,8 +61,8 @@
 
 | 渠道 | 渠道 | 渠道 | 渠道 | 渠道 |
 | --- | --- | --- | --- | --- |
-| [catpaw](./bridges/catpaw.md) | [cline](./bridges/cline.md) | [codearts](./bridges/codearts.md) | [lobsterai](./bridges/lobsterai.md) | [loomy](./bridges/loomy.md) |
-| [qoder](./bridges/qoder.md) | [raccoon](./bridges/raccoon.md) | [trae](./bridges/trae.md) | [workbuddy](./bridges/workbuddy.md) | [workbuddyai](./bridges/workbuddyai.md) |
+| [catpaw](./bridges/catpaw.md) | [codearts](./bridges/codearts.md) | [lobsterai](./bridges/lobsterai.md) | [loomy](./bridges/loomy.md) | [qodercn](./bridges/qodercn.md) |
+| [raccoon](./bridges/raccoon.md) | [traecn](./bridges/traecn.md) | [workbuddy](./bridges/workbuddy.md) | [workbuddyai](./bridges/workbuddyai.md) |
 
 ## 4. 调研记录 `docs/journals/<专题>/`
 

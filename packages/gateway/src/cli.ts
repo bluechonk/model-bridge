@@ -30,7 +30,7 @@ export function usage(): string {
   return `${cid} — ${display} OpenAI Chat Completion 网关（无窗口运行，供 ZCode 插件驱动）
 
 用法: ${cid} <命令> [选项]
-      ${cid} <cid2> <动词> [参数]     # 对某个渠道操作，如 ${single ? cid : "trae"} login
+      ${cid} <cid2> <动词> [参数]     # 对某个渠道操作，如 ${single ? cid : "traecn"} login
 
 网关（仓库级，服务全部渠道）:
   start                     守护式启动网关（幂等：已在跑直接返回）
@@ -94,9 +94,9 @@ ${verbLines.join("\n")}
   ${cid} model usage --refresh          # 立刻重查各渠道账单额度并写进账本
   ${cid} model show catpaw              # catpaw 贡献了池内哪些模型
   ${cid} model refresh                  # 强制重拉全部渠道的模型**目录**（记到本地）
-  ${cid} trae models --refresh          # 只强制重拉 trae 的目录
-  ${cid} trae login                     # 登录 trae（浏览器授权）
-  ${cid} trae billing                   # 看 trae 的剩余额度 / 账单
+  ${cid} traecn models --refresh        # 只强制重拉 traecn 的目录
+  ${cid} traecn login                   # 登录 traecn（浏览器授权）
+  ${cid} traecn billing                 # 看 traecn 的剩余额度 / 账单
   ${cid} checkin --status               # 今天签没签（只读；上方是上游、退化到本地台账）
   ${cid} checkin --fail-if-unclaimed    # 挂定时任务用：今天明确没签就非零退出
   ${cid} checkin                        # 给所有能领的渠道签到

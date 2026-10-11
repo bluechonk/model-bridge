@@ -6,7 +6,7 @@
  * esbuild 从唯一聚合点 `src/cli.ts` 沿静态 import 收编整条依赖图，产物里不再有任何
  * 外部包引用 —— tarball 自包含，`npm i -g` 直接可用。
  *
- * models.json 快照注入：cline / loomy / trae / workbuddy(ai) 的 catalog 用
+ * models.json 快照注入：loomy / traecn / workbuddy(ai) 的 catalog 用
  * `join(import.meta.url, "..", "..", "models.json")` 定位随包快照（dist/ 上两级 = 包根）。
  * bundle 后该相对路径指向「bundle 所在目录的上两级」，解析不到任何真实文件。
  * 机制必须保真：构建期把各渠道包根的 models.json 原样内联为模块导出，loader 按
@@ -23,7 +23,7 @@ const cliRoot = resolve(here, "..");                  // packages/cli
 const repoRoot = resolve(cliRoot, "../..");            // 仓库根
 
 // 携带随包 models.json 快照的渠道（其余渠道无此机制，无需处理）
-const SNAPSHOT_CHANNELS = ["cline", "loomy", "trae", "workbuddy", "workbuddyai"];
+const SNAPSHOT_CHANNELS = ["loomy", "traecn", "workbuddy", "workbuddyai"];
 
 /** 收集各渠道包根的 models.json：绝对路径 → 内联模块源码。 */
 function snapshotModules() {
@@ -52,7 +52,7 @@ await build({
         const mods = snapshotModules();
         b.onResolve({ filter: /\.json$/ }, (args) => {
           if (args.importer.includes("node_modules")) return null;
-          // importer 形如 …/channels/cline/src/catalog.ts → 包根 = 上两级
+          // importer 形如 …/channels/traecn/src/catalog.ts → 包根 = 上两级
           const pkgDir = resolve(dirname(args.importer), "..", "..");
           const target = resolve(args.path);
           if (!mods.has(target)) return null; // 非快照 json（如 package.json 探测）不拦截

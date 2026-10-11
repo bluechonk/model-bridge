@@ -1,7 +1,7 @@
 /**
  * TRAE 额度与签到：签到三端点（status / claim / usage），全部走 `api.trae.cn`。
  *
- * ## 实测要点（docs/protocols/trae/PROTOCOL.md §6）
+ * ## 实测要点（docs/protocols/traecn/PROTOCOL.md §6）
  *
  * - **claim 的 body 是 `{}`**（不是 `{"req_source":2}`），且成功响应只有
  *   `{"code":0,"message":"success"}` —— **不含积分数**，必须补查一次 `status`

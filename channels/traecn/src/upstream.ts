@@ -1,7 +1,7 @@
 /**
  * TRAE（字节跳动）上游：SOLO 形状的端点、请求头、请求体改写、Error 分类与流翻译。
  *
- * ## 本模块承载的渠道知识（每一条都有实测依据，见 docs/protocols/trae/PROTOCOL.md）
+ * ## 本模块承载的渠道知识（每一条都有实测依据，见 docs/protocols/traecn/PROTOCOL.md）
  *
  * 1. **请求头同一 token 设三处**：`Authorization: Cloud-IDE-JWT <token>` /
  *    `X-Cloudide-Token` / `X-Ide-Token` —— 缺任一个都可能被拒。
@@ -567,7 +567,7 @@ export function newTranslator(): StreamTranslator {
   let buffer = "";
   let doneSent = false;
 
-  const id = `chatcmpl-trae-${randomBytes(4).toString("hex")}`;
+  const id = `chatcmpl-traecn-${randomBytes(4).toString("hex")}`;
   const created = Math.floor(Date.now() / 1000);
   let roleSent = false;
   let finishSent = false;
@@ -584,7 +584,7 @@ export function newTranslator(): StreamTranslator {
       object: "chat.completion.chunk",
       created,
       // 上游帧不带模型名，占位为渠道名（客户端一般回填请求里的 model）
-      model: "trae",
+      model: "traecn",
       choices: [{ index: 0, delta, finish_reason: finishReason }],
     };
     if (usagePayload) payload["usage"] = usagePayload;

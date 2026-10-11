@@ -32,10 +32,10 @@ const ALLOWED: ReadonlyArray<readonly [string, string]> = [
   ["deepseek-v4-flash-0731", ""],
   // raccoon：带渠道前缀
   ["sn-deepseek-v4-1-flash", ""],
-  // trae：大小写混排 + 后缀
+  // traecn：大小写混排 + 后缀
   ["DeepSeek-V4-Flash", ""],
   ["DeepSeek-V4-Flash-Official", ""],
-  // cline：斜杠前缀 + `~` 别名 + `:batch` 后缀
+  // 斜杠前缀 + `~` 别名 + `:batch` 后缀（历史 id 形态）
   ["deepseek/deepseek-v4.1-flash", ""],
   ["deepseek/deepseek-v4.1-flash:batch", ""],
   ["~deepseek/deepseek-flash-latest", ""],
@@ -63,7 +63,7 @@ const BLOCKED: ReadonlyArray<readonly [string, string]> = [
   ["qwen3.8-flash", ""],
   ["qwen3.8-flash-max", ""],
   ["MiniMax-M3.1-Flash-Preview", ""],
-  ["cline-free/mimo-v2.6-flash", ""],
+  ["vendor-free/mimo-v2.6-flash", ""],
   ["inclusionai/ling-3.0-flash", ""],
   ["xiaomi/mimo-v2.6-flash", ""],
   ["stepfun/step-3.5-flash", ""],

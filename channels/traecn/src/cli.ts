@@ -13,6 +13,6 @@ main()
     process.exitCode = code;
   })
   .catch((err: unknown) => {
-    console.error(`[trae] uncaught exception: ${String(err)}`);
+    console.error(`[traecn] uncaught exception: ${String(err)}`);
     process.exitCode = 1;
   });

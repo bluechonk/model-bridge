@@ -34,8 +34,7 @@
 | --- | --- |
 | `channels/loomy/src/cred.ts` | `ACCESS_KEY_ID` / `ACCESS_KEY_SECRET` / `APP_ID` / `WECHAT_APP_ID` |
 | `channels/raccoon/src/cred.ts` | `PHONE_CIPHER_SECRET` |
-| `channels/trae/src/cred.ts` | `CLIENT_ID` / `APP_ID` |
-| `channels/cline/src/cred.ts` | `WORKOS_CLIENT_ID` |
+| `channels/traecn/src/cred.ts` | `CLIENT_ID` / `APP_ID` |
 | `channels/codearts/src/cred.ts` | `CLIENT_ID` |
 | `channels/catpaw/src/upstream.ts` | `M_APPKEY` |
 | `channels/qoder[cn]/src/upstream.ts` | `CUSTOM_ALPHABET`（自定义 Base64 混淆表，**非密钥**） |

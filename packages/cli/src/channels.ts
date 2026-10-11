@@ -8,13 +8,12 @@
  */
 
 import "catpaw-bridge";
-import "cline-bridge";
 import "codearts-bridge";
 import "lobsterai-bridge";
 import "loomy-bridge";
 import "qoder-bridge";
 import "qodercn-bridge";
 import "raccoon-bridge";
-import "trae-bridge";
+import "traecn-bridge";
 import "workbuddy-bridge";
 import "workbuddyai-bridge";

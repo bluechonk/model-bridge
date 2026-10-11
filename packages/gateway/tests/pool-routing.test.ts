@@ -53,7 +53,7 @@ describe("1. 归一化：各渠道实测写法都能收敛", () => {
     ["deepseek-v4-flash", "deepseek-v4-flash"],
     ["deepseek-v4.1-flash", "deepseek-v4.1-flash"],
     ["glm-5.3-flash", "glm-5.3-flash"],
-    // 大小写混排（trae / loomy）
+    // 大小写混排（traecn / loomy）
     ["DeepSeek-V4-Flash", "deepseek-v4-flash"],
     ["DeepSeek-V4-Flash-Official", "deepseek-v4-flash"],
     ["GLM-5.3-Flash", "glm-5.3-flash"],
@@ -62,14 +62,14 @@ describe("1. 归一化：各渠道实测写法都能收敛", () => {
     ["sn-glm-5-3-flash", "glm-5.3-flash"],
     // 日期后缀（loomy / codearts）
     ["deepseek-v4-flash-0731", "deepseek-v4-flash"],
-    // 厂商路径段（cline）
+    // 厂商路径段（历史 id 形态）
     ["deepseek/deepseek-v4.1-flash", "deepseek-v4.1-flash"],
     ["z-ai/glm-5.3-flash", "glm-5.3-flash"],
     // 不进池的（归一化后仍不等于两个目标）
     ["glm-5.3-flashx", "glm-5.3-flashx"],
     ["deepseek-v4-flash-vision-exp", "deepseek-v4-flash-vision-exp"],
     ["deepseek-flash", "deepseek-flash"],
-    ["cline-free/mimo-v2.6-flash", "mimo-v2.6-flash"],
+    ["vendor-free/mimo-v2.6-flash", "mimo-v2.6-flash"],
   ];
 
   for (const [input, expected] of cases) {

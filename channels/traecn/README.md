@@ -1,4 +1,4 @@
-# trae-bridge
+# traecn-bridge
 
 TRAE 的本地网关 —— 本工作区的一个**渠道（= 模型池）**。
 
@@ -6,7 +6,7 @@ TRAE 的本地网关 —— 本工作区的一个**渠道（= 模型池）**。
 
 | 内容 | 位置 |
 | --- | --- |
-| 渠道说明（用法 / 存储 / 测试） | [`docs/bridges/trae.md`](../../docs/bridges/trae.md) |
+| 渠道说明（用法 / 存储 / 测试） | [`docs/bridges/traecn.md`](../../docs/bridges/traecn.md) |
 | 协议规格（实现依据） | [`docs/protocols/trae/PROTOCOL.md`](../../docs/protocols/trae/PROTOCOL.md) |
 
 > 文档总索引：[`docs/README.md`](../../docs/README.md) ·

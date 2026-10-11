@@ -164,7 +164,7 @@ export interface CatalogModule {
    * **强制**从上游重拉目录并落盘（CLI 的 `--refresh` 用）。
    *
    * 可选：只有具备「远端目录层」的渠道才实现（catpaw / codearts / lobsterai /
-   * trae / raccoon / loomy / cline）。目录本身就是静态内置表的渠道
+   * traecn / raccoon / loomy）。目录本身就是静态内置表的渠道
    * （workbuddyai / qoder）**不实现** —— 共享层据此回报
    * 「该渠道的模型表是内置的，没有可刷新的远端」，而不是假装刷了一遍。
    *

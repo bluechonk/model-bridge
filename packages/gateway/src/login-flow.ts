@@ -3,9 +3,9 @@
  *
  * | 类型 | 骨架 | 渠道 |
  * |---|---|---|
- * | A. 本地回调服务器 | `startCallbackServer` | trae、codearts、lobsterai |
+ * | A. 本地回调服务器 | `startCallbackServer` | traecn、codearts、lobsterai |
  * | B. flow 轮询 | `pollFlow` | workbuddyai |
- * | C. 设备码 / 扫码轮询 | `pollDeviceCode` | cline、loomy、raccoon |
+ * | C. 设备码 / 扫码轮询 | `pollDeviceCode` | loomy、raccoon |
  *
  * ## 边界
  *

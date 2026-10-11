@@ -14,19 +14,19 @@ import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
 
 export const config: BridgeConfig = {
-  cid: "trae",
+  cid: "traecn",
   display: "TRAE",
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8805",
   uiPort: 8806,
   legacyDirs: [
-    ".trae-bridge",
+    ".traecn-bridge",
     ".zcode-connect-trae",
     ".trae2api",
     ".trae-gateway",
   ],
   legacyEnvVars: ["TRAE_HOME"],
-  debugDumpEnv: "TRAE_DEBUG_DUMP",
+  debugDumpEnv: "TRAECN_DEBUG_DUMP",
 };
 
 export const channel: Channel = { config, cred, upstream, catalog, billing };

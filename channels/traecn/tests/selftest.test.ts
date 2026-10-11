@@ -1,5 +1,5 @@
 /**
- * trae-bridge 自检（离线，不出网）。
+ * traecn-bridge 自检（离线，不出网）。
  *
  * 覆盖：
  *  1. 凭据与设备指纹（32 hex、签到设备确定性派生、昵称乱码修复）
@@ -23,7 +23,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 // 必须在 import 被测模块之前设置（paths 每次调用都重新解析存储根）
-const HOME = mkdtempSync(join(tmpdir(), "trae-selftest-"));
+const HOME = mkdtempSync(join(tmpdir(), "traecn-selftest-"));
 process.env["MODEL_BRIDGE_HOME"] = HOME;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
@@ -652,7 +652,7 @@ describe("6. 模型目录", () => {
   });
 
   it("models.json 的 alias 覆盖暴露 id，但上游用 slug", () => {
-    const dir = mkdtempSync(join(tmpdir(), "trae-models-"));
+    const dir = mkdtempSync(join(tmpdir(), "traecn-models-"));
     writeFileSync(
       join(dir, "models.json"),
       JSON.stringify({
@@ -931,7 +931,7 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
   });
 
   it("池内没有可用模型：流式对话直接 503，不触达上游", async () => {
-    // trae 目录只有 DeepSeek-V4-Flash 系 + 非 flash 的 glm，池收窄后一个都不提供
+    // traecn 目录只有 DeepSeek-V4-Flash 系 + 非 flash 的 glm，池收窄后一个都不提供
     fake.requests.length = 0;
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",

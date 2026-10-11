@@ -13,10 +13,9 @@
  * |---|---|---|
  * | catpaw | `deepseek-v4-flash` | `deepseek-v4-flash` |
  * | raccoon | `sn-deepseek-v4-1-flash` | `deepseek-v4.1-flash` |
- * | trae | `DeepSeek-V4-Flash-Official` | `deepseek-v4-flash` |
+ * | traecn | `DeepSeek-V4-Flash-Official` | `deepseek-v4-flash` |
  * | loomy | `deepseek-v4-flash-0731` | `deepseek-v4-flash` |
- * | cline | `deepseek/deepseek-v4.1-flash` | `deepseek-v4.1-flash` |
- *
+ *  *
  * 归一化之后做**精确相等**比较 —— 这是 4.0 与 4.1 不互相串号的唯一保证
  * （用包含匹配就会让 `deepseek-v4-flash` 也命中 `deepseek-v4.1-flash`）。
  *
@@ -92,7 +91,7 @@ const WRAPPER_PREFIXES = ["sn-", "z-ai-", "bytedance-"];
  * 归一化的共用实现。
  *
  * ⚠ `stripPath` 是**目录 id 与客户端请求名的分水岭**：
- * - 渠道目录里带厂商路径段是合法的（cline 的 `deepseek/deepseek-v4.1-flash`），
+ * - 渠道目录里带厂商路径段是合法的（如 `deepseek/deepseek-v4.1-flash`），
  *   所以要取最后一段；
  * - 客户端请求名**不许**带渠道前缀（那是已取消的旧形态），带了一律判为未知 ——
  *   否则 `alpha/deepseek-v4-flash` 会被剥成 `deepseek-v4-flash` 而蒙混命中。

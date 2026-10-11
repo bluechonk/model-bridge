@@ -50,10 +50,9 @@
 │   ├── state/                   ← 跨重启保持
 │   └── debug/                   ← 抓包落盘（opt-in）
 ├── catpaw/
-├── trae/
+├── traecn/
 ├── codearts/
 ├── lobsterai/
-├── cline/
 ├── loomy/
 ├── raccoon/
 └── qoder/
@@ -83,13 +82,11 @@
 | workbuddy | `.workbuddy-bridge` | `<root>/workbuddy` | `WORKBUDDY_HOME` | `WBAI_DEBUG_DUMP`  | `.zcode-workbuddy-bridge`, `.zcode-connect-workbuddyai`, `.workbuddyai2api`, `.workbuddyai-gateway` | `ZCB_HOME`, `WBAI2API_HOME` |
 | catpaw | `.catpaw-bridge` | `<root>/catpaw` | `CATPAW_HOME` | `CATPAW_DEBUG_DUMP` | `.zcode-catpaw-bridge`, `.zcode-connect-catpaw` | `ZCC_HOME` |
 | zcode | `.zcode-bridge` | `<root>/zcode` | `ZCODE_HOME` | `ZCODE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-zcode`, `.zcode2api`, `.zcode-gateway` | — |
-| trae | `.trae-bridge` | `<root>/trae` | `TRAE_HOME` | `TRAE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-trae`, `.trae2api`, `.trae-gateway` | — |
+| traecn | `.trae-bridge` | `<root>/traecn` | `TRAE_HOME` | `TRAECN_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-trae`, `.trae2api`, `.trae-gateway` | — |
 | codearts | `.codearts-bridge` | `<root>/codearts` | `CODEARTS_HOME` | `CODEARTS_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-codearts`, `.codearts2api`, `.codearts-gateway` | — |
 | lobsterai | `.lobsterai-bridge` | `<root>/lobsterai` | `LOBSTERAI_HOME` | `LOBSTERAI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-lobsterai`, `.lobsterai2api`, `.lobsterai-gateway` | — |
-| cline | `.cline-bridge` | `<root>/cline` | `CLINE_HOME` | `CLINE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-cline`, `.cline2api`, `.cline-gateway` | — |
 | loomy | `.loomy-bridge` | `<root>/loomy` | `LOOMY_HOME` | `LOOMY_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-loomy`, `.loomy2api`, `.loomy-gateway` | — |
 | raccoon | `.raccoon-bridge` | `<root>/raccoon` | `RACCOON_HOME` | `RACCOON_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-raccoon`, `.raccoon2api`, `.raccoon-gateway` | — |
-| minimax | `.minimax-bridge` | `<root>/minimax` | `MINIMAX_HOME` | `MINIMAX_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-minimax`, `.minimax2api`, `.minimax-gateway` | — |
 | gemini | `.gemini-bridge` | `<root>/gemini` | `GEMINI_HOME` | `GEMINI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-gemini`, `.gemini2api`, `.gemini-gateway` | — |
 | qoder | `.qoder-bridge` | `<root>/qoder` | `QODER_HOME` | `QODER_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-qoder`, `.qoder2api`, `.qoder-gateway` | — |
 
@@ -149,11 +146,11 @@
 
 除 workbuddy / catpaw 外的 10 份 `channel.ts`，迁移链首项都是 workbuddy 的历史目录名
 （模板复制扩散的产物）。而迁移逻辑是「新目录不存在时，按 `legacyDirs` 顺序把第一个存在的
-旧目录整体搬过来」——若该旧目录还在而 trae 抢先启动，它会**把 workbuddy 的旧目录搬成自己的**，
+旧目录整体搬过来」——若该旧目录还在而 traecn 抢先启动，它会**把 workbuddy 的旧目录搬成自己的**，
 凭证被掠走且不可逆。
 
 **处置**：非 workbuddy 渠道一律删除该条。收拢到单根后，这一条同样必须清掉，否则
-「搬进 `<root>/trae/`」的对象会是 workbuddy 的数据。
+「搬进 `<root>/traecn/`」的对象会是 workbuddy 的数据。
 
 ### 3.2【高】迁移不支持「新旧并存」
 
@@ -170,7 +167,7 @@ if (existsSync(target)) return target;   // 新目录在 → 直接返回，lega
 
 ### 3.3【中】workbuddy 的调试变量名是 `WBAI_DEBUG_DUMP`
 
-其余 11 个都是 `<CID>_DEBUG_DUMP`，只有它用了更早的 `WBAI_` 前缀，与自己的
+其余 10 个都是 `<CID>_DEBUG_DUMP`，只有它用了更早的 `WBAI_` 前缀，与自己的
 `WORKBUDDY_HOME` 都不一致。`WBAI_` 只应出现在 legacy 列表里。
 
 **处置**：改为 `WORKBUDDY_DEBUG_DUMP`，旧名进 `legacyEnvVars`。

@@ -1,5 +1,5 @@
 {
-  "name": "trae-bridge",
+  "name": "traecn-bridge",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "node": ">=22.6"
   },
   "bin": {
-    "trae": "./dist/cli.js"
+    "traecn": "./dist/cli.js"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -30,7 +30,7 @@
     "proxy",
     "cli",
     "typescript",
-    "trae"
+    "traecn"
   ],
   "license": "MIT",
   "devDependencies": {

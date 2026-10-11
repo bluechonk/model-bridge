@@ -33,7 +33,7 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 │       └── index.ts              ← 对外的统一出口
 ├── plugins/model-bridge/         ← **唯一的 ZCode 插件**（命令/技能/hook）
 ├── marketplace.json              ← ZCode 市场清单（单条目 → ./plugins/model-bridge）
-├── channels/                     ← 11 个渠道（每个 = 一个模型池 + 账号池）
+├── channels/                     ← 10 个渠道（每个 = 一个模型池 + 账号池）
 │   └── <cid>/                    ← 结构见下
 ├── packages/cli/                 ← **仓库级入口**（bin `mb` / `model-bridge`）
 │   └── src/
@@ -107,7 +107,7 @@ channels/<cid>/
 约束：
 
 - 渠道源码保持全静态 ESM import（无运行时动态加载渠道包），bundle 才能收干净；
-- cline / loomy / trae / workbuddy(ai) 的 `models.json` 随包快照由 loader 在构建期
+- loomy / traecn / workbuddy(ai) 的 `models.json` 随包快照由 loader 在构建期
   内联（bundle 后 `import.meta.url` 相对路径失效，机制必须保真）；
 - daemon 重启守护进程用 `process.argv[1]`（当前入口），bundle 形态下天然正确；
   回退分支（`node -e` 等异常启动方式）在 bundle 下同样失效，属已知限制
@@ -227,7 +227,7 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 
 > 类型定义在 `packages/gateway/src/channel.ts`（`CredModule` / `UpstreamModule` /
 > `CatalogModule` / `BillingModule`）。凭据/配置的具体形态各渠道不同，故这些位置用
-> `any` —— 共享层只在**结构**上依赖它们，不做跨渠道的类型统一（那会在 11 个异构
+> `any` —— 共享层只在**结构**上依赖它们，不做跨渠道的类型统一（那会在 10 个异构
 > 渠道间制造大量摩擦）。
 
 ### 5.1 `cred.ts`
@@ -443,8 +443,8 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 | 类型 | 用法 | 渠道 |
 |---|---|---|
 | **A. 创建 flow + 轮询** | `POST .../auth/state` 或 `.../oauth/cli/init` → 取 `authorize_url`/`authUrl` → 轮询拿 token | workbuddyai、workbuddy |
-| **B. 本地回调服务器** | 起 `http://127.0.0.1:<port>` 回调服务 → 拼授权 URL（含 PKCE/DPoP 等）→ 等浏览器重定向回填 | trae、codearts、lobsterai |
-| **C. 设备码 / 扫码轮询** | 申请 device code 或二维码 URL → 轮询 token | cline、loomy、raccoon |
+| **B. 本地回调服务器** | 起 `http://127.0.0.1:<port>` 回调服务 → 拼授权 URL（含 PKCE/DPoP 等）→ 等浏览器重定向回填 | traecn、codearts、lobsterai |
+| **C. 设备码 / 扫码轮询** | 申请 device code 或二维码 URL → 轮询 token | loomy、raccoon |
 
 共同要求：
 

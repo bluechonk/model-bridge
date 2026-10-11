@@ -10,17 +10,17 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 
 ## 背景事实
 
-- **一个网关 + N 个池子**：本仓库注册 11 个渠道（`catpaw` `cline` `codearts` `lobsterai`
-  `loomy` `qoder` `qodercn` `raccoon` `trae` `workbuddy` `workbuddyai`）。每个渠道是一个**模型池**：
+- **一个网关 + N 个池子**：本仓库注册 10 个渠道（`catpaw` `codearts` `lobsterai`
+  `loomy` `qoder` `qodercn` `raccoon` `traecn` `workbuddy` `workbuddyai`）。每个渠道是一个**模型池**：
   自己的一套模型目录 + 凭证 + 上游协议。
 - **对外只有两个模型 id**（**不带渠道前缀**）：
   `deepseek-v4.1-flash`、`glm-5.3-flash`。
   客户端只写模型名，**请求落到哪家渠道由网关按各渠道账单已用量自己决定**（用得多的先走，
   失败的当 0 并进入冷却）；匹配大小写不敏感，上游 slug 仍用渠道目录里的原始写法。
   旧的 `<cid>/<模型>` 形态（如 `workbuddyai/deepseek-v4.1-flash`）**已移除**，现在会 400。
-- **这两个模型各自对应多家渠道**（例如 `glm-5.3-flash` 可由 catpaw / cline / codearts /
+- **这两个模型各自对应多家渠道**（例如 `glm-5.3-flash` 可由 catpaw / codearts /
   lobsterai / loomy / qoder / qodercn / raccoon 提供）。所以「某渠道未登录」通常**不影响**
-  模型可用性 —— 网关会走别家。`trae` 不再贡献任何池内模型（它的 DeepSeek-V4-Flash 已随
+  模型可用性 —— 网关会走别家。`traecn` 不再贡献任何池内模型（它的 DeepSeek-V4-Flash 已随
   `deepseek-v4-flash` 出池）。
 - **只放行 `(deepseek | glm)` 家族的 flash 模型**（网关级白名单，判据在共享层）。
   某渠道池子为空通常是未登录或上游目录拉取失败，不是插件坏了；
@@ -67,16 +67,16 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `mb checkin --status` | **今天签没签**（上游 → 本地台账 → 未知；末尾给 N/M 摘要） |
 
 **命令形态**：网关生命周期（`start/stop/restart/status/logs`）是**仓库级**的，不带渠道；
-「对某个渠道做点什么」写成 `<cid> <动词>`（如 `mb trae login`、`mb trae billing`、
-`mb trae checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
+「对某个渠道做点什么」写成 `<cid> <动词>`（如 `mb traecn login`、`mb traecn billing`、
+`mb traecn checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
 
-**没有 per-channel command**：命令都是跨渠道的（`/model-bridge-login`、`/model-bridge-credits`、
-`/model-bridge-checkin`、`/model-bridge-models` 等）。凡动作要落到某个渠道、而用户没指明时：
+**没有 per-channel command**：命令都是跨渠道的（`/mb-login`、`/mb-credits`、
+`/mb-checkin`、`/mb-models` 等）。凡动作要落到某个渠道、而用户没指明时：
 先跑只读命令（`mb status --json` / `mb channels` / `mb checkin --status`）拿渠道清单与现状 →
 用 **`ask_user_query`** 让用户选（标注已登录/未登录，给「全部」选项）→ 再执行；
 **不要替用户决定**，写操作（`checkin`、`accounts remove`）执行前必须确认。
 
-`checkin` 对**所有**渠道口径统一：有端点的真查真领（codearts / lobsterai / loomy / raccoon / trae / qoder / qodercn），没端点的返回渠道自己的一句说明（workbuddy / workbuddyai / catpaw / cline —— 上游自动发奖励）。
+`checkin` 对**所有**渠道口径统一：有端点的真查真领（codearts / lobsterai / loomy / raccoon / traecn / qoder / qodercn），没端点的返回渠道自己的一句说明（workbuddy / workbuddyai / catpaw —— 上游自动发奖励）。
 「没有端点」不是故障、退出码仍为 0；只有查询/领取**抛错**（未登录等）才非零。
 
 ## 标准流程

@@ -1,7 +1,7 @@
 /**
  * TRAE（字节跳动）认证：浏览器授权登录、设备指纹、ExchangeToken 续期。
  *
- * ## 登录（实测，docs/protocols/trae/PROTOCOL.md §2）
+ * ## 登录（实测，docs/protocols/traecn/PROTOCOL.md §2）
  *
  * - 登录页参数名必须是 **`auth_callback_url`**（没有 `callback_url`/`redirect_uri`），
  *   写错登录页**永远停在授权中**（真实缺陷）。
@@ -61,7 +61,7 @@ export const CALLBACK_PATH = "/authorize";
 const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
 const HTTP_TIMEOUT_MS = 30_000;
 
-const NOT_LOGGED_IN_MSG = "no credentials found; run `trae login` first";
+const NOT_LOGGED_IN_MSG = "no credentials found; run `traecn login` first";
 
 /** 磁盘上不存在可用凭据。 */
 export class NotLoggedInError extends Error {
