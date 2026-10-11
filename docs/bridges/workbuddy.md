@@ -26,23 +26,18 @@ WorkBuddy **国内版**（腾讯 CodeBuddy，`codebuddy.ai`）的本地 OpenAI C
 
 ## 快速开始
 
-```bash
-npm install && npm run build            # 工作区根
-node channels/workbuddy/dist/cli.js status
-node channels/workbuddy/dist/cli.js login      # 浏览器授权（输出授权链接）
-```
-
-仓库级 CLI（推荐，一次拿到全部渠道）：
+## 快速开始
 
 ```bash
-node packages/cli/dist/cli.js model list        # 看池子与模型
-node packages/cli/dist/cli.js workbuddy login   # 登录国内版
-node packages/cli/dist/cli.js workbuddy billing # 剩余额度 / 账单
-node packages/cli/dist/cli.js workbuddy checkin # 签到（本渠道无签到端点，返回说明）
+npm install && npm run build              # 工作区根：装依赖 + 编译全部包
+mb workbuddy login                            # 仓库级 CLI：登录
+mb workbuddy status / models / billing        # 状态 / 模型 / 账单
+node channels/workbuddy/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-`bin` 名是 `workbuddy`（`npm link` 后可直接用）。网关端口默认 `127.0.0.1:8803`，
-控制台 API `8804`（工作区内每渠道独占一组端口，互不冲突）。
+日常使用走**仓库级网关**：`mb start` 后在 ZCode 设置里把 provider 指到
+`http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
+单渠道独立运行（`node channels/workbuddy/dist/cli.js serve`）仅在调试该渠道时用。
 
 ## 存储
 

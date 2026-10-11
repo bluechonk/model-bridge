@@ -18,29 +18,6 @@
 一句话：**先定「形状」（接口、目录、id），后做「策略」。** 形状晚定，就要连带重做存储迁移
 与调用点改造；策略晚做只是少个功能。
 
-### 0.1 实施进度（2026-10-08）
-
-| 步骤 | 状态 |
-|---|---|
-| 1. 注册表多渠化 + `paths` 按 cid 参数化 |  已落地 |
-| 2. 网关路由 + `/v1/models` |  已落地；**2026-10-08 改版**：对外只剩公共模型（原 `<cid>/<模型>` 形态已移除，见 §2） |
-| 3. 账号池「形状」落地（`accounts/`） |  已落地（`account-pool.ts` + `mb accounts`；实际结构见 §3.4） |
-| 4. 插件收敛（仓库级 `plugins/model-bridge/`） |  已落地：**一个**插件（单份清单、一套 `mb-*` 命令、一个技能、一个 hook）+ 工作区根 `marketplace.json`；10 个 bridge 各自的 `plugins/` + `marketplace.json` + `.claude-plugin/` 三层配置已移除 |
-| 5. **公共模型池（跨渠道两个模型 + 账单额度排序）** |  已落地（`pool-targets.ts` / `pool-usage.ts`；见 §2） |
-| 6. 账号池策略层（AA 选择 / 跨渠道上下架） | ⏳ 未开始（渠道内的 401/403 换号早已在跑，见 §3.3） |
-
-落地时新增的两块公共层（方案里没预写、但实施时发现必须）：
-
-- **渠道上下文**（`channel-context.ts`）：渠道模块内部的 `paths.*` 调用必须知道「现在为哪个
- cid 干活」。用 `AsyncLocalStorage` 而非模块级变量 —— `cred.refresh()` / `login()` 这类异步
- 链路中间有 await，模块级变量会被并发请求互相踩（A 在刷 token 时切到 B 的渠道，
- A 就可能把凭据写进 B 的目录）。共享层在**每一次调用渠道模块前**包一层 `runInChannel(cid, fn)`。
-- **仓库级入口包**（`packages/cli`，bin `mb` / `model-bridge`）：共享包按契约不 import 任何
- 渠道模块，所以「注册全部渠道」这件事必须有一层独立存在。它只做一件事：`import` 10 个渠道包
- （副作用即 `setChannel`）→ 交给共享 CLI。新增渠道 = 在那里加一行 import。
-
----
-
 ## 1. 形态改变：仓库即插件，渠道即池子
 
 - **一个插件**：`plugins/model-bridge/` —— 一个 marketplace 条目、一个 CLI（`mb`）、

@@ -26,7 +26,7 @@
  *
  * 缓存文件落在渠道层内：`<存储根>/codearts/cache/models.json` 与 `benefit-models.json`
  * （`DSH_CODEARTS_CACHE_DIR` / `CODEARTS_CACHE_DIR` 可显式覆盖），**同步读写**：chat 签名前要读它。
- * 旧位置 `~/.cache/deveco/codearts_*.json` 只作一次性兼容读（见 STORAGE-CONVENTION.md §3.4）。
+ * 旧位置 `~/.cache/deveco/codearts_*.json` 只作一次性兼容读（见 STORAGE-CONVENTION.md）。
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

@@ -28,30 +28,24 @@
 
 ## 快速开始
 
+## 快速开始
+
 ```bash
-npm install                # 从工作区根运行，会软链 @model-bridge/gateway
-npm run build              # 编译到 dist/
-
-node dist/cli.js serve --json    # 前台无窗口运行：登录探测 + 网关
-node dist/cli.js login --json     # 真实 URL 登录：输出授权链接，浏览器授权后自动保存凭证
-
-npm link                   # 或用 npm i -g . 得到 catpaw 命令
-catpaw start               # 守护式启动（幂等）：分离后台进程 + PID 文件 + 健康等待
-catpaw status / models / credits / stop
+npm install && npm run build              # 工作区根：装依赖 + 编译全部包
+mb catpaw login                            # 仓库级 CLI：登录
+mb catpaw status / models / billing        # 状态 / 模型 / 账单
+node channels/catpaw/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-`serve` 未登录时默认只报告状态、不弹浏览器；
-`--ensure-login` / `--force-login` 会打开浏览器走交互授权。
-
-`--json` 让 `login`/`serve` 以 JSON 事件行输出，供插件或脚本解析。
-
-可选参数（serve）：`--addr`（监听地址，默认 `127.0.0.1:8790`）、`--verbose`（打印每个请求）。
+日常使用走**仓库级网关**：`mb start` 后在 ZCode 设置里把 provider 指到
+`http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
+单渠道独立运行（`node channels/catpaw/dist/cli.js serve`）仅在调试该渠道时用。
 
 ## 状态 API 与 ZCode 插件
 
 `serve` 提供本地网关（`/health` `/v1/models` `/v1/chat/completions`）。
 插件（工作区级 `plugins/model-bridge/`）提供 hooks + skills + commands，
-接入 ZCode 后可在设置里把 provider 的 baseUrl 指到 `http://127.0.0.1:8790/v1`。
+接入 ZCode 后把 provider 的 baseUrl 指到仓库级网关 `http://127.0.0.1:8787/v1`。
 
 ## 与共享 gateway 层的关系
 

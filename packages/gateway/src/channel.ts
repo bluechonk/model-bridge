@@ -261,7 +261,7 @@ export interface BridgeConfig {
    * 历史顶层目录名（新→旧），首次访问时收拢进 `<root>/<cid>/`。
    *
    * 首项通常是刚被取代的 `.<cid>-bridge`。**只填本渠道的历史名** ——
-   * 混入其它渠道的名字会导致跨渠道数据劫持（见 STORAGE-CONVENTION.md §3.1）。
+   * 混入其它渠道的名字会导致跨渠道数据劫持（见 STORAGE-CONVENTION.md §4 条文第 12 条）。
    */
   readonly legacyDirs?: readonly string[];
   /**

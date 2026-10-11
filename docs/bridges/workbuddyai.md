@@ -31,35 +31,18 @@ hooks + skills + commands。
 
 ## 快速开始
 
+## 快速开始
+
 ```bash
-npm install                # 只装 devDependencies（TypeScript 类型定义 + 编译器）
-npm run build              # 编译到 dist/
-
-node dist/cli.js serve --json    # 前台无窗口运行：登录探测 + 网关 + 控制台 API
-node dist/cli.js login --json     # 无窗口登录：输出授权链接，浏览器授权后自动保存凭证
-
-npm link                   # 或用 npm i -g . 得到 workbuddyai 命令
-workbuddyai start            # 守护式启动（幂等）：分离后台进程 + PID 文件 + 健康等待
-workbuddyai status / models / credits / stop
+npm install && npm run build              # 工作区根：装依赖 + 编译全部包
+mb workbuddyai login                            # 仓库级 CLI：登录
+mb workbuddyai status / models / billing        # 状态 / 模型 / 账单
+node channels/workbuddyai/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-`serve` 未登录时默认只报告状态、不弹浏览器（`/api/state` 会给出提示）；
-`--ensure-login` / `--force-login` 会打开浏览器走交互授权。
-
-`--json` 让 `login`/`serve` 以 JSON 事件行输出（`event: start/login/ready/done/error/stopped`，
-登录事件带 `auth_url`），供插件或脚本解析；解析方应跳过无法解析的行。
-
-可选参数（serve）：`--addr`（监听地址，默认 `127.0.0.1:8787`）、`--ui-port`
-（控制台 API 端口，默认 `8788`）、`--verbose`（打印每个请求）、`--no-console`；
-`login` 另有 `--force`（忽略已有凭证强制重登）。
-
-`workbuddyai credits` 直接请求上游 billing 端点（`/v2/billing/meter/get-user-resource`）查询账号
-剩余额度，不经本地网关、只读；`workbuddyai status` 聚合网关健康与登录状态。
-
-`workbuddyai start` 是守护式入口：幂等（先探测 `/health`）、分离后台进程、写
-`~/.model-bridge/workbuddyai/gateway.pid`、日志落 `gateway.log`，健康等待后命令退出。
-`--auto`（hook 场景）受 prefs 的 `auto_start` 开关约束（默认开）；
-`--strict` 时失败以非零码退出。`workbuddyai stop` 读 PID 文件杀进程树，不碰第三方进程。
+日常使用走**仓库级网关**：`mb start` 后在 ZCode 设置里把 provider 指到
+`http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
+单渠道独立运行（`node channels/workbuddyai/dist/cli.js serve`）仅在调试该渠道时用。
 
 ## 状态 API 与 ZCode 插件
 
