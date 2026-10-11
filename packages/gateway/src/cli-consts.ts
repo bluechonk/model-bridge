@@ -14,7 +14,7 @@ import { channelCount, getChannel } from "./channel.js";
 /**
  * 入口包（`process.argv[1]` 所在包）的版本。
  *
- * 多渠道路由下没有"渠道版本"可言，`--version` 该报**仓库级 CLI**（bin `model-bridge`）的版本；
+ * 多渠道路由下没有"渠道版本"可言，`--version` 该报**仓库级 CLI**（bin `mb` / `model-bridge`）的版本；
  * 而共享层不知道自己在哪个入口下被跑，故从入口脚本的位置反推它的 package.json。
  */
 function entryVersion(): string {

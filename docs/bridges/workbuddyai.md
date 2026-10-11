@@ -116,7 +116,7 @@ tests/
 历史顶层目录（`~/.workbuddyai2api/`、`~/.workbuddyai-gateway/` 等）首次访问时自动收拢进该层，
 无需重新登录。`MODEL_BRIDGE_HOME` 可把整个存储根指到别处（旧的 `ZCB_HOME` / `WBAI2API_HOME`
 仍被识别但已弃用），便携/测试用。
-`model-bridge paths --all` 可只读列出全部落点。
+`mb paths --all` 可只读列出全部落点。
 
 拆分成两条渠道后，**裸 `workbuddy` 名字**（`~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
 `WORKBUDDY_DEBUG_DUMP`）**两条渠道都不再认领**：那个目录里是国际版旧凭证，而 `workbuddy`

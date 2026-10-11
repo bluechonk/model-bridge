@@ -352,7 +352,7 @@ fileMigrations?: Array<{ from: string; to?: string; action?: "delete" }>;
 - [ ] `~/.catpaw-bridge/daemon.pid` 收敛为 `<root>/catpaw/gateway.pid`
 - [ ] 权限：根 0700、层 0700、凭证 0600
 - [ ] `tools/verify-storage.mjs` 全绿并接入工作区 `npm test`
-- [ ] `model-bridge paths --all` 一张表列出全部渠道的落点与状态
+- [ ] `mb paths --all` 一张表列出全部渠道的落点与状态
 - [ ] `npm run build --workspaces && npm run test --workspaces` 退出码 0
 
 ---

@@ -11,7 +11,7 @@
 
 ```
 packages/gateway/    共享层（gateway / daemon / headless / paths / 渠道注册表；**不许出现渠道知识**）
-packages/cli/        仓库级入口（bin `model-bridge`，注册全部渠道后交给共享 CLI）
+packages/cli/        仓库级入口（bin `mb` / `model-bridge`，注册全部渠道后交给共享 CLI）
 channels/<cid>/      一个渠道 = 一个池子（每个只实现 4 个渠道特有模块）
 plugins/model-bridge/  唯一的 ZCode 插件（命令 / 技能 / hook）
 docs/                全部文档

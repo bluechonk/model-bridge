@@ -35,7 +35,7 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 ├── marketplace.json              ← ZCode 市场清单（单条目 → ./plugins/model-bridge）
 ├── channels/                     ← 11 个渠道（每个 = 一个模型池 + 账号池）
 │   └── <cid>/                    ← 结构见下
-├── packages/cli/                 ← **仓库级入口**（bin `model-bridge`）
+├── packages/cli/                 ← **仓库级入口**（bin `mb` / `model-bridge`）
 │   └── src/
 │       ├── channels.ts           ← import 全部渠道包（副作用 = setChannel）
 │       └── cli.ts                ← bin 入口：注册全部渠道后调共享 `main()`
@@ -504,10 +504,10 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 `packages/*/dist`、`channels/*/dist` 下的 `.js`）与**守护进程启动时刻**
 （pid 文件的 mtime，`start` 亲手写的那一刻，等价且零平台依赖）。
 
-- `model-bridge status`：命中时打印
- ` 网关在跑旧代码：构建产物 <t1> 比进程启动 <t2> 新。跑 model-bridge restart …`；
+- `mb status`：命中时打印
+ ` 网关在跑旧代码：构建产物 <t1> 比进程启动 <t2> 新。跑 mb restart …`；
  `status --json` 里是 `stale_build: true`
-- `model-bridge start`：**「已在运行」分支**也要检查 —— 那正是「改完 build 再来 start
+- `mb start`：**「已在运行」分支**也要检查 —— 那正是「改完 build 再来 start
  被拦下、用户以为已经启动好了」的漏点
 
 只**报告**、不自动重启：是否重启由用户决定（自动重启会打断正在服务的会话）。

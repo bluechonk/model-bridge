@@ -162,6 +162,6 @@ export function staleBuildHint(report: StaleBuildReport): string {
     ms === null ? "?" : new Date(ms).toLocaleString("zh-CN", { hour12: false });
   return (
     `⚠ 网关在跑旧代码：构建产物 ${at(report.buildMs)} 比进程启动 ${at(report.pidMs)} 新。` +
-    `跑 \`model-bridge restart\` 让修复生效（否则测到的还是旧行为）。`
+    `跑 \`mb restart\` 让修复生效（否则测到的还是旧行为）。`
   );
 }

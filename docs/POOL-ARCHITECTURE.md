@@ -24,7 +24,7 @@
 |---|---|
 | 1. 注册表多渠化 + `paths` 按 cid 参数化 |  已落地 |
 | 2. 网关路由 + `/v1/models` |  已落地；**2026-10-08 改版**：对外只剩公共模型（原 `<cid>/<模型>` 形态已移除，见 §2） |
-| 3. 账号池「形状」落地（`accounts/`） |  已落地（`account-pool.ts` + `model-bridge accounts`；实际结构见 §3.4） |
+| 3. 账号池「形状」落地（`accounts/`） |  已落地（`account-pool.ts` + `mb accounts`；实际结构见 §3.4） |
 | 4. 插件收敛（仓库级 `plugins/model-bridge/`） |  已落地：**一个**插件（单份清单、一套 `model-bridge-*` 命令、一个技能、一个 hook）+ 工作区根 `marketplace.json`；11 个 bridge 各自的 `plugins/` + `marketplace.json` + `.claude-plugin/` 三层配置已移除 |
 | 5. **公共模型池（跨渠道两个模型 + 账单额度排序）** |  已落地（`pool-targets.ts` / `pool-usage.ts`；见 §2） |
 | 6. 账号池策略层（AA 选择 / 跨渠道上下架） | ⏳ 未开始（渠道内的 401/403 换号早已在跑，见 §3.3） |
@@ -35,7 +35,7 @@
  cid 干活」。用 `AsyncLocalStorage` 而非模块级变量 —— `cred.refresh()` / `login()` 这类异步
  链路中间有 await，模块级变量会被并发请求互相踩（A 在刷 token 时切到 B 的渠道，
  A 就可能把凭据写进 B 的目录）。共享层在**每一次调用渠道模块前**包一层 `runInChannel(cid, fn)`。
-- **仓库级入口包**（`packages/model-bridge`，bin `model-bridge`）：共享包按契约不 import 任何
+- **仓库级入口包**（`packages/cli`，bin `mb` / `model-bridge`）：共享包按契约不 import 任何
  渠道模块，所以「注册全部渠道」这件事必须有一层独立存在。它只做一件事：`import` 11 个渠道包
  （副作用即 `setChannel`）→ 交给共享 CLI。新增渠道 = 在那里加一行 import。
 
@@ -43,7 +43,7 @@
 
 ## 1. 形态改变：仓库即插件，渠道即池子
 
-- **一个插件**：`plugins/model-bridge/` —— 一个 marketplace 条目、一个 CLI（`model-bridge`）、
+- **一个插件**：`plugins/model-bridge/` —— 一个 marketplace 条目、一个 CLI（`mb`）、
  一个 hook、一个网关进程。渠道不再各自成插件。
 - **渠道的新角色**：不是「一个网关」，而是**一个池子**。
  - **模型池**：该渠道能提供哪些模型（= 现有 `catalog` + 白名单 `FAMILY_ALLOWLIST = [/flash/i]`）。
@@ -118,7 +118,7 @@
 
 - 账单**一天刷两三次**（TTL 8 小时）：网关启动时、以及 TTL 到期后的下一次请求，
  在**后台**异步刷新（`maybeRefreshBilling`），绝不阻塞正在处理的请求。
-- 手动刷新：`model-bridge model usage --refresh`。
+- 手动刷新：`mb model usage --refresh`。
 - 账单查询失败只更新尝试时刻、**保留上一次的用量数字**（不把账清零，也不用 0 冒充）。
 
 ### 2.4 路由与失败转移
@@ -179,11 +179,11 @@
 
 | 命令 | 看什么 |
 |---|---|
-| `model-bridge model list` | **池视图**：两个模型，各自挂出候选渠道 + 已用量 + 冷却状态（顺序就是实际路由顺序） |
-| `model-bridge model show <cid>` | **渠道视角**：该渠道贡献了池内哪些模型 |
-| `model-bridge model usage [--refresh]` | 看账本；`--refresh` 立刻重查各渠道账单额度 |
-| `model-bridge channels` | 同「渠道视角」，覆盖全部渠道 |
-| `model-bridge model refresh [cid]` | 重拉上游**目录**（与「刷账单」是两件事） |
+| `mb model list` | **池视图**：两个模型，各自挂出候选渠道 + 已用量 + 冷却状态（顺序就是实际路由顺序） |
+| `mb model show <cid>` | **渠道视角**：该渠道贡献了池内哪些模型 |
+| `mb model usage [--refresh]` | 看账本；`--refresh` 立刻重查各渠道账单额度 |
+| `mb channels` | 同「渠道视角」，覆盖全部渠道 |
+| `mb model refresh [cid]` | 重拉上游**目录**（与「刷账单」是两件事） |
 
 > 单渠道独立运行（`channels/<cid>/dist/cli.js start`）**也走池**：`/v1/models` 同样是那两条，
 > 只是候选渠道只有一个（提供不了的模型请求时回 503）。
@@ -288,10 +288,10 @@ interface CredModule {
 
 | 入口 | 行为 |
 |---|---|
-| `model-bridge accounts`（`--channel` / `--json`） | 列出池子；**首次查看会把已登录的凭证自动收进池子** |
-| `model-bridge accounts add --channel <cid>` | 走渠道自己的登录流程（浏览器授权）→ 成功后入池并设为生效 |
-| `model-bridge accounts use <key>` | 切换生效账号 |
-| `model-bridge accounts remove <key>` | 从池子删除（生效账号 → 同时登出） |
+| `mb accounts`（`--channel` / `--json`） | 列出池子；**首次查看会把已登录的凭证自动收进池子** |
+| `mb accounts add --channel <cid>` | 走渠道自己的登录流程（浏览器授权）→ 成功后入池并设为生效 |
+| `mb accounts use <key>` | 切换生效账号 |
+| `mb accounts remove <key>` | 从池子删除（生效账号 → 同时登出） |
 | `login` 成功后 / 守护 `start` 前 | 自动同步（登录即入池；刷新过的 token 回灌） |
 
 **未实现（策略层，见 §3.3）**：一个渠道内多账号的轮询 / 失败转移 / 配额耗尽自动换号。
@@ -352,7 +352,7 @@ hasChannel(cid?: string): boolean;
  「本进程认得的全部身份」，所以单渠道的 `status` 也认得多渠道路由的网关。
 - **`channels` / `model list` 子命令**：前者是**渠道视角**（每个渠道贡献了池内哪些模型），
  后者是**池视图**（两个模型各自会落到哪家、账本用量与冷却）。
-- **仓库级 CLI 已可用**：`packages/model-bridge`（bin `model-bridge`）。
+- **仓库级 CLI 已可用**：`packages/cli`（bin `mb` / `model-bridge`）。
 - **插件收敛已完成**：`<工作区>/plugins/model-bridge/`（单插件）+ `<工作区>/marketplace.json`（单条目）。
  各 bridge 的 bin 保留为「单渠道独立运行」的调试入口，但不再各带一套插件。
  未动：`.hermes-plugin/`（Hermes 侧的另一套集成，不在本次范围）。

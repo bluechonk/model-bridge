@@ -275,7 +275,7 @@ Request with GET/HEAD method cannot have body.
 ## 9. 签到验证（2026-10-09）
 
 - 两区 `checkin --status` 都正常：`? [qoder] 上游今天没有可领的奖励（当前没有可领取的签到活动）`
-- **一键签到**（`model-bridge checkin`，不带 `<cid>`）覆盖全部 11 个渠道，三类状态分得很清楚：
+- **一键签到**（`mb checkin`，不带 `<cid>`）覆盖全部 11 个渠道，三类状态分得很清楚：
  有端点（`·`）、无端点（`?` + 渠道自己的说明）、查询失败（`?` 如实报未知）
 - 直接 dump 上游表明**结论正确**：`{"showCampaign":true,"claimable":false,"campaigns":[{...,"actionType":"VIEW_DETAILS","claimStatus":"CLAIMED"}]}`
  —— 该账号此刻唯一的活动是 Pro 推广（`VIEW_DETAILS`），没有 `CLAIM_BENEFIT` 可领项
