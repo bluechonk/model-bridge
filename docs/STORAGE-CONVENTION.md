@@ -81,7 +81,6 @@
 |---|---|---|---|---|---|---|
 | workbuddy | `.workbuddy-bridge` | `<root>/workbuddy` | `WORKBUDDY_HOME` | `WBAI_DEBUG_DUMP`  | `.zcode-workbuddy-bridge`, `.zcode-connect-workbuddyai`, `.workbuddyai2api`, `.workbuddyai-gateway` | `ZCB_HOME`, `WBAI2API_HOME` |
 | catpaw | `.catpaw-bridge` | `<root>/catpaw` | `CATPAW_HOME` | `CATPAW_DEBUG_DUMP` | `.zcode-catpaw-bridge`, `.zcode-connect-catpaw` | `ZCC_HOME` |
-| zcode | `.zcode-bridge` | `<root>/zcode` | `ZCODE_HOME` | `ZCODE_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-zcode`, `.zcode2api`, `.zcode-gateway` | — |
 | traecn | `.trae-bridge` | `<root>/traecn` | `TRAE_HOME` | `TRAECN_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-trae`, `.trae2api`, `.trae-gateway` | — |
 | codearts | `.codearts-bridge` | `<root>/codearts` | `CODEARTS_HOME` | `CODEARTS_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-codearts`, `.codearts2api`, `.codearts-gateway` | — |
 | lobsterai | `.lobsterai-bridge` | `<root>/lobsterai` | `LOBSTERAI_HOME` | `LOBSTERAI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-lobsterai`, `.lobsterai2api`, `.lobsterai-gateway` | — |

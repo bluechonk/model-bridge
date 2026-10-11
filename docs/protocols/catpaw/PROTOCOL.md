@@ -13,7 +13,6 @@
 | --- | --- | --- |
 | 0 | [FINDINGS.md](FINDINGS.md) | **先看这个**：全部结论汇总 + 证据等级 |
 | 0 | [FLOW.md](FLOW.md) | 端到端数据流：登录态怎么落盘、怎么加密、怎么被解出来 |
-| 1 | [phase7-upstream-protocol/API-REFERENCE.md](phase7-upstream-protocol/API-REFERENCE.md) | 上游接口速查（含体积上限与消息序列校验） |
 
 ## 方法论
 
@@ -58,5 +57,5 @@
 
 - 分析对象是**本机、本人账号**的登录态文件；仓库不包含、也不生成任何可用凭据。
 - 结论中的协议知识仅用于理解客户端行为；请不要用它做绕开授权或对外提供服务的事。
-- 仓库的凭据处理有全历史审计记录（见 [security/findings.md](../../journals/security/findings.md)）：
+- 仓库做过一次全历史敏感信息审计与清理（记录见 git 历史，任务结束已归档）：
   文档只保留协议结论，不含真实凭据；密钥派生知识仅用于解析本机登录态。

@@ -16,7 +16,7 @@
 > | 旧签名 | 提到 `Appcode`/固定 SECRET | 那套已失效（无账号身份参与），现行是 COSY bearer |
 >
 > 完整依据、参考项目清单（含许可证）与「照抄不改」清单见
-> [`docs/journals/qoder/findings.md`](../../journals/qoder/findings.md)。下文保留作历史记录。
+> 社区五个反代项目的分析结论（原 `docs/journals/qoder/findings.md`，已随任务结束归档到 git 历史）。下文保留作历史记录。
 
 提取自 `dsh-our-free-model/vendor/channel-pack/src/` 的 TypeScript 实现（下称 `<SRC>`）。
 行号对应提取时的源码。

@@ -52,7 +52,6 @@
 - [PROTOCOL.md](./protocols/catpaw/PROTOCOL.md) —— 全部结论速览 + 方法论 + 证据等级约定
 - [FINDINGS.md](./protocols/catpaw/FINDINGS.md) —— 结论汇总（逐条标注证据等级）
 - [FLOW.md](./protocols/catpaw/FLOW.md) —— 端到端数据流：登录态怎么落盘、怎么加密、怎么被解出来
-- [phase7/API-REFERENCE.md](./protocols/catpaw/phase7-upstream-protocol/API-REFERENCE.md) —— 上游接口速查
 
 ## 3. 渠道说明 `docs/bridges/<cid>.md`
 
@@ -70,9 +69,7 @@
 
 | 专题 | 文件 | 说明 |
 | --- | --- | --- |
-| `qoder` | [findings](./journals/qoder/findings.md) | 五个参考反代项目的分析结论与许可证清单（实现依据的出处） |
 | `workbuddyai` | [findings](./journals/workbuddyai/findings.md) | 该渠道的协议事实（登录流程 / 端点 / 上游约束） |
-| `security` | [findings](./journals/security/findings.md) | 全历史安全审计与 gemini secret 清理记录 |
 
 ## 5. 其它文档（不在本目录）
 

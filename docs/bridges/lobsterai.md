@@ -13,32 +13,18 @@ LobsterAI（有道）的本地 OpenAI Chat Completion 透明代理网关（**Typ
 
 ## 快速开始
 
+## 快速开始
+
 ```bash
-uv sync
-uv run lobsterai serve --json    # 前台无窗口运行
-uv run lobsterai login --json    # 无窗口登录：输出授权链接
-uv tool install .            # 全局安装后用 lobsterai 直接调用
-lobsterai start                  # 守护式启动（幂等）
-lobsterai status / models / credits / stop
+npm install && npm run build              # 工作区根：装依赖 + 编译全部包
+mb lobsterai login                            # 仓库级 CLI：登录
+mb lobsterai status / models / billing        # 状态 / 模型 / 账单
+node channels/lobsterai/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-## 状态 API 与 ZCode 插件
-
-`serve` 会启动控制台 API（默认 `http://127.0.0.1:8810`，无页面托管）：
-
-| 端点 | 说明 |
-| --- | --- |
-| `GET /api/state` | 状态快照（`ui_state` / `message` / `auth_url` / `models`） |
-| `POST /api/retry-login` | 投递「重试登录」意图 |
-| `POST /api/theme` | 空操作（保留端点兼容） |
-
-日常操作不用直接打这些接口 —— 插件 `lobsterai-bridge` 用命令与技能把能力包好了。
-
-## 让 ZCode 走这个网关
-
-在 ZCode 设置里添加 provider：类型 `openai-chat-completions`、
-baseUrl `http://127.0.0.1:8809/v1`、API key 任意非空、模型用 `lobsterai models` 的输出。
-插件注册不了 provider，这一步需手动。
+日常使用走**仓库级网关**：`mb start` 后在 ZCode 设置里把 provider 指到
+`http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
+单渠道独立运行（`node channels/lobsterai/dist/cli.js serve`）仅在调试该渠道时用。
 
 ## 许可证
 
