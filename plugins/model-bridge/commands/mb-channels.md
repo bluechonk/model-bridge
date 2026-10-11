@@ -19,8 +19,8 @@ skills: model-bridge-gateway
 
 ```
 mb model refresh             # 刷新全部渠道的模型目录
-mb model refresh trae        # 只刷 trae
-mb trae models --refresh     # 同上（按渠道的写法）
+mb model refresh traecn      # 只刷 traecn
+mb traecn models --refresh   # 同上（按渠道的写法）
 ```
 
 > 注意区分两件事：`model refresh` 刷的是**上游目录**；`model usage --refresh` 刷的是

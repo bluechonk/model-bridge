@@ -25,5 +25,5 @@ baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型名填上面�
 3. **不要替用户决定**；写操作（`checkin`、`accounts remove`）执行前必须确认。
 
 渠道清单（11 个）：`catpaw` `cline` `codearts` `lobsterai` `loomy` `qoder` `qodercn` `raccoon`
-`trae` `workbuddy` `workbuddyai`。各渠道的登录方式见 `/model-bridge-login`；
+`trae` `workbuddy` `workbuddyai`。各渠道的登录方式见 `/mb-login`；
 单渠道细节（存储落点、约束、排障）见仓库 `docs/bridges/<cid>.md`。

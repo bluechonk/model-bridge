@@ -33,11 +33,11 @@ mb checkin --fail-if-unclaimed # 今天**明确**没签就非零退出（挂定�
 
 ## 各渠道现状（向用户解释时照此说）
 
-- **有真实端点**：`codearts` / `lobsterai` / `loomy` / `qoder` / `qodercn` / `raccoon` / `trae`
+- **有真实端点**：`codearts` / `lobsterai` / `loomy` / `qoder` / `qodercn` / `raccoon` / `traecn`
 - **没有端点**（额度由服务端按天/按订阅自动发，返回文本说明，**不是故障、退出码仍为 0**）：
-  `catpaw` / `cline` / `workbuddy` / `workbuddyai`
+  `catpaw` / `workbuddy` / `workbuddyai`
 - `raccoon`：签到 = 触发 `setting_info`（按天幂等）+ 账单核对今日入账；**「今天」按北京时间**。
 - `qoder` / `qodercn`：活动（campaign）平台「每日领取 100 Credits」，**10:00 UTC+8 刷新**。
-- `trae`：`9074` 是设备级限流（会轮换签到设备代次）。
+- `traecn`：`9074` 是设备级限流（会轮换签到设备代次）。
 - 只有查询/领取**抛错**（未登录、上游拒绝）才非零退出；「没有端点」不算失败。
 - 领取失败大多是**未登录**（`NotLoggedInError`）—— 先登录再试。

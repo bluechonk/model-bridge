@@ -26,10 +26,9 @@ skills: model-bridge-gateway
 | loomy | 交互菜单：`1) SMS code`（手机号与验证码**当场输入**）/ `2) WeChat QR code` | 终端里会继续提示输入；`--wechat` 可直接指定扫码 |
 | raccoon | 浏览器打开官方授权页 → **把回跳的 `office-raccoon://auth/callback?…` 整条 URL 粘贴回终端** | 别用 `/login/mp` 那条（只给官方手机 App 扫码，网页端是死链） |
 | catpaw | 浏览器点一下（`login-config` 拼 `auth_url`）→ `poll-token?sid=` 每 1s 轮询（≤10 分钟） | **无本地回调服务器**，也不读桌面端本地文件 |
-| cline | WorkOS **设备码**授权 | 浏览器开 `verification_uri_complete` → 轮询 → WorkOS 令牌换 Cline 令牌 |
 | codearts | 华为 IAM OAuth（**PKCE + DPoP(ES256)**） | 带本地回调，**回调端口须 ≥10000** |
 | lobsterai | 浏览器门户 + 本地回调（`/auth/callback`） | state 严格相等 |
-| trae | 浏览器授权页 + 本地回调（端口 **18080**，被占用则回退随机端口） | 回调**直接回传 token**（不是 `?code=`）；仅 CN 域 |
+| traecn | 浏览器授权页 + 本地回调（端口 **18080**，被占用则回退随机端口） | 回调**直接回传 token**（不是 `?code=`）；仅 CN 域 |
 
 - `--force` 强制重登；`--wechat` 仅 loomy 支持。
 - 登录是**唯一需要用户动手**的步骤；登录成功后账号自动入池（`mb accounts` 可见，
