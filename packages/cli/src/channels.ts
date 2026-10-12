@@ -11,6 +11,7 @@ import "catpaw-bridge";
 import "codearts-bridge";
 import "lobsterai-bridge";
 import "loomy-bridge";
+import "qoder-bridge";
 import "qodercn-bridge";
 import "raccoon-bridge";
 import "traecn-bridge";
