@@ -60,7 +60,7 @@ auth_from=solo
 login_channel=native_ide
 plugin_version=2.3.62834
 auth_type=local
-client_id=en1oxy7wnw8j9n
+client_id=ono9krqynydwx5（网页授权门户专用；IDE 客户端 ID en1oxy7wnw8j9n 会被门户 404）
 redirect=0
 login_trace_id=<machineId+deviceId 拼接的尾 16 字符>
 auth_callback_url=<实际回调地址>
@@ -90,7 +90,7 @@ x_app_type=stable
 ```
 POST {oauthHost}/cloudide/api/v3/trae/oauth/ExchangeToken
 Headers: Content-Type: application/json, Accept: application/json, User-Agent
-Body: {"ClientID":"en1oxy7wnw8j9n","RefreshToken":"<refreshToken>","ClientSecret":"-","UserID":""}
+Body: {"ClientID":"ono9krqynydwx5","RefreshToken":"<refreshToken>","ClientSecret":"-","UserID":""}
 → {Result:{Token, RefreshToken, TokenExpireAt, TokenExpireDuration, RefreshExpireAt}}
 ```
 （大小写两种键都接受。**access 与 refresh 都轮换**，续期后必须回写）
