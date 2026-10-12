@@ -315,17 +315,18 @@ describe("1. 凭据与设备指纹", () => {
 });
 
 describe("2. 登录 URL 与回调", () => {
-  it("18 个参数，auth_callback_url 拼写正确（写错登录页永远停在授权中）", () => {
+  it("20 个参数（网页授权门户形态），auth_callback_url 拼写正确（写错登录页永远停在授权中）", () => {
     const url = cred.buildAuthorizeUrl("http://127.0.0.1:18080/authorize", "a".repeat(32), "b".repeat(32));
     assert.ok(url.startsWith("https://www.trae.cn/authorization?"));
     const params = new URL(url).searchParams;
-    assert.equal([...params.keys()].length, 18);
+    assert.equal([...params.keys()].length, 20);
     assert.equal(params.get("auth_callback_url"), "http://127.0.0.1:18080/authorize");
     assert.ok(!params.has("callback_url") && !params.has("redirect_uri"));
     assert.equal(params.get("login_trace_id"), "a".repeat(32).concat("b".repeat(32)).slice(-16));
     assert.equal(params.get("plugin_version"), "2.3.62834", "plugin_version ≠ ideVersion");
     assert.equal(params.get("x_app_version"), "0.1.52");
-    assert.equal(params.get("client_id"), "en1oxy7wnw8j9n");
+    assert.equal(params.get("client_id"), "ono9krqynydwx5", "网页授权门户只认网页端 client_id（IDE ID 会 404）");
+    assert.equal(params.get("hide_saas_login"), "true", "网页授权门户要求此参数（对齐 trae2api 实测）");
     assert.equal(params.get("redirect"), "0");
   });
 
@@ -833,7 +834,7 @@ describe("8. 额度、签到与续期", () => {
     try {
       const updated = await cred.refresh(cred.load());
       const sent = fake.requests.at(-1)!.body!;
-      assert.equal(sent["ClientID"], "en1oxy7wnw8j9n");
+      assert.equal(sent["ClientID"], "ono9krqynydwx5", "续期与授权必须同一 client_id");
       assert.equal(sent["RefreshToken"], "rt-old");
       assert.equal(updated.accessToken, "at-new");
       assert.equal(updated.refreshToken, "rt-new");

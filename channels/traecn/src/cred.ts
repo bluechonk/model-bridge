@@ -47,7 +47,15 @@ export const UG_HOST = "https://api.trae.cn";
 /** 登录门户（consoleHost）。 */
 export const CONSOLE_HOST = "https://www.trae.cn";
 
-export const CLIENT_ID = "en1oxy7wnw8j9n";
+/**
+ * 网页授权门户的 client_id（tr 兆 web 端身份）。
+ *
+ * ⚠ 与 IDE 客户端 ID（对话链路用）不同：授权页只认 web 端 ID，
+ * 传 IDE ID 会直接 404（对齐 trae2api 实测）。
+ */
+export const CLIENT_ID = "ono9krqynydwx5";
+/** IDE 客户端 ID：对话 / 模型列表 / 签到链路的身份，不用于授权页。 */
+export const IDE_CLIENT_ID = "en1oxy7wnw8j9n";
 export const APP_ID = "6eefa01a-1036-4c7e-9ca5-d891f63bfcd8";
 /** ideVersion 是模型准入条件：版本过低时 glm-5.3 等新模型报 4001。 */
 export const IDE_VERSION = "0.1.52";
@@ -251,10 +259,12 @@ export function fixNickname(raw: string, uid = ""): string {
 // ── 登录 URL 与回调 ──────────────────────────────────────────────────────────
 
 /**
- * 构造登录 URL（逐字 18 个参数）。
+ * 构造登录 URL（网页授权门户形态，20 个参数；对齐 trae2api 实测）。
  *
  * ⚠ 参数名必须是 `auth_callback_url`；没有 `callback_url`/`redirect_uri` ——
  * 写错登录页永远停在授权中。
+ * ⚠ client_id 必须是网页端 `ono9krqynydwx5`（IDE 客户端 ID 会被门户 404）；
+ * ExchangeToken/GetUserInfo 也用同一 client_id，保证 token 与兑换域一致。
  */
 export function buildAuthorizeUrl(
   callbackUrl: string,
@@ -279,8 +289,11 @@ export function buildAuthorizeUrl(
     x_device_brand: "PC",
     x_device_type: "PC",
     x_os_version: "1.0",
+    x_env: "",
     x_app_version: IDE_VERSION,
     x_app_type: "stable",
+    // 网页授权门户要求：不带会 404（对齐 trae2api 实测）
+    hide_saas_login: "true",
   });
   return `${(consoleHost || CONSOLE_HOST).replace(/\/+$/, "")}/authorization?${params.toString()}`;
 }
