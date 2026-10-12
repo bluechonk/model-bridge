@@ -10,7 +10,7 @@
 
 | | 现在 | 理由 |
 |---|---|---|
-| 接口签名（`CredModule` 的池子方法） | **定** | 改签名要动 10 个渠道 + 共享层调用点 |
+| 接口签名（`CredModule` 的池子方法） | **定** | 改签名要动全部渠道 + 共享层调用点 |
 | 存储布局（`accounts/` + 索引） | **定** | 布局是最贵的一类改动：**刚统一完存储，不想再迁一次** |
 | 对外模型 id 形态 | **已定案**：两个公共模型（2026-10-08 定案，后收窄，见 §2） | 客户端不再关心渠道；早期 `<cid>/<模型>` 形态已移除 |
 | 池子策略（轮换 / 失败转移 / 健康度） | **已落地**（账单已用量排序 + 失败冷却，见 §2.3） | 排序源是账单已用量，落盘缓存 |
@@ -179,7 +179,7 @@
    └── <account-key>.json  ← 单账号凭证（account-key = 稳定账号标识）
 ```
 
-- **为什么保留 `credentials.json`**：10 个渠道的 `cred.load()/save()`、插件命令、以及刚统一的
+- **为什么保留 `credentials.json`**：全部渠道的 `cred.load()/save()`、插件命令、以及刚统一的
  `paths` 全都依赖它。保留 = 零改动兼容，池子新增的 `accounts/` 承载多账号。
 - `accounts.json` 每条的元信息建议：`key` / `uid` / `nickname` / `domain`（realm）/ `expires_at` /
  `last_used` / `health`（ok / unauthorized / quota）。
@@ -201,7 +201,7 @@ interface CredModule {
 }
 ```
 
-这样：现在 10 个渠道一个都不实现，模型池照常工作；将来某个渠道实现了，池子能力自动生效。
+这样：现在全部渠道一个都不实现，模型池照常工作；将来某个渠道实现了，池子能力自动生效。
 
 ### 3.3 策略（以后做，先记下要解决什么）
 
@@ -252,7 +252,7 @@ interface CredModule {
 - `health`：`ok` | `unauthorized` | `unknown`。由**网关**在刷新失败时写 `unauthorized`、
  请求成功时写 `ok`；同值短路（进程内缓存），稳态下不产生额外 I/O。
 - **共享层不解析渠道磁盘格式**：只做「复制文件 + 记下 `cred.load()` 的契约字段 uid/domain」，
- 所以 10 个渠道**零改动**就支持账号池。
+ 所以全部渠道**零改动**就支持账号池。
 - **同步按身份，不按时间**：`credentials.json` 变新时先比 `accountKey` —— 同一账号 → 回灌池内
  那份（渠道 `refresh()` 只写 live 文件）；不同账号 → 收成新账号并设为 active。
  > 实现时踩过：只看 mtime 回灌，会在「换账号登录」时把旧账号的池内文件覆盖成别人的凭证。
@@ -283,7 +283,7 @@ interface CredModule {
 `getChannel()` 调用点（`gateway` / `daemon` / `headless` / `console` / `sse-stream` /
 `auth-flow` / `paths` / `cli` / `cli-consts` / `report`），全部假设「一个进程一个渠道」。
 
-落地后的 API（**保留了 `setChannel` 签名**，10 个渠道一行都没改）：
+落地后的 API（**保留了 `setChannel` 签名**，全部渠道一行都没改）：
 
 ```ts
 setChannel(channel: Channel): void;   // 按 config.cid 存进注册表（同 cid 重复注册即替换）
@@ -296,7 +296,7 @@ hasChannel(cid?: string): boolean;
 ```
 
 配套：`paths` 全部函数加**可选 `cid`**（`channelDir(cid)`、`credentialsPath(cid)`、`pidPath(cid)`…），
-省略时按「渠道上下文 → 唯一渠道」解析。现有 10 个渠道与全部既有测试**无需同步修改** ——
+省略时按「渠道上下文 → 唯一渠道」解析。现有渠道与全部既有测试**无需同步修改** ——
 这条渐进策略是本次改造能一次通过 470 项测试的关键。
 
 ### 4.2 路由层（已落地）
@@ -308,7 +308,7 @@ hasChannel(cid?: string): boolean;
 
 ### 4.3 进程与入口收敛（部分落地）
 
-现状：10 个渠道各有 `defaultAddr` / `uiPort` 与各自的守护进程（仓库级网关不用它们，见上文）。
+现状：各渠道都有自己的 `defaultAddr` / `uiPort` 与单渠道守护进程（仓库级网关不用它们，见上文）。
 
 目标：仓库级插件只跑**一个**网关进程 + **一个**控制台端口；各渠道的 bin 保留为
 「单渠道独立运行」的调试入口（不删，但不再是主路径）。插件只挂一个 hook、暴露一个 CLI

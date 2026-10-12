@@ -4,7 +4,7 @@
 历史名迁移。**凭证/配置的字段内容不在此列** —— 各 `channels/<cid>/` 自己决定
 （见 `CONTRACT-TS.md` §5）。
 
-适用范围：工作区内的 10 个渠道包 + 共享包 `packages/gateway`。
+适用范围：工作区内全部渠道包 + 共享包 `packages/gateway`（清单以 `mb channels` 为准）。
 
 ---
 

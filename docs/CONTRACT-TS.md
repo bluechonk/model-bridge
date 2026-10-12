@@ -33,14 +33,14 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 │       └── index.ts              ← 对外的统一出口
 ├── plugins/model-bridge/         ← **唯一的 ZCode 插件**（命令/技能/hook）
 ├── marketplace.json              ← ZCode 市场清单（单条目 → ./plugins/model-bridge）
-├── channels/                     ← 10 个渠道（每个 = 一个模型池 + 账号池）
+├── channels/                     ← 渠道（每个 = 一个模型池 + 账号池；清单以 mb channels 为准）
 │   └── <cid>/                    ← 结构见下
 ├── packages/cli/                 ← **仓库级入口**（bin `mb` / `model-bridge`）
 │   └── src/
 │       ├── channels.ts           ← import 全部渠道包（副作用 = setChannel）
 │       └── cli.ts                ← bin 入口：注册全部渠道后调共享 `main()`
 ├── docs/                         ← 契约、渠道协议（protocols/）、渠道说明（bridges/）、进度（journals/）
-└── tools/                        ← 仓库级工具（verify-storage.mjs 等）
+└── tools/                        ← 仓库级校验器（verify-contract / verify-storage / verify-docs）
 ```
 
 `channels/<cid>/` 内部（= 一个**池子**）：
@@ -222,8 +222,10 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 
 ## 5. 渠道特有模块的接口契约
 
-共享层的 `gateway.ts` / `headless.ts` / `daemon.ts` / `auth-flow.ts` 按下面这套接口
-调用渠道模块。**实现渠道时只要满足这些签名，网关就能工作。**
+共享层的 `gateway.ts` / `headless.ts` / `daemon.ts` / `auth-flow.ts` 按这套接口调用渠道模块。
+**导出签名以 `packages/gateway/src/channel.ts` 的类型定义与各渠道实现为准** ——
+`tsc -b` 就是签名的校验器，本文不抄写签名（抄写必漂移）。本节只记录**编译器管不到的语义约定**：
+行为契约、禁止事项、与「为什么」。
 
 > 类型定义在 `packages/gateway/src/channel.ts`（`CredModule` / `UpstreamModule` /
 > `CatalogModule` / `BillingModule`）。凭据/配置的具体形态各渠道不同，故这些位置用
@@ -231,26 +233,6 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 > 渠道间制造大量摩擦）。
 
 ### 5.1 `cred.ts`
-
-```ts
-export const DEFAULT_BASE_URL: string;
-export class NotLoggedInError extends Error {}
-
-export interface Credentials {
- readonly accessToken: string;
- readonly uid: string;
- readonly domain: string;
- // ... 渠道自己的字段
-}
-export function load(): Credentials;                 // 不可用抛 NotLoggedInError
-export function save(c: Credentials): Promise<void>;  // 原子替换 + 0600
-export function login(baseUrl: string, options?: {
- onUrl?: (url: string) => void;
- onStatus?: (msg: string) => void;
-}): Promise<Credentials>;
-export function refresh(c: Credentials): Promise<Credentials>;
-export function resolveBaseUrl(realm?: string): string;
-```
 
 **`onUrl(authorizeUrl)` 必须在拿到 URL 后立刻调用**（界面据此弹窗）。
 **登录必须是真实 URL 链路**（设备码 / OAuth 回调 / 扫码轮询）——
@@ -260,33 +242,6 @@ export function resolveBaseUrl(realm?: string): string;
 `load()` 遇到「老凭据缺新字段」时，能补就补，而不是拒绝整条凭据。
 
 ### 5.2 `upstream.ts`
-
-```ts
-export const DEFAULT_BASE_URL: string;
-export const WIRE: "openai" | "custom";        // 决定网关是否需要翻译层
-export const DISPLAY_NAME: string;              // 状态页/日志用
-export class UpstreamUnauthorized extends Error {}
-
-export interface Config { baseUrl: string; /* ... 渠道自己的字段 */ }
-export function defaultConfig(): Config;
-export function loadConfig(): [Config, boolean];       // [配置, 是否来自磁盘]
-export function saveConfig(cfg: Config): Promise<void>;
-export function chatUrl(cfg?: Config): string;
-export function modelsUrl(cfg?: Config): string;
-export function buildHeaders(credential: any, cfg?: Config): Record<string, string>;
-export function buildChatBody(req: Record<string, unknown>, upstreamModel: string): Record<string, unknown>;
-export function fetchModels(credential: any): Promise<Record<string, unknown>>;
-export function resolveConfig(data: Record<string, unknown>, fallback?: Config): Config;
-
-// 可选钩子（共享层只在渠道声明时才调用）：
-/** 判定「非 401/403 的响应」是否也算鉴权失败（如 codearts 的 400 + APIG.0602）。 */
-export function isAuthFailure?(status: number, body: string): boolean;
-/** 判定流内错误帧是否为「排队」语义（如 qoder 的 10605），触发等待 + 重开上游。 */
-export function isQueueError?(frame: Record<string, unknown>): boolean;
-
-// 仅当 WIRE === "custom" 时需要：
-export function newTranslator(): StreamTranslator;
-```
 
 **两个可选钩子的语义**（实现细节见 `POOL-ARCHITECTURE.md` §2.4）：
 
@@ -307,15 +262,6 @@ export function newTranslator(): StreamTranslator;
 
 **`StreamTranslator` 的契约（必须是增量）**：
 
-```ts
-export interface StreamTranslator {
- /** 喂入一块字节，返回本次可产出的 **OpenAI SSE 帧**（Buffer 或 string 数组）。 */
- feed(chunk: Buffer): Array<Buffer | string>;
- /** 流结束：处理残余、补 `finish_reason` 帧与 `data: [DONE]`。 */
- finish(): Array<Buffer | string>;
-}
-```
-
 **不能是「读完再翻」** —— 那会让流式失去意义（用户要等整轮生成完才看到第一个字）。
 **必须跨 chunk 保留半帧**：SSE 事件会被 TCP 切在任意位置（中文多字节字符与
 `\n\n` 分隔符都会被切开）。用 `new TextDecoder("utf-8")` 的流式解码 + 字符串缓冲，
@@ -333,13 +279,6 @@ export interface StreamTranslator {
 网关只会额外补 `Accept: text/event-stream`（若头里没有）。
 
 ### 5.3 `catalog.ts`
-
-```ts
-export function exposedIds(): string[];              // 池内模型短名（已过白名单）
-export function resolveModel(name: string): string;  // 短名 → 上游 slug；未知原样返回
-export function details(): Array<Record<string, unknown>>;  // 可选，供状态页
-export function refresh?(): Promise<void>;           // 可选：强制重拉上游目录（CLI --refresh）
-```
 
 **兜底表是必需的**：未登录或上游目录失败时用户仍应看到模型（否则渠道在选择器里
 凭空消失，用户以为插件坏了）。
@@ -387,33 +326,6 @@ export function refresh?(): Promise<void>;           // 可选：强制重拉上
 以及告诉用户这次看的是哪份数据。
 
 ### 5.4 `billing.ts`
-
-```ts
-export class CreditsError extends Error {}
-export function fetchCredits(options?: { refreshOn401?: boolean }): Promise<CreditsResult>;
-
-interface CreditsResult {
- ok: true;
- total: { remain: number; size: number; used: number; unit: string; remain_percent: number };
- packages: CreditPackage[];
- claimable?: Array<Record<string, unknown>>;
-}
-
-// 签到 / 领取能力（**必需**：每个渠道都要提供；CLI 的 `<cid> checkin` 用）
-export const signin: SigninModule;
-interface SigninModule {
- // 只读。claimedToday：**今天是否已签**（渠道能判断就给；判断不了用 null）；
- // daily：是否"每日"语义（false = 一次性奖励，如 raccoon）
- status(): Promise<{
-   claimable: boolean | null;
-   summary: string;
-   items?: …;
-   claimedToday?: boolean | null;
-   daily?: boolean;
- }>;
- claim(): Promise<{ ok: boolean; summary: string; detail?: unknown }>;          // 写：会真的领掉
-}
-```
 
 **「今日是否签到过」的判定顺序**（CLI 侧）：① 上游 `claimedToday` → ② 本地台账
 `state/signin.json`（记"我们发起过的领取"）→ ③ 都没有就明确报未知，不猜。上游说已签而台账
