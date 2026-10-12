@@ -13,16 +13,18 @@ skills: model-bridge-gateway
 baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型名填上面那两个。
 
 命令一览：`model list` / `model usage` / `model show <cid>` / `channels` / `status` / `start` / `stop` /
-`restart` / `models` / `login` / `logs` / `credits` / `checkin` / `accounts` / `paths`。
+`restart` / `models` / `login` / `logs` / `credits` / `accounts` / `paths`。
+
+签到已**自动化**：网关运行期间逐渠道自动签到（未登录跳过、连败 3 次当日熔断），无需手动触发。
 
 ## 选渠道的交互约定（**重要**）
 
 命令都是**跨渠道**的；**没有 per-channel 命令**了。凡是要落到某个渠道的动作
-（`login` / `credits` / `checkin` / `model show` / `logs` 的单渠道形态 / `accounts add|use|remove`）：
+（`login` / `credits` / `model show` / `logs` 的单渠道形态 / `accounts add|use|remove`）：
 
-1. 先跑只读命令拿渠道清单与现状：`mb status --json` / `mb channels` / `mb checkin --status`；
+1. 先跑只读命令拿渠道清单与现状：`mb status --json` / `mb channels`；
 2. 用 `ask_user_query` 让用户选（列出渠道，标注已登录/未登录；给「全部」选项）；
-3. **不要替用户决定**；写操作（`checkin`、`accounts remove`）执行前必须确认。
+3. **不要替用户决定**；写操作（`accounts remove`）执行前必须确认。
 
 渠道清单：`catpaw` `codearts` `lobsterai` `loomy` `qoder` `qodercn` `raccoon`
 `traecn` `workbuddy` `workbuddyai`（以 `mb channels` 输出为准）。各渠道的登录方式见 `/mb-login`；

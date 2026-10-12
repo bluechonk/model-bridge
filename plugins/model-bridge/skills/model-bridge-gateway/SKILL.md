@@ -63,20 +63,19 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `mb model show <cid>` | 该渠道贡献了池内哪些模型 |
 | `mb <cid> login` | 登录该渠道（等价 `login --channel <cid>`） |
 | `mb <cid> billing` | 该渠道额度 / 账单（别名 `credits`） |
-| `mb <cid> checkin` | 该渠道签到 / 领奖励（`--status` 只查不领、`--daily-only` 跳过一次性） |
-| `mb checkin --status` | **今天签没签**（上游 → 本地台账 → 未知；末尾给 N/M 摘要） |
+| 签到 | **已自动化**：网关运行期间逐渠道自动签到（未登录跳过、连败 3 次当日熔断；台账见 `mb status`） |
 
 **命令形态**：网关生命周期（`start/stop/restart/status/logs`）是**仓库级**的，不带渠道；
 「对某个渠道做点什么」写成 `<cid> <动词>`（如 `mb traecn login`、`mb traecn billing`、
-`mb traecn checkin`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
+`mb traecn credits`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
 
 **没有 per-channel command**：命令都是跨渠道的（`/mb-login`、`/mb-credits`、
-`/mb-checkin`、`/mb-models` 等）。凡动作要落到某个渠道、而用户没指明时：
-先跑只读命令（`mb status --json` / `mb channels` / `mb checkin --status`）拿渠道清单与现状 →
+`/mb-models` 等）。凡动作要落到某个渠道、而用户没指明时：
+先跑只读命令（`mb status --json` / `mb channels`）拿渠道清单与现状 →
 用 **`ask_user_query`** 让用户选（标注已登录/未登录，给「全部」选项）→ 再执行；
-**不要替用户决定**，写操作（`checkin`、`accounts remove`）执行前必须确认。
+**不要替用户决定**，写操作（`accounts remove`）执行前必须确认。
 
-`checkin` 对**所有**渠道口径统一：有端点的真查真领（codearts / lobsterai / loomy / raccoon / traecn / qoder / qodercn），没端点的返回渠道自己的一句说明（workbuddy / workbuddyai / catpaw —— 上游自动发奖励）。
+签到已**自动化**：网关运行期间逐渠道自动签到（未登录跳过、台账已签跳过、连败 3 次当日熔断），`mb status` 可看本地台账摘要。
 「没有端点」不是故障、退出码仍为 0；只有查询/领取**抛错**（未登录等）才非零。
 
 ## 标准流程
