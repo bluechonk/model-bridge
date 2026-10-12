@@ -6,6 +6,7 @@
  */
 
 export * as authFlow from "./auth-flow.js";
+export * as autoSignin from "./auto-signin.js";
 export * as cli from "./cli.js";
 export * as consoleApi from "./console.js";
 export * as daemon from "./daemon.js";
