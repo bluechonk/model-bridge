@@ -9,6 +9,7 @@
  */
 
 import * as authFlow from "./auth-flow.js";
+import { startAutoSignin } from "./auto-signin.js";
 import { syncPool } from "./account-pool.js";
 import { runInChannel } from "./channel-context.js";
 import { channels, getChannel, type Channel } from "./channel.js";
@@ -308,6 +309,8 @@ export async function runServe(options: ServeOptions): Promise<number> {
         console: consoleServer?.url ?? "",
       });
     }
+    // 网关 ready 即挂自动签到：逐渠道（未登录跳过 / 台账已签跳过 / 连败 3 次当日熔断）
+    startAutoSignin((m) => console.error(`${prefix} ${m}`));
     // 运行态轮询本地 /v1/models 把可用模型喂给控制台
     for (;;) {
       if (state.quitting) return;
