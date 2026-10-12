@@ -8,8 +8,7 @@
     "node": ">=22.6"
   },
   "bin": {
-    "catpaw": "./dist/cli.js",
-    "catpaw-bridge": "./dist/cli.js"
+    "catpaw": "./dist/cli.js"
   },
   "exports": {
     ".": "./dist/index.js",

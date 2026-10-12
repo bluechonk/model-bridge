@@ -58,6 +58,13 @@ for (const cid of channelDirs) {
     `${where}: devDependencies 含非白名单包 ${devDeps.filter((d) => !DEV_ALLOW.includes(d)).join(", ")}`,
   );
 
+  // 渠道 bin 恰为 `<cid>`（单渠道调试入口；双名 mb/model-bridge 属仓库级 packages/cli）
+  const bin = pkg.bin ?? {};
+  check(
+    Object.keys(bin).length === 1 && bin[cid] === "./dist/cli.js",
+    `${where}: bin 必须恰为 { "${cid}": "./dist/cli.js" }，当前 ${JSON.stringify(bin)}`,
+  );
+
   // cid 与目录名一致（防两套名字漂移）
   const channelSrc = read(`${where}/src/channel.ts`);
   const cidDecl = channelSrc.match(/cid:\s*"([a-z0-9-]+)"/);
