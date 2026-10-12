@@ -484,6 +484,10 @@ export async function fetchModels(
   return env;
 }
 
+/** Remote 网页目录端点（对齐 trae2api 实测；Solo batch 端点对新账号已 2001）。 */
+export const REMOTE_MODELS_PATH = "/api/remote/v1/models";
+const REMOTE_FUNCTIONS = "solo_agent_remote%2Csolo_work_remote%2Csolo_design_remote";
+
 /** 从模型载荷推导连接配置（远端不掌握 host 时保持默认）。 */
 export function resolveConfig(data: Record<string, unknown>, fallback?: Config): Config {
   const cfg: Config = { ...(fallback ?? loadConfig()[0] ?? defaultConfig()) };
@@ -492,6 +496,53 @@ export function resolveConfig(data: Record<string, unknown>, fallback?: Config):
   cfg.chatPath = CHAT_PATH;
   cfg.modelsPath = MODELS_PATH;
   return cfg;
+}
+
+/**
+ * 拉取 Remote 网页目录（当前主来源，协议 §5.0）。
+ *
+ * 与 Solo 目录的差异：载荷是 `{data:{list:[{function, models:[{name,…}]}]}}`，
+ * 模型名大小写混排（`deepseek-v4.1-flash` 与 `DeepSeek-V4-Flash-Official` 并存）。
+ */
+export async function fetchRemoteModels(
+  credential: AuthLike,
+  timeoutMs = 30_000,
+): Promise<Record<string, unknown>> {
+  const cfg = loadConfig()[0];
+  if (credential.domain && credential.domain !== hostOf(cfg.baseUrl)) {
+    cfg.baseUrl = `https://${credential.domain}`;
+  }
+  const url = `${trimSlash(cfg.baseUrl)}${REMOTE_MODELS_PATH}?functions=${REMOTE_FUNCTIONS}&show_custom_model=true`;
+  const headers = buildHeaders(credential, { accept: "application/json" });
+  headers["Origin"] = "https://www.trae.cn";
+  headers["Referer"] = "https://www.trae.cn/";
+
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      method: "GET",
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    throw new Error(`Remote model list request failed: ${String(err)}`);
+  }
+  const text = await resp.text();
+  if (resp.status === 401 || resp.status === 403) {
+    throw new UpstreamUnauthorized("Upstream rejected the access token (HTTP 401/403)");
+  }
+  if (resp.status !== 200) {
+    const kind = classifyError(resp.status, text);
+    throw new Error(`Remote model list request failed: HTTP ${resp.status} (${kind})`);
+  }
+  let env: unknown;
+  try {
+    env = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Remote model list response is not valid JSON: ${String(err)}`);
+  }
+  if (!isRecord(env)) throw new Error("Remote model list response is not a JSON object");
+  return env;
 }
 
 // ── 流翻译：TRAE event 流 → OpenAI SSE（必须是增量） ─────────────────────────

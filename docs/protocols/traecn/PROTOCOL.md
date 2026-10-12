@@ -222,7 +222,26 @@ Body: {"ClientID":"ono9krqynydwx5","RefreshToken":"<refreshToken>","ClientSecret
 
 ## 5. 模型目录
 
-### 5.1 拉取（trae-auth.ts:676-706）
+### 5.0 Remote 网页目录（**当前主来源**，2026-10 实测）
+
+**背景**：`batch_get_detail_param`（§5.1）对新账号已全线 `error_code=2001`
+（22 个通道全部 config not found，账号无 SOLO 权益时如此）；
+trae2api 系项目同样以 Remote 目录为主、Solo 目录仅作补充。
+
+```
+GET {agentHost}/api/remote/v1/models?functions=solo_agent_remote%2Csolo_work_remote%2Csolo_design_remote&show_custom_model=true
+Headers: 同对话头（buildHeaders）+ Origin/Referer: https://www.trae.cn/
+→ HTTP 200 { data: { list: [ { function, models: [ { name, ... } ] } ] } }
+```
+
+- 三个组：`solo_agent_remote`（最全）、`solo_work_remote`、`solo_design_remote`
+- 实测池内模型（2026-10-12，新登录账号）：`glm-5.3-flash`、`glm-5.3`、
+  `glm-5.3-flashx`、`glm-5.2`、`deepseek-v4.1-flash`、`DeepSeek-V4-Flash-Official`、
+  `DeepSeek-V4-Pro-Official`、`kimi-k3`、`kimi-k2.7-code`、`Doubao-Seed-*`、`mimo-v2.6-*`、`step-5-preview`
+- 模型名大小写混排（`deepseek-v4.1-flash` 与 `DeepSeek-V4-Flash-Official` 并存）；
+  池白名单在共享层做 case-insensitive 匹配
+
+### 5.1 拉取（Solo 通道，trae-auth.ts:676-706；**对新账号已 2001，仅存档**）
 
 ```
 POST {agentHost}/api/ide/v1/batch_get_detail_param

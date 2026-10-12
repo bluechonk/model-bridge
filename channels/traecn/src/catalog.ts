@@ -331,15 +331,66 @@ export function resetRemoteCache(): void {
 }
 
 /**
+ * 解析 Remote 网页目录载荷（协议 §5.0）：
+ * `{data:{list:[{function, models:[{name,…}]}]}}` —— 三组模型按组内顺序合并，
+ * 同名后不覆盖前（agent_remote 组最全、排最前）。
+ */
+export function parseWebCatalog(payload: Record<string, unknown>): ModelEntry[] {
+  const list = (payload["data"] as Record<string, unknown> | undefined)?.["list"];
+  if (!Array.isArray(list)) return [];
+  const entries: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const group of list) {
+    if (!isRecord(group)) continue;
+    const models = group["models"];
+    if (!Array.isArray(models)) continue;
+    for (const raw of models) {
+      if (!isRecord(raw)) continue;
+      const name = nonEmpty(raw["name"]);
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      entries.push({
+        id: name,
+        model: name,
+        name,
+        function: nonEmpty(group["function"]) ?? nonEmpty(group["agent_type"]) ?? "solo_agent_remote",
+        context_window: FALLBACK_CONTEXT_WINDOW,
+        max_output: FALLBACK_MAX_OUTPUT,
+        max_mode: false,
+        multimodal: false,
+        tiered: false,
+        efforts: [],
+        default_effort: "",
+        hidden: false,
+      });
+    }
+  }
+  return entries;
+}
+
+/**
  * 强制从上游重拉目录并落盘（CLI `--refresh` / `model refresh`）。
  *
  * 与自动路径的区别：**失败抛错**。用户显式要求刷新时必须知道成没成，
  * 而不是看到一张旧表还以为刷成功了。
+ *
+ * 主来源是 Remote 网页目录（§5.0）；Remote 拿不到时回落 Solo batch（§5.1，
+ * 对新账号通常已 2001，仅对老账号兜底）。
  */
 export async function refresh(): Promise<void> {
   // 动态 import：避免 catalog ↔ upstream/cred 的静态环
   const [upstream, cred] = await Promise.all([import("./upstream.js"), import("./cred.js")]);
   const c = cred.load();
+  try {
+    const payload = await upstream.fetchRemoteModels(c);
+    const entries = parseWebCatalog(payload);
+    if (entries.length > 0) {
+      mergeRemote(entries);
+      return;
+    }
+  } catch {
+    /* Remote 失败：回落 Solo 目录 */
+  }
   const payload = await upstream.fetchModels(c);
   const entries = parseRemoteCatalog(payload);
   if (entries.length === 0) throw new Error("Upstream returned an empty model catalog (or every channel was filtered out by the whitelist)");
