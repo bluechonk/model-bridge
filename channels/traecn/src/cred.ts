@@ -479,7 +479,7 @@ export interface LoginOptions {
   onStatus?: (msg: string) => void;
 }
 
-/** 运行一次浏览器授权登录并持久化结果。 */
+/** 运行一次浏览器授权登录并持久化结果。baseUrl 仅作为对话域落盘（realm 解析用），不参与授权 URL。 */
 export async function login(baseUrl?: string, options: LoginOptions = {}): Promise<Credentials> {
   const { onUrl, onStatus } = options;
   const machineId = generateMachineId();
@@ -487,7 +487,8 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   const callback = await startCallbackServer();
   try {
     const callbackUrl = `http://127.0.0.1:${callback.port}${CALLBACK_PATH}`;
-    const authorizeUrl = buildAuthorizeUrl(callbackUrl, machineId, deviceId, baseUrl);
+    // 授权页固定在 consoleHost（www.trae.cn）；共享层传入的 baseUrl 是 agentHost，误传会导致登录域名错误
+    const authorizeUrl = buildAuthorizeUrl(callbackUrl, machineId, deviceId);
     onUrl?.(authorizeUrl); // 拿到 URL 立刻回调（界面据此弹窗）
     onStatus?.(`Opened the browser authorization page, waiting for callback (local port ${callback.port})…`);
     openBrowser(authorizeUrl);
