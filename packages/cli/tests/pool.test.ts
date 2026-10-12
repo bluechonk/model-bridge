@@ -32,10 +32,11 @@ describe("仓库级模型池", () => {
 
   it("注册了全部 10 个渠道", () => {
     const cids = gw.channels().map((c) => c.config.cid).sort();
-    assert.equal(cids.length, 10, `实际: ${cids.join(", ")}`);
+    assert.equal(cids.length, 9, `实际: ${cids.join(", ")}`);
     assert.ok(!cids.includes("cline"), "cline 渠道已移除");
     assert.ok(!cids.includes("zcode"), "zcode 渠道已移除");
-    for (const cid of ["workbuddy", "workbuddyai", "catpaw", "traecn", "codearts", "loomy", "qoder", "qodercn"]) {
+    assert.ok(!cids.includes("qoder"), "qoder 渠道已移除");
+    for (const cid of ["workbuddy", "workbuddyai", "catpaw", "traecn", "codearts", "loomy", "qodercn"]) {
       assert.ok(cids.includes(cid), `缺少渠道 ${cid}`);
     }
   });
@@ -45,7 +46,7 @@ describe("仓库级模型池", () => {
     assert.equal(health["ok"], true);
     assert.equal(health["service"], "model-bridge");
     const per = health["channels"] as Array<{ cid: string }>;
-    assert.equal(per.length, 10, "逐渠道报告");
+    assert.equal(per.length, 9, "逐渠道报告");
   });
 
   it("/v1/models 恒返回两个池模型，不带渠道前缀", async () => {
@@ -96,7 +97,7 @@ describe("仓库级模型池", () => {
 
   it("渠道一览：桩渠道不贡献模型，也不拖垮整表", () => {
     const rows = gw.channels().map((c) => {
-      // 与 CLI 同样的容错：桩渠道（qoder）抛错 → 视为空
+      // 与 CLI 同样的容错：桩渠道（qodercn）抛错 → 视为空
       let exposed: string[] = [];
       try {
         exposed = gw.runInChannel(c.config.cid, () => c.catalog.exposedIds());
@@ -114,14 +115,6 @@ describe("仓库级模型池", () => {
       contributed("workbuddyai").includes("deepseek-v4.1-flash"),
       "workbuddyai 应贡献 deepseek-v4.1-flash",
     );
-    // qoder 的上游 key 是短名（gfmodel），由渠道自己映射成池内名；
-    // 4.0 的 dfmodel 已随 deepseek-v4-flash 出池，故只剩 glm 一条
-    assert.deepEqual(
-      [...contributed("qoder")].sort(),
-      ["glm-5.3-flash"],
-      "qoder 用 gfmodel 贡献 glm-5.3-flash",
-    );
-
     const contributing = gw.channels().filter((c) => contributed(c.config.cid).length > 0);
     assert.ok(contributing.length >= 8, `至少 8 个渠道有贡献，实际 ${contributing.length}`);
 

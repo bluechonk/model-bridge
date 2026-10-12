@@ -40,7 +40,6 @@
 | `codearts` | CodeArts（华为云） | [PROTOCOL.md](./protocols/codearts/PROTOCOL.md) |
 | `lobsterai` | LobsterAI（有道） | [PROTOCOL.md](./protocols/lobsterai/PROTOCOL.md) |
 | `loomy` | Loomy（讯飞） | [PROTOCOL.md](./protocols/loomy/PROTOCOL.md) |
-| `qoder` | Qoder（国际版 `qoder.com`） | [PROTOCOL.md](./protocols/qoder/PROTOCOL.md) |
 | `qodercn` | Qoder 国内版（`qoder.com.cn`） | 与 `qoder` **同一套协议**（仅域名/身份/模型目录不同），见 [PROTOCOL.md](./protocols/qoder/PROTOCOL.md) |
 | `raccoon` | Raccoon（商汤） | [PROTOCOL.md](./protocols/raccoon/PROTOCOL.md) |
 | `traecn` | TRAE（字节，中国版） | [PROTOCOL.md](./protocols/traecn/PROTOCOL.md) |

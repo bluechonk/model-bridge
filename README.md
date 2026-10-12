@@ -58,7 +58,7 @@ mb model list          # 任意目录直接可用（全名 model-bridge 等价�
 | 契约与规范（改代码前必读） | [docs/CONTRACT-TS.md](docs/CONTRACT-TS.md) |
 | 公共模型池怎么选渠道 | [docs/POOL-ARCHITECTURE.md](docs/POOL-ARCHITECTURE.md) |
 | 存储落点规范 | [docs/STORAGE-CONVENTION.md](docs/STORAGE-CONVENTION.md) |
-| 某个渠道怎么用 | [docs/bridges/&lt;cid&gt;.md](docs/bridges/)（如 `docs/bridges/qoder.md`） |
+| 某个渠道怎么用 | [docs/bridges/&lt;cid&gt;.md](docs/bridges/)（如 `docs/bridges/qodercn.md`） |
 | 某个上游的协议细节 | `docs/protocols/<cid>/PROTOCOL.md` |
 
 ## 约定

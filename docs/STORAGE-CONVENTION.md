@@ -32,7 +32,6 @@
 ├── lobsterai/
 ├── loomy/
 ├── raccoon/
-└── qoder/
 ```
 
 分层名 = `cid`（全小写、仅 `[a-z0-9-]`），**不带点、不带 `-bridge` 后缀** —— 它已经是
@@ -54,7 +53,6 @@
 | loomy | `.loomy-bridge` | `<root>/loomy` | `LOOMY_HOME` | `LOOMY_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-loomy`, `.loomy2api`, `.loomy-gateway` | — |
 | raccoon | `.raccoon-bridge` | `<root>/raccoon` | `RACCOON_HOME` | `RACCOON_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-raccoon`, `.raccoon2api`, `.raccoon-gateway` | — |
 | gemini | `.gemini-bridge` | `<root>/gemini` | `GEMINI_HOME` | `GEMINI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-gemini`, `.gemini2api`, `.gemini-gateway` | — |
-| qoder | `.qoder-bridge` | `<root>/qoder` | `QODER_HOME` | `QODER_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-qoder`, `.qoder2api`, `.qoder-gateway` | — |
 
 = 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据。）此后渠道有过增删：`zcode` 移除、`workbuddy` 拆成 `workbuddy` + `workbuddyai`、`gemini` / `minimax` 移除 —— 下表是**迁移当时**的快照，不代表当前渠道集合。`<root>` = `~/.model-bridge`。
 

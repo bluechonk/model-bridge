@@ -21,7 +21,6 @@ skills: model-bridge-gateway
 | --- | --- | --- |
 | workbuddy | 浏览器授权 + 每 5s 轮询 `/v2/plugin/auth/token` | 国内版（账号在 `codebuddy.ai`） |
 | workbuddyai | 同上（**同一套协议**） | 国际版（`workbuddy.ai`）；**两条渠道别选错，选错会一直等授权超时** |
-| qoder | OAuth 设备授权（PKCE S256）→ 浏览器 → `deviceToken/poll` | 国际版 `qoder.com`；**轮询期 HTTP 404 是正常中间态**（用户还没点同意） |
 | qodercn | 同上 | 国内版 `qoder.com.cn`（阿里云账号）；别与 `qoder` 互换 |
 | loomy | 交互菜单：`1) SMS code`（手机号与验证码**当场输入**）/ `2) WeChat QR code` | 终端里会继续提示输入；`--wechat` 可直接指定扫码 |
 | raccoon | 浏览器打开官方授权页 → **把回跳的 `office-raccoon://auth/callback?…` 整条 URL 粘贴回终端** | 别用 `/login/mp` 那条（只给官方手机 App 扫码，网页端是死链） |

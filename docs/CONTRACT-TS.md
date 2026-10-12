@@ -390,7 +390,7 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 
 **未实现的渠道**（`cred`/`upstream`/`catalog`/`billing` 是桩）必须让每个函数
 **立即抛错且消息含「尚未实现 + 实现依据指引」**，而不是返回空值。
-测试要锁定这个语义（见 `qoder-bridge/tests/selftest.test.ts`）。
+测试要锁定这个语义（见 `qodercn-bridge/tests/selftest.test.ts`）。
 
 ---
 
