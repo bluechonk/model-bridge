@@ -671,14 +671,9 @@ export function newTranslator(): StreamTranslator {
         const events = decodeFrame(diff, frame as Record<string, unknown>);
         for (const ev of events) pendingEvents.push(ev);
       }
-      // 消费 pending（error 出现后不再发内容）
+      // 消费 pending 事件并按序转发
       while (pendingEvents.length > 0) {
-        const ev = pendingEvents.shift()!;
-        if (ev.type === "error") {
-          out.push(eventToSseFrame(ev));
-        } else {
-          out.push(eventToSseFrame(ev));
-        }
+        out.push(eventToSseFrame(pendingEvents.shift()!));
       }
       return out;
     },

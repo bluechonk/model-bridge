@@ -313,7 +313,6 @@ function ensureCachedModels(): void {
   }
 }
 
-/** 写入远端目录缓存（解析后的条目）。 */
 /**
  * 灌入远端目录（由 `refreshCatalog` 拉到后调用）。
  *

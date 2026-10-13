@@ -18,7 +18,7 @@ export function writeSecretFile(path: string, body: string): void {
   try {
     chmodSync(path, 0o600);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
 }
 

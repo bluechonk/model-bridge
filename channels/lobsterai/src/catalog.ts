@@ -57,21 +57,15 @@ export interface ModelEntry {
 }
 
 /**
- * 兜底模型表（30 条，全部 `contextWindow: 131072`）。
- *
- * 来源：`GET /api/models/available` 在 **2026-10-08** 的一次真实拉取
- * （此前是 2026-08-06 的 19 条快照，与上游已脱节）。顺序照抄上游返回顺序，
- * 不重排 —— 它是实测时的返回顺序，重排会让「与上游对比」失去可比性。
- *
- * ⚠️ 不含 `costMultiplier`：编译期快照，价格会变，**不猜**。
- */
-/**
  * 兜底目录：**未登录 / 上游拉不到时**给用户看的那份。
  *
  * ⚠ 这是**快照**不是实时数据：内容来自 2026-10-08 的一次真实拉取
  * （`upstream.fetchModels()`，当时 30 条）。真机拉到远端后会用远端目录覆盖它，
  * 并落盘到 `cache/models.json`（见共享层 `catalog-cache.ts`）——
  * 所以正常使用时看到的**不是**这张表。
+ *
+ * 顺序照抄上游返回顺序，不重排 —— 重排会让「与上游对比」失去可比性。
+ * 不含 `costMultiplier`：编译期快照，价格会变，不猜。
  */
 const FALLBACK: readonly string[] = [
   "deepseek-flash",

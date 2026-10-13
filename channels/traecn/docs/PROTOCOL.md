@@ -273,7 +273,7 @@ tool_response_multimodal}`、`context_window_tokens{dev,max}`、
 
 ### 5.2 通道白名单机制（重点）
 
-白名单（顺序即优先级，共 15 个，可用 `DSH_TRAE_CHANNELS` 覆盖整张表）：
+白名单（顺序即优先级，共 15 个，可用 `TRAE_CHANNELS` 覆盖整张表）：
 
 ```
 solo_agent, solo_work_lite, solo_agent_remote, solo_work_remote, solo_agent_lite,

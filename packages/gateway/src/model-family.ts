@@ -26,7 +26,7 @@
  * | traecn | `DeepSeek-V4-Flash-Official` | id 里 |
  * | qoder | `dfmodel` / `gfmodel` / `qfmodel` | **只在展示名里**（DeepSeek-Flash / GLM-5.3-Flash） |
  * | workbuddyai | `deepseek-v4.1-flash` | id 里 |
- *  *
+ *
  * ⇒ 只匹配 id 会漏掉 Qoder 那类「目录 key 当 id」的渠道，故两者都要看。
  *
  * ## 策略边界（改前必读）

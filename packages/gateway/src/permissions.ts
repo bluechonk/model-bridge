@@ -13,12 +13,12 @@ export function enforcePermissions(root: string, dir: string): void {
   try {
     chmodSync(root, 0o700);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
   try {
     chmodSync(dir, 0o700);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
   let entries: string[];
   try {
@@ -32,7 +32,7 @@ export function enforcePermissions(root: string, dir: string): void {
       if (statSync(path).isDirectory()) chmodSync(path, 0o700);
       else chmodSync(path, 0o600);
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   }
   // 再往下一层：`accounts/`（账号池）、`cache/` 等子目录里的文件同样该是 0600
@@ -51,7 +51,7 @@ export function enforcePermissions(root: string, dir: string): void {
         if (statSync(path).isDirectory()) chmodSync(path, 0o700);
         else chmodSync(path, 0o600);
       } catch {
-        /* ignore */
+        /* 忽略 */
       }
     }
   }

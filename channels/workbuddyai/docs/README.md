@@ -60,21 +60,15 @@ baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型 `deepseek-v4.
 
 ```
 src/
- cli.ts           命令行入口（node:util parseArgs，零依赖）
- cli-consts.ts    默认地址与版本（单独一个模块，避免 cli ↔ daemon 循环导入）
- headless.ts      serve / login 的无窗口实现
- gateway.ts       HTTP 网关（node:http）+ 上游约束与指纹改写
- sse-stream.ts    SSE 规范化转发与聚合
- daemon.ts        守护进程管理（start/stop/restart/status/models/credits/logs）
- console.ts       控制台 API
- auth-flow.ts     登录编排（与界面解耦，只经 LoginUi 接口交互）
- cred.ts          凭据：设备码登录、刷新、落盘
- upstream.ts      上游端点、配置、鉴权头
- catalog.ts       模型短名 ↔ 上游 slug
- billing.ts       额度查询
- portfree.ts      端口自愈与服务身份
+  channel.ts       渠道注册（ChannelConfig + 4 个模块装配）
+  cli.ts           单渠道 CLI 入口（注册本渠道后交给共享 CLI）
+  index.ts         模块导出
+  cred.ts          凭据：登录、刷新、落盘
+  upstream.ts      上游端点、配置、鉴权头
+  catalog.ts       模型映射与目录
+  billing.ts       额度查询
 tests/
- selftest.test.ts node:test 自检（离线，不出网）
+  selftest.test.ts node:test 自检（离线，不出网）
 ```
 
 构建产物 `dist/` 与依赖 `node_modules/` 已在 `.gitignore` 中。

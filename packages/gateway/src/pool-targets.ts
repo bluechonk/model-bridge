@@ -1,8 +1,7 @@
 /**
- * 公共模型池：对外只有**三个跨渠道模型**。
+ * 公共模型池：对外只有**两个跨渠道模型**。
  *
- * 客户端看到的 id 是固定的三个（`deepseek-v4.1-flash` / `deepseek-v4-flash` /
- * `glm-5.3-flash`），**不带渠道前缀**；请求落到哪家渠道由网关按账本决定
+ * 客户端看到的 id 是固定的两个（`deepseek-v4.1-flash` / `glm-5.3-flash`），**不带渠道前缀**；请求落到哪家渠道由网关按账本决定
  * （见 `pool-usage.ts`）。客户端不需要、也无法指定渠道。
  *
  * ## 为什么要归一化
@@ -15,7 +14,7 @@
  * | raccoon | `sn-deepseek-v4-1-flash` | `deepseek-v4.1-flash` |
  * | traecn | `DeepSeek-V4-Flash-Official` | `deepseek-v4-flash` |
  * | loomy | `deepseek-v4-flash-0731` | `deepseek-v4-flash` |
- *  *
+ *
  * 归一化之后做**精确相等**比较 —— 这是 4.0 与 4.1 不互相串号的唯一保证
  * （用包含匹配就会让 `deepseek-v4-flash` 也命中 `deepseek-v4.1-flash`）。
  *
@@ -29,7 +28,7 @@
 import { channels, type Channel } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
 
-/** 对外暴露的三个模型 id（恒小写，也是客户端应使用的写法）。 */
+/** 对外暴露的两个模型 id（恒小写，也是客户端应使用的写法）。 */
 export const POOL_MODELS = [
   "deepseek-v4.1-flash",
   "glm-5.3-flash",
