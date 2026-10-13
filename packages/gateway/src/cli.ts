@@ -38,19 +38,15 @@ export function usage(): string {
   restart                   重启守护式网关（stop + start）
   status                    聚合状态：网关健康、逐渠道登录状态、守护 PID、凭证
   logs [-f]                 查看网关日志尾部；-f 持续输出新日志（Ctrl+C 退出）
-  serve                     前台无窗口运行（不守护；守护进程内部也用它）
 
 模型池（对外只有 2 个模型，请求落到哪家渠道由网关按账单已用量决定）:
-  model list                池视图：2 个模型 → 候选渠道 + 已用量 + 冷却状态
-  model show <cid>          某个渠道贡献了池内哪些模型
+  model list                池视图：2 个模型 → 候选渠道 + 已用量 + 冷却/暂不可用
   model usage [--refresh]   池账本；--refresh 立刻重查各渠道账单额度
-  model refresh [cid]       强制重拉上游模型**目录**并记到本地（可只刷一个渠道）
 
 按渠道操作（<cid> 是已注册的渠道，如 workbuddyai）:
 ${verbLines.join("\n")}
 
 其它:
-  channels                  渠道视角：每个渠道各自贡献了池内哪些模型（= model list 的补集）
   paths [--all]             存储落点与文件（仓库级 = 全部渠道；只读）
   accounts [...]            账号池（不加 <cid> 时跨渠道）
   credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
@@ -68,8 +64,8 @@ ${verbLines.join("\n")}
   --realm <名>              login 的登录域（渠道自定义；单域渠道忽略）
   --wechat                  login：微信扫码登录（仅声明该方式的渠道，如 loomy）
   --channel <cid>           只操作该渠道（等价把 <cid> 写成第一个参数）
-  --refresh                 model refresh / <cid> models：强制重拉上游目录；
-                            model usage：立刻重查各渠道账单额度（失败即报错退出）
+  --refresh                 <cid> models / model usage：强制重拉上游目录 / 重查账单
+                            （失败即报错退出）
   --all                     paths：统计工作区内全部渠道
   --workspace <dir>         paths：工作区根（默认从当前目录向上查找）
   --json                    输出 JSON（事件行 / 结构化结果）
@@ -88,9 +84,7 @@ ${verbLines.join("\n")}
   ${cid} start                          # 起网关（守护式，幂等）
   ${cid} model list                     # 池视图：2 个模型分别会先落到哪家
   ${cid} model usage --refresh          # 立刻重查各渠道账单额度并写进账本
-  ${cid} model show catpaw              # catpaw 贡献了池内哪些模型
-  ${cid} model refresh                  # 强制重拉全部渠道的模型**目录**（记到本地）
-  ${cid} traecn models --refresh        # 只强制重拉 traecn 的目录
+  ${cid} traecn models --refresh        # 强制重拉 traecn 的模型目录
   ${cid} traecn login                   # 登录 traecn（浏览器授权）
   ${cid} traecn billing                 # 看 traecn 的剩余额度 / 账单
   ${cid} workbuddyai status --json       # 结构化状态（脚本用）

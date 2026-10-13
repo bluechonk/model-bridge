@@ -335,6 +335,21 @@ export async function runServe(options: ServeOptions): Promise<number> {
     }
     // 网关 ready 即挂自动签到：逐渠道（未登录跳过 / 台账已签跳过 / 连败 3 次当日熔断）
     startAutoSignin((m) => console.error(`${prefix} ${m}`));
+
+    // 目录保鲜：每天后台重拉一次各渠道模型目录（实现了 catalog.refresh 的渠道才拉），
+    // 渠道上游加了新模型时无需手动 `--refresh`。失败静默保留旧表（下次再试）。
+    const CATALOG_REFRESH_MS = 24 * 60 * 60 * 1000;
+    const catalogTimer = setInterval(() => {
+      if (state.quitting) return;
+      for (const channel of targets) {
+        const refresh = channel.catalog.refresh;
+        if (!refresh) continue; // 内置表渠道没有远端目录层
+        void runInChannel(channel.config.cid, () => refresh.call(channel.catalog)).catch(() => {
+          /* 拉取失败：旧表继续用，下个周期再试 */
+        });
+      }
+    }, CATALOG_REFRESH_MS);
+    catalogTimer.unref?.(); // 不阻止进程退出
     // 运行态轮询本地 /v1/models 把可用模型喂给控制台
     for (;;) {
       if (state.quitting) return;

@@ -518,6 +518,16 @@ export async function status(
         `（${info.signin.channels.map((c) => `${c.cid}${c.claimed_today ? "✓" : ""}`).join(", ")}）`,
     );
   }
+  // 下一步建议：有异常才说话，正常不打扰（status 是高频诊断命令的收尾）
+  const notLoggedIn = perChannel.filter((c) => !c.present);
+  if (notLoggedIn.length > 0) {
+    const first = notLoggedIn[0]!;
+    console.log(
+      list.length === 1
+        ? `建议: mb login -c ${first.cid}（未登录）`
+        : `建议: ${notLoggedIn.length} 个渠道未登录，逐个 mb login -c <cid>（如 mb login -c ${first.cid}）`,
+    );
+  }
   if (stale.stale) console.log(staleBuildHint(stale));
   const message = consoleState?.["message"];
   if (typeof message === "string" && message) console.log(`提示: ${message}`);

@@ -49,7 +49,6 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | --- | --- |
 | `mb model list` | **池视图**：两个模型 → 候选渠道 + 账单已用量 + 冷却（顺序即路由顺序） |
 | `mb model usage [--refresh]` | 池账本；`--refresh` 立刻重查各渠道账单额度 |
-| `mb channels` | **渠道视角**：每个渠道各自贡献了池内哪些模型 |
 | `mb status`（`--json`） | 网关健康、逐渠道登录状态、守护 PID、凭证、auto_start |
 | `mb start` | 守护式启动（幂等；失败默认只报告，`--strict` 才非零退出） |
 | `mb stop` / `restart` | 停 / 重启守护实例（不碰第三方进程；成功停止会在日志留 `stop` 记录） |
@@ -60,18 +59,18 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `mb credits` | 账号剩余额度（只读，不经网关，不消耗额度） |
 | `mb paths`（`--all`） | 存储落点与文件（只读） |
 | `mb accounts`（`--channel`） | **账号池**：列出账号 / `use <key>` / `add` / `remove <key>` |
-| `mb model show <cid>` | 该渠道贡献了池内哪些模型 |
+| `mb <cid> models` | 该渠道贡献了池内哪些模型（`model show` 是别名，文档不教） |
 | `mb <cid> login` / `mb login -c <cid>` | 登录该渠道；已有凭据时不重授权（提示加 `--force`）；死凭据由网关自动登出清理 |
 | `mb <cid> billing` | 该渠道额度 / 账单（别名 `credits`） |
 | 签到 | **已自动化**：网关运行期间逐渠道自动签到（未登录跳过、连败 3 次当日熔断；台账见 `mb status`） |
 
 **命令形态**：网关生命周期（`start/stop/restart/status/logs`）是**仓库级**的，不带渠道；
 「对某个渠道做点什么」写成 `<cid> <动词>`（如 `mb traecn login`、`mb traecn billing`、
-`mb traecn credits`）。两种写法等价：`<cid> 动词` 与 `动词 --channel <cid>`，都支持 `--json`。
+`mb traecn credits`）。两种写法等价：`<cid> 动词` 与 `动词 -c/--channel <cid>`，都支持 `--json`。
 
-**没有 per-channel command**：命令都是跨渠道的（`/mb-login`、`/mb-credits`、
-`/mb-models` 等）。凡动作要落到某个渠道、而用户没指明时：
-先跑只读命令（`mb status --json` / `mb channels`）拿渠道清单与现状 →
+**没有 per-channel command**：插件命令只有 6 个（`/mb` `/mb-status` `/mb-gateway`
+`/mb-login` `/mb-credits` `/mb-models`），全部跨渠道。凡动作要落到某个渠道、而用户没指明时：
+先跑只读命令（`mb status --json` / `mb model list`）拿渠道清单与现状 →
 用 **`ask_user_query`** 让用户选（标注已登录/未登录，给「全部」选项）→ 再执行；
 **不要替用户决定**，写操作（`accounts remove`）执行前必须确认。
 
@@ -86,7 +85,7 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
    别替他决定）→ `mb login --channel <cid>`，把授权链接原样展示给用户并请其授权；
    不要并发重复跑。国内版与国际版是**两个渠道**：账号在 `codebuddy.ai` 用 `workbuddy`，
    在 `workbuddy.ai` 用 `workbuddyai` —— 选错渠道会一直等授权超时。
-4. 「有哪些模型可用」→ `mb model list`（池视图）；`mb channels`（渠道视角，不需要网关）。
+4. 「有哪些模型可用」→ `mb model list`（池视图）；`mb <cid> models`（单渠道贡献）。
 5. 「凭证/配置放哪」→ `mb paths --all`；「有几个账号 / 换账号」→ `mb accounts`。
 6. 用户要求停掉 → `mb stop`；端口被第三方占用时如实报告，让用户自行处理。
 
