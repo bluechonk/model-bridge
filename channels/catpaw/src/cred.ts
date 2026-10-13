@@ -304,7 +304,7 @@ export async function fetchCurrentUserId(token: string): Promise<string> {
     // 字段名以参考实现为准（userId）；其余为历史/变体写法。
     //
     // ⚠ 不能直接用共享的 `str()`：它只认字符串，而上游实测返回的是**数字**
-    //   （`"userId": 1234567890`）—— 用 `str()` 会把 uid 静默丢成空串，
+    //   （`"userId": 1234567890`，数字形态）—— 用 `str()` 会把 uid 静默丢成空串，
     //   账号池随即退化成按 token 建键（同一账号登录两次记成两条）。
     for (const key of ["userId", "uid", "user_id", "id"]) {
       const value = rec[key];
