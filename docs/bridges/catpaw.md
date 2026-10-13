@@ -1,13 +1,13 @@
 # catpaw-bridge
 
 美团妙手（CatPaw）的本地 OpenAI Chat Completion 兼容网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，翻译成妙手的 conversation 协议
 （round → event → turn 三段式）转发到上游。
 
 > 本仓库原为 Python 实现（uv + aiohttp + cryptography），已重构为 TypeScript
-> （Node ≥ 22.6，零第三方运行依赖），并纳入 `model-bridge` 工作区的
+> （Node ≥ 22.6，零第三方运行依赖），并纳入 `modelmux` 工作区的
 > `packages/gateway` 共享层。旧实现与逆向研究结论保留在 git 历史与 `docs/` 里。
 
 ## 特性
@@ -22,7 +22,7 @@
   （上游无原生用户工具通道），`finish_reason=tool_calls`
 - **工具规模自适应**：上游对 `systemPromptOverride` 有 65508 字符硬上限，
   超限时明确回 400 `prompt_too_large`（不静默截断）
-- **凭据只来自登录**：`~/.model-bridge/catpaw/credentials.json`，由 `catpaw login` 落盘；
+- **凭据只来自登录**：`~/.modelmux/catpaw/credentials.json`，由 `catpaw login` 落盘；
   不读桌面端密文 / auth.json（遵守「禁止从本地文件获取」规则）
 
 ## 快速开始
@@ -31,12 +31,12 @@
 
 ```bash
 npm install && npm run build              # 工作区根：装依赖 + 编译全部包
-mb catpaw login                            # 仓库级 CLI：登录
-mb catpaw status / models / billing        # 状态 / 模型 / 账单
+mx catpaw login                            # 仓库级 CLI：登录
+mx catpaw status / models / billing        # 状态 / 模型 / 账单
 node channels/catpaw/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-日常使用走**仓库级网关**：`mb start` 后把任意 OpenAI 客户端指到
+日常使用走**仓库级网关**：`mx start` 后把任意 OpenAI 客户端指到
 `http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
 单渠道独立运行（`node channels/catpaw/dist/cli.js serve`）仅在调试该渠道时用。
 

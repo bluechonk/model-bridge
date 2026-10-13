@@ -202,7 +202,7 @@ GET https://xiaohuanxiong.com/api/web/auth/v1/user_info
 
 ### 2.9 本插件的登录交互（非上游协议，供实现对照）
 
-**没有本地登录页**：`mb raccoon login` 直接打印授权页 URL（见 §2.4），用户在浏览器里
+**没有本地登录页**：`mx raccoon login` 直接打印授权页 URL（见 §2.4），用户在浏览器里
 完成登录后，把地址栏里的整条回调 URL 粘贴回终端；非交互场景可用环境变量
 `RACCOON_LOGIN_CALLBACK` 注入回调 URL。
 

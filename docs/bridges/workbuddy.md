@@ -1,7 +1,7 @@
 # workbuddy-bridge（国内版 CodeBuddy）
 
 WorkBuddy **国内版**（腾讯 CodeBuddy，`codebuddy.ai`）的本地 OpenAI Chat Completion
-透明代理网关。**无窗口（headless）**：状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
+透明代理网关。**无窗口（headless）**：状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
 
 > **国际版是另一条渠道**：`workbuddyai`（`workbuddy.ai`），见 [`workbuddyai.md`](workbuddyai.md)。
 > 两者的登录协议、上游约束、SSE 处理**完全一致**（代码有意重复，见下），差别只有域名、
@@ -29,18 +29,18 @@ WorkBuddy **国内版**（腾讯 CodeBuddy，`codebuddy.ai`）的本地 OpenAI C
 
 ```bash
 npm install && npm run build              # 工作区根：装依赖 + 编译全部包
-mb workbuddy login                            # 仓库级 CLI：登录
-mb workbuddy status / models / billing        # 状态 / 模型 / 账单
+mx workbuddy login                            # 仓库级 CLI：登录
+mx workbuddy status / models / billing        # 状态 / 模型 / 账单
 node channels/workbuddy/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-日常使用走**仓库级网关**：`mb start` 后把任意 OpenAI 兼容客户端指到
+日常使用走**仓库级网关**：`mx start` 后把任意 OpenAI 兼容客户端指到
 `http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
 单渠道独立运行（`node channels/workbuddy/dist/cli.js serve`）仅在调试该渠道时用。
 
 ## 存储
 
-统一存储根 `~/.model-bridge/` 下按 cid 分层，本渠道全部落在 `~/.model-bridge/workbuddy/`：
+统一存储根 `~/.modelmux/` 下按 cid 分层，本渠道全部落在 `~/.modelmux/workbuddy/`：
 `credentials.json`（0600）、`upstream.json`、`prefs.json`、`gateway.pid`、`gateway.log`，
 外加 `cache/`、`state/`、`debug/`。
 
@@ -76,7 +76,7 @@ npm test                                  # 本渠道（离线，不出网）
 node --test channels/workbuddy/tests/*.test.ts
 ```
 
-数据目录用 `MODEL_BRIDGE_HOME` 指向临时目录，不碰真实凭据。
+数据目录用 `MODELMUX_HOME` 指向临时目录，不碰真实凭据。
 
 ## 许可证
 

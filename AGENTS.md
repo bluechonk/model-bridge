@@ -1,10 +1,10 @@
-# AGENTS.md —— 工作区规则（`model-bridge-cli`）
+# AGENTS.md —— 工作区规则（`modelmux`）
 
 本文件是**仓库级**规则（与 `~/.zcode/AGENTS.md` 的个人偏好同时生效；项目约定以本文件为准）。
 
 ## 1. 这是什么
 
-一个本地 OpenAI 兼容网关 CLI（`model-bridge-cli`，bin `mb`）+ 全部渠道：
+一个本地 OpenAI 兼容网关 CLI（`modelmux`，bin `mb`）+ 全部渠道：
 专注一件事——多个渠道汇成一个 OpenAI 兼容端点，对外丢出两个池内模型。
 每个渠道在下游是一个**池子**：模型池（`catalog` + `(deepseek|glm) × flash` 白名单）+ 账号池（同渠道多账号）。
 **对外只有两个跨渠道模型**（`deepseek-v4.1-flash` / `glm-5.3-flash`），
@@ -12,8 +12,8 @@
 
 ```
 packages/gateway/    共享层（gateway / daemon / headless / paths / 渠道注册表；**不许出现渠道知识**）
-packages/cli/        CLI 入口（bin `mb` / `model-bridge`，注册全部渠道后交给共享 CLI；
-                     发布名 model-bridge-cli，单文件 bundle 自包含，npx/npm -g 直装）
+packages/cli/        CLI 入口（bin `mb` / `modelmux`，注册全部渠道后交给共享 CLI；
+                     发布名 modelmux，单文件 bundle 自包含，npx/npm -g 直装）
 channels/<cid>/      一个渠道 = 一个池子（每个只实现 4 个渠道特有模块）
 docs/                全部文档
 ```
@@ -86,7 +86,7 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 
 - `npm test` 全绿（含 `verify:storage` / `verify:docs`）。
 - 文档与代码**同一个 commit** 更新。
-- 不要提交运行时数据（`~/.model-bridge/`、`dist/`、`node_modules/`）。
+- 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。
 
 ## 6. 改完代码要重启网关（**别让用户测旧进程**）
 

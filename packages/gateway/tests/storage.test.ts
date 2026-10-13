@@ -44,13 +44,13 @@ function useChannel(cid: string, extra: Partial<BridgeConfig> = {}): BridgeConfi
 /** 每个用例一个独立存储根（paths 按 (root,cid) 缓存收拢结果）。 */
 function withRoot(fn: (root: string) => void): void {
   const root = mkdtempSync(join(tmpdir(), "mb-storage-"));
-  const saved = process.env["MODEL_BRIDGE_HOME"];
-  process.env["MODEL_BRIDGE_HOME"] = root;
+  const saved = process.env["MODELMUX_HOME"];
+  process.env["MODELMUX_HOME"] = root;
   try {
     fn(root);
   } finally {
-    if (saved === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-    else process.env["MODEL_BRIDGE_HOME"] = saved;
+    if (saved === undefined) delete process.env["MODELMUX_HOME"];
+    else process.env["MODELMUX_HOME"] = saved;
     rmSync(root, { recursive: true, force: true });
   }
 }
@@ -61,29 +61,13 @@ const write = (path: string, body: string): void => {
 };
 
 describe("1. 分层：单根 + <cid>", () => {
-  it("storage 根来自 MODEL_BRIDGE_HOME，渠道层是 <root>/<cid>", () => {
+  it("storage 根来自 MODELMUX_HOME，渠道层是 <root>/<cid>", () => {
     withRoot((root) => {
       useChannel("alpha");
       assert.equal(paths.rootDir(), root);
       assert.equal(paths.channelDir(), join(root, "alpha"));
       assert.equal(paths.channelDirFor(useChannel("beta")), join(root, "beta"));
     });
-  });
-
-  it("旧的 <CID>_HOME 仍按存储根处理（兼容）", () => {
-    const alt = mkdtempSync(join(tmpdir(), "mb-legacy-env-"));
-    const savedNew = process.env["MODEL_BRIDGE_HOME"];
-    const savedOld = process.env["ALPHA_HOME"];
-    delete process.env["MODEL_BRIDGE_HOME"];
-    process.env["ALPHA_HOME"] = alt;
-    try {
-      assert.equal(paths.rootDirFor(useChannel("alpha")), alt);
-    } finally {
-      if (savedNew !== undefined) process.env["MODEL_BRIDGE_HOME"] = savedNew;
-      if (savedOld === undefined) delete process.env["ALPHA_HOME"];
-      else process.env["ALPHA_HOME"] = savedOld;
-      rmSync(alt, { recursive: true, force: true });
-    }
   });
 
   it("channelFile 拒绝非法文件名，固定文件路径都在渠道层内", () => {
@@ -93,95 +77,6 @@ describe("1. 分层：单根 + <cid>", () => {
       assert.equal(paths.credentialsPath(), join(root, "alpha", "credentials.json"));
       assert.equal(paths.pidPath(), join(root, "alpha", "gateway.pid"));
       assert.equal(paths.cacheDir(), join(root, "alpha", "cache"));
-    });
-  });
-});
-
-describe("2. 历史顶层目录收拢", () => {
-  it("~/.<cid>-bridge 整目录收拢进 <root>/<cid>/（凭证随之而来）", () => {
-    withRoot((root) => {
-      useChannel("alpha");
-      write(join(root, ".alpha-bridge", "credentials.json"), '{"accessToken":"x"}');
-      const dir = paths.channelDir();
-      assert.equal(dir, join(root, "alpha"));
-      assert.equal(readFileSync(join(dir, "credentials.json"), "utf8"), '{"accessToken":"x"}');
-      assert.equal(existsSync(join(root, ".alpha-bridge")), false, "旧顶层目录应被搬走");
-    });
-  });
-
-  it("新旧并存：补齐缺失文件，且不覆盖已有文件", () => {
-    withRoot((root) => {
-      useChannel("alpha");
-      write(join(root, "alpha", "gateway.log"), "NEW");
-      write(join(root, ".alpha-bridge", "gateway.log"), "OLD");
-      write(join(root, ".alpha-bridge", "credentials.json"), "{}");
-      const dir = paths.channelDir();
-      assert.equal(readFileSync(join(dir, "gateway.log"), "utf8"), "NEW", "已有文件不被覆盖");
-      assert.ok(existsSync(join(dir, "credentials.json")), "缺失文件被补齐");
-    });
-  });
-
-  it("只收拢第一个存在的历史目录，更旧的原样不动", () => {
-    withRoot((root) => {
-      useChannel("alpha");
-      write(join(root, ".alpha-bridge", "credentials.json"), "{}");
-      write(join(root, ".alpha2api", "credentials.json"), "{\"old\":true}");
-      paths.channelDir();
-      assert.ok(existsSync(join(root, ".alpha2api", "credentials.json")), "更旧的历史目录不动");
-      assert.equal(existsSync(join(root, "alpha", "credentials.json")), true);
-    });
-  });
-
-  it("skipMerge：标记为删除的条目不会在补齐时被搬过来", () => {
-    withRoot((root) => {
-      useChannel("alpha", { fileMigrations: [{ from: "junk", action: "delete" }] });
-      // 目标层已存在 → 走「补齐」分支（整体搬移失败时的路径）
-      mkdirSync(join(root, "alpha"), { recursive: true });
-      write(join(root, ".alpha-bridge", "junk", "big.bin"), "x");
-      write(join(root, ".alpha-bridge", "credentials.json"), "{}");
-      const dir = paths.channelDir();
-      assert.equal(existsSync(join(dir, "junk")), false, "已知废弃物不补齐");
-      assert.ok(existsSync(join(dir, "credentials.json")), "正常文件照常补齐");
-    });
-  });
-
-  it("不认其它渠道的旧顶层目录（防止跨渠道劫持）", () => {
-    withRoot((root) => {
-      useChannel("alpha");
-      write(join(root, ".other-bridge", "credentials.json"), "{}");
-      const dir = paths.channelDir();
-      assert.equal(dir, join(root, "alpha"));
-      assert.ok(existsSync(join(root, ".other-bridge")), "别人的旧目录必须原地不动");
-    });
-  });
-});
-
-describe("3. 文件级收敛", () => {
-  it("daemon.pid → gateway.pid", () => {
-    withRoot((root) => {
-      useChannel("alpha", { fileMigrations: [{ from: "daemon.pid", to: "gateway.pid" }] });
-      mkdirSync(join(root, "alpha"), { recursive: true });
-      writeFileSync(join(root, "alpha", "daemon.pid"), "123\n", "utf8");
-      paths.channelDir();
-      assert.equal(readFileSync(join(root, "alpha", "gateway.pid"), "utf8"), "123\n");
-      assert.equal(existsSync(join(root, "alpha", "daemon.pid")), false);
-    });
-  });
-
-  it("action=delete 只在目录为空时删除，非空保留", () => {
-    withRoot((root) => {
-      useChannel("alpha", { fileMigrations: [{ from: "webview", action: "delete" }] });
-      mkdirSync(join(root, "alpha", "webview", "nested"), { recursive: true });
-      writeFileSync(join(root, "alpha", "webview", "nested", "keep.txt"), "x", "utf8");
-      paths.channelDir();
-      assert.ok(existsSync(join(root, "alpha", "webview")), "非空目录不删");
-    });
-
-    withRoot((root) => {
-      useChannel("alpha", { fileMigrations: [{ from: "webview", action: "delete" }] });
-      mkdirSync(join(root, "alpha", "webview"), { recursive: true });
-      paths.channelDir();
-      assert.equal(existsSync(join(root, "alpha", "webview")), false, "空目录可清理");
     });
   });
 });

@@ -121,7 +121,7 @@ describe("自动登出：死凭据被清理并退出路由", () => {
 
   before(async () => {
     root = mkdtempSync(join(tmpdir(), "mb-autologout-"));
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream();
     clearChannels();
     setChannel(makeChannel("dead", upstream.url));
@@ -132,7 +132,7 @@ describe("自动登出：死凭据被清理并退出路由", () => {
   after(async () => {
     await gw?.close().catch(() => {});
     await new Promise<void>((r) => upstream.server.close(() => r()));
-    delete process.env["MODEL_BRIDGE_HOME"];
+    delete process.env["MODELMUX_HOME"];
     clearChannels();
     rmSync(root, { recursive: true, force: true });
   });
@@ -155,7 +155,7 @@ describe("自动登出：死凭据被清理并退出路由", () => {
     assert.equal(status, 503);
     const payload = JSON.parse(text) as { error: { code: string; message: string } };
     assert.equal(payload.error.code, "not_authenticated");
-    assert.ok(payload.error.message.includes("mb login -c"), "提示重新登录的出口");
+    assert.ok(payload.error.message.includes("mx login -c"), "提示重新登录的出口");
     assert.equal(upstream.captured.length, 0, "不应触达上游（渠道根本没凭据）");
   });
 });
@@ -167,7 +167,7 @@ describe("候选过滤：未登录渠道不被路由（高用量也不参与）"
 
   before(async () => {
     root = mkdtempSync(join(tmpdir(), "mb-ghostfilter-"));
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream();
     clearChannels();
     setChannel(makeChannel("ghost", upstream.url)); // 不写凭证 = 未登录
@@ -181,7 +181,7 @@ describe("候选过滤：未登录渠道不被路由（高用量也不参与）"
   after(async () => {
     await gw?.close().catch(() => {});
     await new Promise<void>((r) => upstream.server.close(() => r()));
-    delete process.env["MODEL_BRIDGE_HOME"];
+    delete process.env["MODELMUX_HOME"];
     clearChannels();
     rmSync(root, { recursive: true, force: true });
   });

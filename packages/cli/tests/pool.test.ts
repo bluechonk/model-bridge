@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "mb-all-selftest-"));
-process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["MODELMUX_HOME"] = HOME;
 delete process.env["MODEL_BRIDGE_API_KEY"];
 
 const gw = await import("@model-bridge/gateway");
@@ -40,10 +40,10 @@ describe("仓库级模型池", () => {
     }
   });
 
-  it("服务身份是仓库级 model-bridge（不是某个渠道）", async () => {
+  it("服务身份是仓库级 modelmux（不是某个渠道）", async () => {
     const health = (await (await fetch(`http://${running.addr}/health`)).json()) as Record<string, unknown>;
     assert.equal(health["ok"], true);
-    assert.equal(health["service"], "model-bridge");
+    assert.equal(health["service"], "modelmux");
     const per = health["channels"] as Array<{ cid: string }>;
     assert.equal(per.length, 10, "逐渠道报告");
   });
@@ -60,7 +60,7 @@ describe("仓库级模型池", () => {
       payload.data.every((m) => !m.id.includes("/")),
       "不再暴露 <cid>/<模型> 形态",
     );
-    assert.ok(payload.data.every((m) => m.owned_by === "model-bridge"), "池身份");
+    assert.ok(payload.data.every((m) => m.owned_by === "modelmux"), "池身份");
   });
 
   it("每个池模型都有**跨渠道**候选（不是某个渠道私有）", () => {

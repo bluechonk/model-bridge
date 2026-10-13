@@ -1,7 +1,7 @@
 # raccoon-bridge
 
 Raccoon（商汤）的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 Raccoon 后端。
 
@@ -14,10 +14,10 @@ Raccoon（商汤）的本地 OpenAI Chat Completion 透明代理网关（**TypeS
 
 ```bash
 node channels/raccoon/dist/cli.js login    # 无窗口登录：打印授权链接，粘贴回调 URL 完成
-mb raccoon login                           # 仓库级入口等价写法
+mx raccoon login                           # 仓库级入口等价写法
 node channels/raccoon/dist/cli.js serve    # 前台无窗口运行（单渠道）
-mb start                                   # 守护式启动（幂等，仓库级网关）
-mb status / model list / raccoon billing
+mx start                                   # 守护式启动（幂等，仓库级网关）
+mx status / model list / raccoon billing
 ```
 
 > **登录两步**：打开打印出的 `/code/authorize` 授权页用微信/验证码/密码登录 →
@@ -34,7 +34,7 @@ mb status / model list / raccoon billing
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作走 `mb` 命令（`mb status` / `mb model list` / `mb login -c <cid>` / `mb <cid> billing`）。。
+日常操作走 `mb` 命令（`mx status` / `mx model list` / `mx login -c <cid>` / `mx <cid> billing`）。。
 
 ## 接入
 

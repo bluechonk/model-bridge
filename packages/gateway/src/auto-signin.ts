@@ -14,7 +14,7 @@
  * ## 与手动 `checkin` 的关系
  *
  * 完全复用 `signin.status()` / `signin.claim()` 契约，不做任何渠道特判；
- * 成功记账走同一个 `recordClaim`，所以 `checkin --status` 与 `mb status` 的
+ * 成功记账走同一个 `recordClaim`，所以 `checkin --status` 与 `mx status` 的
  * 签到摘要对自动签到天然可见。
  */
 

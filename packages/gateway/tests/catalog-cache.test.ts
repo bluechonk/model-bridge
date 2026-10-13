@@ -37,13 +37,13 @@ function useChannel(cid: string): void {
 
 function withRoot(fn: (root: string) => void): void {
   const root = mkdtempSync(join(tmpdir(), "mb-catalog-cache-"));
-  const saved = process.env["MODEL_BRIDGE_HOME"];
-  process.env["MODEL_BRIDGE_HOME"] = root;
+  const saved = process.env["MODELMUX_HOME"];
+  process.env["MODELMUX_HOME"] = root;
   try {
     fn(root);
   } finally {
-    if (saved === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-    else process.env["MODEL_BRIDGE_HOME"] = saved;
+    if (saved === undefined) delete process.env["MODELMUX_HOME"];
+    else process.env["MODELMUX_HOME"] = saved;
     clearChannels();
     rmSync(root, { recursive: true, force: true });
   }

@@ -19,13 +19,6 @@ export const config: BridgeConfig = {
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8801",
   uiPort: 8802,
-  legacyDirs: [
-    ".qoder-bridge",
-    ".zcode-connect-qoder",
-    ".qoder2api",
-    ".qoder-gateway",
-  ],
-  legacyEnvVars: ["QODER_HOME"],
   debugDumpEnv: "QODER_DEBUG_DUMP",
 };
 

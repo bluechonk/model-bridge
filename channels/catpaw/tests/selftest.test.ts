@@ -22,7 +22,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "catpaw-selftest-"));
-process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["MODELMUX_HOME"] = HOME;
 process.env["CATPAW_NO_BROWSER"] = "1";
 
 // 先注册渠道再引模块
@@ -56,7 +56,7 @@ after(() => {
 // ── 1. 路径与配置 ────────────────────────────────────────────────────────────
 
 describe("paths & config", () => {
-  it("MODEL_BRIDGE_HOME 覆盖存储根", () => {
+  it("MODELMUX_HOME 覆盖存储根", () => {
     assert.equal(paths.rootDir(), HOME);
   });
 

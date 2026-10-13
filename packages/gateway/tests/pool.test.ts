@@ -28,13 +28,13 @@ let savedRoot: string | undefined;
 
 before(() => {
   root = mkdtempSync(join(tmpdir(), "mb-pool-"));
-  savedRoot = process.env["MODEL_BRIDGE_HOME"];
-  process.env["MODEL_BRIDGE_HOME"] = root;
+  savedRoot = process.env["MODELMUX_HOME"];
+  process.env["MODELMUX_HOME"] = root;
 });
 
 after(() => {
-  if (savedRoot === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-  else process.env["MODEL_BRIDGE_HOME"] = savedRoot;
+  if (savedRoot === undefined) delete process.env["MODELMUX_HOME"];
+  else process.env["MODELMUX_HOME"] = savedRoot;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -221,7 +221,7 @@ describe("1. /v1/models 只有两个模型，请求由池决定落到谁", () =>
       payload.data.map((m) => m.id),
       ["deepseek-v4.1-flash", "glm-5.3-flash"],
     );
-    assert.equal(payload.data[0]!.owned_by, "model-bridge", "池身份，不泄露候选渠道");
+    assert.equal(payload.data[0]!.owned_by, "modelmux", "池身份，不泄露候选渠道");
   });
 
   it("请求 glm-5.3-flash → 打到唯一能提供它的渠道，且用目录里的原始 slug", async () => {
@@ -307,14 +307,14 @@ describe("1. /v1/models 只有两个模型，请求由池决定落到谁", () =>
       unknown
     >;
     assert.equal(health["ok"], true);
-    assert.equal(health["service"], "model-bridge");
+    assert.equal(health["service"], "modelmux");
     assert.equal(health["logged_in"], true);
     const per = health["channels"] as Array<{ cid: string; logged_in: boolean }>;
     assert.deepEqual(per.map((c) => c.cid).sort(), ["alpha", "beta"]);
 
     const rootInfo = (await (await fetch(`http://${gw.addr}/`)).json()) as Record<string, unknown>;
     assert.deepEqual(rootInfo["channels"], ["alpha", "beta"]);
-    assert.equal(rootInfo["service"], "model-bridge");
+    assert.equal(rootInfo["service"], "modelmux");
   });
 });
 

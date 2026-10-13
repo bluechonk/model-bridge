@@ -26,19 +26,7 @@ export const config: BridgeConfig = {
   // `WORKBUDDY_DEBUG_DUMP`：这些「裸 workbuddy」名字现在归**独立渠道** `workbuddy`
   // （国内版 codebuddy.ai）所有 —— 一个名字只能属于一个渠道，否则会跨产品串号。
   // 旧数据早已迁到 `<root>/workbuddyai/`，无需再认它们。
-  legacyDirs: [
-    ".zcode-workbuddy-bridge",
-    ".zcode-connect-workbuddyai",
-    ".workbuddyai2api",
-    ".workbuddyai-gateway",
-  ],
-  legacyEnvVars: ["ZCB_HOME", "WBAI2API_HOME"],
   debugDumpEnv: "WORKBUDDYAI_DEBUG_DUMP",
-  legacyDebugDumpEnv: ["WBAI_DEBUG_DUMP"],
-  fileMigrations: [
-    // 迁移遗留的空目录残留（非空时只记日志，不删）
-    { from: "webview", action: "delete" },
-  ],
 };
 
 export const channel: Channel = { config, cred, upstream, catalog, billing };

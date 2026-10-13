@@ -28,7 +28,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "raccoon-selftest-"));
-process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["MODELMUX_HOME"] = HOME;
 process.env["RACCOON_NO_BROWSER"] = "1"; // 测试里绝不真开浏览器
 
 const PHONE = "13800138000";
@@ -321,26 +321,12 @@ after(() => {
 // ── 1. 路径 ───────────────────────────────────────────────────────────────────
 
 describe("1. 路径", () => {
-  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/raccoon", () => {
+  it("数据目录名固定，受 MODELMUX_HOME 覆盖，渠道层是 <root>/raccoon", () => {
     assert.equal(paths.rootDir(), HOME);
     assert.equal(paths.channelDir(), join(HOME, "raccoon"));
     assert.ok(paths.credentialsPath().endsWith("credentials.json"));
   });
 
-  it("旧目录存在时整目录迁移", () => {
-    const alt = mkdtempSync(join(tmpdir(), "raccoon-legacy-"));
-    mkdirSync(join(alt, ".raccoon-gateway"), { recursive: true });
-    writeFileSync(join(alt, ".raccoon-gateway", "credentials.json"), '{"access_token":"legacy"}', "utf8");
-    const saved = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = alt;
-    try {
-      assert.equal(paths.channelDir(), join(alt, "raccoon"));
-      assert.ok(readFileSync(paths.credentialsPath(), "utf8").includes("legacy"));
-    } finally {
-      process.env["MODEL_BRIDGE_HOME"] = saved;
-      rmSync(alt, { recursive: true, force: true });
-    }
-  });
 });
 
 // ── 2. 手机号 AES-128-CFB ─────────────────────────────────────────────────────

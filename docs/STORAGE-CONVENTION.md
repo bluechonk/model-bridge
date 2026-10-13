@@ -1,19 +1,19 @@
-# 存储落点与文件命名规范（工作区 `model-bridge`）
+# 存储落点与文件命名规范（工作区 `modelmux`）
 
 本文件只规定**放在哪里、叫什么名字**：存储根、cid 分层、覆盖用环境变量、目录内的文件命名、
 历史名迁移。**凭证/配置的字段内容不在此列** —— 各 `channels/<cid>/` 自己决定
 （见 `CONTRACT-TS.md` §5）。
 
-适用范围：工作区内全部渠道包 + 共享包 `packages/gateway`（清单以 `mb model list` 为准）。
+适用范围：工作区内全部渠道包 + 共享包 `packages/gateway`（清单以 `mx model list` 为准）。
 
 ---
 
 ## 1. 目标布局（一句话）
 
-**工作区只有一个存储根 `~/.model-bridge/`，各渠道按 `cid` 分一层子目录。**
+**工作区只有一个存储根 `~/.modelmux/`，各渠道按 `cid` 分一层子目录。**
 
 ```
-~/.model-bridge/                 ← 唯一存储根（MODEL_BRIDGE_HOME 可覆盖）
+~/.modelmux/                 ← 唯一存储根（MODELMUX_HOME 可覆盖）
 ├── prefs.json                   ← （可选）跨渠道共享偏好
 ├── gateway.pid / gateway.log    ← 仓库级网关的 PID 与日志（不属于任何渠道）
 ├── pool-usage.json              ← 公共模型池的渠道账本（账单已用量 + 失败冷却）
@@ -56,7 +56,7 @@
 | raccoon | `.raccoon-bridge` | `<root>/raccoon` | `RACCOON_HOME` | `RACCOON_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-raccoon`, `.raccoon2api`, `.raccoon-gateway` | — |
 | gemini | `.gemini-bridge` | `<root>/gemini` | `GEMINI_HOME` | `GEMINI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-gemini`, `.gemini2api`, `.gemini-gateway` | — |
 
-= 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据。）此后渠道有过增删：`zcode` 移除、`workbuddy` 拆成 `workbuddy` + `workbuddyai`、`gemini` / `minimax` 移除 —— 下表是**迁移当时**的快照，不代表当前渠道集合。`<root>` = `~/.model-bridge`。
+= 违反规范，见 §3。（**均已修复**，§3 保留迁移前的盘点作为历史依据。）此后渠道有过增删：`zcode` 移除、`workbuddy` 拆成 `workbuddy` + `workbuddyai`、`gemini` / `minimax` 移除 —— 下表是**迁移当时**的快照，不代表当前渠道集合。`<root>` = `~/.modelmux`。
 
 > 上表是**迁移前快照**，其中 `workbuddy` 一行指的是**当时**那个兼做国际/国内的渠道
 > （后来改名为 `workbuddyai`）。该渠道现已**拆成两条**，见 §2.4。
@@ -94,9 +94,9 @@ codearts 的模型缓存主落点是 `<root>/codearts/cache/`；历史位置 `~/
 
 ## 4. 目标规范（条文）
 
-1. **单一存储根**：`~/.model-bridge/`，由共享层唯一解析，渠道不得自行拼绝对路径。
+1. **单一存储根**：`~/.modelmux/`，由共享层唯一解析，渠道不得自行拼绝对路径。
 2. **按 cid 分层**：`<root>/<cid>/`。`cid` 全小写、仅 `[a-z0-9-]`、等于 `BridgeConfig.cid`。
-3. **根目录覆盖变量**：`MODEL_BRIDGE_HOME`（唯一）。旧的 `<CID>_HOME` 降级为兼容别名：
+3. **根目录覆盖变量**：`MODELMUX_HOME`（唯一）。旧的 `<CID>_HOME` 降级为兼容别名：
   读到即视为覆盖根（并打一条 deprecation 日志）—— 现状脚本与测试不会断。
 4. **目录内固定文件名**（唯一定义处：`packages/gateway/src/paths.ts`）：
 

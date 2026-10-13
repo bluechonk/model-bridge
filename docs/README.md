@@ -1,6 +1,6 @@
 # 文档索引
 
-工作区 `model-bridge` 的**全部文档集中在本目录**，按用途分四类：
+工作区 `modelmux` 的**全部文档集中在本目录**，按用途分四类：
 
 | 目录 | 放什么 |
 | --- | --- |
@@ -26,7 +26,7 @@
 | 文档 | 一句话 |
 | --- | --- |
 | [CONTRACT-TS.md](./CONTRACT-TS.md) | **工作区实现契约**：共享层 / 渠道层 7 文件 / 零运行依赖 / 发布构建 / 测试要求 / 交付清单 |
-| [STORAGE-CONVENTION.md](./STORAGE-CONVENTION.md) | **存储落点与文件命名规范**：统一根 `~/.model-bridge/` + 按 cid 分层、迁移规则 |
+| [STORAGE-CONVENTION.md](./STORAGE-CONVENTION.md) | **存储落点与文件命名规范**：统一根 `~/.modelmux/` + 按 cid 分层、迁移规则 |
 | [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) | **池化架构**：公共模型池（两个跨渠道模型 + 账单额度排序，§2）+ 账号池 |
 
 ## 2. 渠道协议规格 `docs/protocols/<cid>/PROTOCOL.md`

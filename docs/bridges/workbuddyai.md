@@ -1,7 +1,7 @@
 # workbuddyai-bridge
 
 WorkBuddyAI 的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 WorkBuddyAI 后端。
 
@@ -33,12 +33,12 @@ WorkBuddyAI 的本地 OpenAI Chat Completion 透明代理网关（**TypeScript**
 
 ```bash
 npm install && npm run build              # 工作区根：装依赖 + 编译全部包
-mb workbuddyai login                            # 仓库级 CLI：登录
-mb workbuddyai status / models / billing        # 状态 / 模型 / 账单
+mx workbuddyai login                            # 仓库级 CLI：登录
+mx workbuddyai status / models / billing        # 状态 / 模型 / 账单
 node channels/workbuddyai/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-日常使用走**仓库级网关**：`mb start` 后把任意 OpenAI 兼容客户端指到
+日常使用走**仓库级网关**：`mx start` 后把任意 OpenAI 兼容客户端指到
 `http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
 单渠道独立运行（`node channels/workbuddyai/dist/cli.js serve`）仅在调试该渠道时用。
 
@@ -52,8 +52,8 @@ node channels/workbuddyai/dist/cli.js --help    # 单渠道 CLI（调试 / 回�
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作走 `mb` 命令（`mb status` / `mb start|stop|restart` / `mb login -c workbuddyai` /
-`mb model list` / `mb workbuddyai billing`），控制台 API 只是给程序化调用留的口子：
+日常操作走 `mb` 命令（`mx status` / `mx start|stop|restart` / `mx login -c workbuddyai` /
+`mx model list` / `mx workbuddyai billing`），控制台 API 只是给程序化调用留的口子：
 
 | 端点 | 说明 |
 | --- | --- |
@@ -89,17 +89,17 @@ tests/
 
 ## 存储与配置
 
-全部落点在统一存储根 `~/.model-bridge/` 下按渠道分层：凭证在
-`~/.model-bridge/workbuddyai/credentials.json`（权限 0600），不要提交到 git。
+全部落点在统一存储根 `~/.modelmux/` 下按渠道分层：凭证在
+`~/.modelmux/workbuddyai/credentials.json`（权限 0600），不要提交到 git。
 历史顶层目录（`~/.workbuddyai2api/`、`~/.workbuddyai-gateway/` 等）首次访问时自动收拢进该层，
-无需重新登录。`MODEL_BRIDGE_HOME` 可把整个存储根指到别处（旧的 `ZCB_HOME` / `WBAI2API_HOME`
+无需重新登录。`MODELMUX_HOME` 可把整个存储根指到别处（旧的 `ZCB_HOME` / `WBAI2API_HOME`
 仍被识别但已弃用），便携/测试用。
-`mb paths --all` 可只读列出全部落点。
+`mx paths --all` 可只读列出全部落点。
 
 拆分成两条渠道后，**裸 `workbuddy` 名字**（`~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
 `WORKBUDDY_DEBUG_DUMP`）**两条渠道都不再认领**：那个目录里是国际版旧凭证，而 `workbuddy`
 这个 cid 现在属于国内版 —— 认领会把国际数据迁进国内渠道（跨产品串号）。旧数据早已迁入
-`~/.model-bridge/workbuddyai/`，无需再迁。
+`~/.modelmux/workbuddyai/`，无需再迁。
 
 ## 模型短名映射
 
@@ -113,7 +113,7 @@ tests/
 npm test          # = node --test tests/selftest.test.ts
 ```
 
-测试**完全离线**：所有上游调用指向本机假服务，数据目录用 `MODEL_BRIDGE_HOME`
+测试**完全离线**：所有上游调用指向本机假服务，数据目录用 `MODELMUX_HOME`
 指向临时目录，不需要真实凭据，也不会碰真实账号。
 
 覆盖：路径与目录迁移、模型别名映射、凭据落盘/损坏容忍、上游 URL 与鉴权头、

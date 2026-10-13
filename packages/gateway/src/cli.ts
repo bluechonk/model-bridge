@@ -22,8 +22,8 @@ import * as report from "./report.js";
 /** 生成当前渠道的帮助文本。 */
 export function usage(): string {
   const single = channelCount() === 1;
-  // 仓库级入口的 bin 有 `model-bridge` / `mb` 两个名字，帮助里统一用短名 `mb`。
-  const cid = single ? getChannel().config.cid : "mb";
+  // 仓库级入口的 bin 有 `modelmux` / `mx` 两个名字，帮助里统一用短名 `mx`。
+  const cid = single ? getChannel().config.cid : "mx";
   const display = single ? getChannel().config.display : "多渠道路由（模型池）";
   const verbLines = CHANNEL_VERBS.map(([v, d]) => `  ${("<cid> " + v).padEnd(24)} ${d}`);
   return `${cid} — ${display} OpenAI Chat Completion 网关（本地多渠道）
@@ -92,7 +92,7 @@ ${verbLines.join("\n")}
 
 /** 打印版本：`<入口名> <版本>（N 个渠道；node vX）`。 */
 function printVersion(cid?: string): void {
-  const label = cid ?? (channelCount() === 1 ? getChannel().config.cid : "mb");
+  const label = cid ?? (channelCount() === 1 ? getChannel().config.cid : "mx");
   console.log(`${label} ${version(cid)}（${channelCount()} 个渠道；node ${process.version}）`);
 }
 
@@ -204,7 +204,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
 
-  // ① 以渠道为第一参数：`mb <cid> <动词>`
+  // ① 以渠道为第一参数：`mx <cid> <动词>`
   if (hasChannel(command)) {
     return groups.runChannelCommand(command, positionals.slice(1), ctx);
   }

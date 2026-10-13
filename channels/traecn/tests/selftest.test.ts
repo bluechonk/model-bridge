@@ -24,7 +24,7 @@ import { after, before, describe, it } from "node:test";
 
 // 必须在 import 被测模块之前设置（paths 每次调用都重新解析存储根）
 const HOME = mkdtempSync(join(tmpdir(), "traecn-selftest-"));
-process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["MODELMUX_HOME"] = HOME;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
 const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");

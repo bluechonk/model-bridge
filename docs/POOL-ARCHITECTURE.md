@@ -1,4 +1,4 @@
-# 池化架构：模型池 + 账号池（`model-bridge-cli`）
+# 池化架构：模型池 + 账号池（`modelmux`）
 
 本文件回答「一个 CLI + 渠道即池子」形态下的公共层设计，并给出
 **账号池要不要现在做**的结论与顺序。实现契约仍见 `CONTRACT-TS.md`，落点见
@@ -20,7 +20,7 @@
 
 ## 1. 形态：一个 CLI，渠道即池子
 
-- **一个 CLI**：`mb`（bin `model-bridge` 等价）—— 一个网关进程、一个入口；
+- **一个 CLI**：`mb`（bin `modelmux` 等价）—— 一个网关进程、一个入口；
   早期 per-channel 插件形态已全部移除（2026-10-13）。
 - **渠道的新角色**：不是「一个网关」，而是**一个池子**。
  - **模型池**：该渠道能提供哪些模型（= 现有 `catalog` + 白名单 `FAMILY_ALLOWLIST = [/flash/i]`）。
@@ -95,7 +95,7 @@
 
 - 账单**一天刷两三次**（TTL 8 小时）：网关启动时、以及 TTL 到期后的下一次请求，
  在**后台**异步刷新（`maybeRefreshBilling`），绝不阻塞正在处理的请求。
-- 手动刷新：`mb model usage --refresh`。
+- 手动刷新：`mx model usage --refresh`。
 - 账单查询失败只更新尝试时刻、**保留上一次的用量数字**（不把账清零，也不用 0 冒充）。
 
 ### 2.4 路由与失败转移
@@ -156,9 +156,9 @@
 
 | 命令 | 看什么 |
 |---|---|
-| `mb model list` | **池视图**：两个模型，各自挂出候选渠道 + 已用量 + 冷却状态（顺序就是实际路由顺序） |
-| `mb <cid> models` | **渠道视角**：该渠道贡献了池内哪些模型（`--refresh` 重拉上游目录） |
-| `mb model usage [--refresh]` | 看账本；`--refresh` 立刻重查各渠道账单额度 |
+| `mx model list` | **池视图**：两个模型，各自挂出候选渠道 + 已用量 + 冷却状态（顺序就是实际路由顺序） |
+| `mx <cid> models` | **渠道视角**：该渠道贡献了池内哪些模型（`--refresh` 重拉上游目录） |
+| `mx model usage [--refresh]` | 看账本；`--refresh` 立刻重查各渠道账单额度 |
 
 > 单渠道独立运行（`channels/<cid>/dist/cli.js start`）**也走池**：`/v1/models` 同样是那两条，
 > 只是候选渠道只有一个（提供不了的模型请求时回 503）。
@@ -263,10 +263,10 @@ interface CredModule {
 
 | 入口 | 行为 |
 |---|---|
-| `mb accounts`（`--channel` / `--json`） | 列出池子；**首次查看会把已登录的凭证自动收进池子** |
-| `mb accounts add --channel <cid>` | 走渠道自己的登录流程（浏览器授权）→ 成功后入池并设为生效 |
-| `mb accounts use <key>` | 切换生效账号 |
-| `mb accounts remove <key>` | 从池子删除（生效账号 → 同时登出） |
+| `mx accounts`（`--channel` / `--json`） | 列出池子；**首次查看会把已登录的凭证自动收进池子** |
+| `mx accounts add --channel <cid>` | 走渠道自己的登录流程（浏览器授权）→ 成功后入池并设为生效 |
+| `mx accounts use <key>` | 切换生效账号 |
+| `mx accounts remove <key>` | 从池子删除（生效账号 → 同时登出） |
 | `login` 成功后 / 守护 `start` 前 | 自动同步（登录即入池；刷新过的 token 回灌） |
 
 **未实现（策略层，见 §3.3）**：一个渠道内多账号的轮询 / 失败转移 / 配额耗尽自动换号。
@@ -323,11 +323,11 @@ hasChannel(cid?: string): boolean;
 - **修掉一个潜伏 bug**：`daemon.start` 原本 spawn **共享包的 `cli.js`**，而那个文件只是一组
  导出、没有自带入口调用 → 守护进程起来立刻退出（TS 版 `start` 一直是坏的）。现在改为重跑
  **当前进程的入口**（`process.argv[1]`），任何入口（单渠道 bin / 仓库级 bin）都自洽。
-- **服务身份**：单渠道 = `<cid>-bridge`；多渠道路由 = `model-bridge`。守护进程探测时接受
+- **服务身份**：单渠道 = `<cid>-bridge`；多渠道路由 = `modelmux`。守护进程探测时接受
  「本进程认得的全部身份」，所以单渠道的 `status` 也认得多渠道路由的网关。
 - **`model list` / `model usage` 子命令**：池视图（两个模型各自会落到哪家、账本用量与
  冷却/暂不可用）与池账本；渠道视角并入 `<cid> models`。
-- **仓库级 CLI 已可用**：`packages/cli`（bin `mb` / `model-bridge`）。
+- **仓库级 CLI 已可用**：`packages/cli`（bin `mb` / `modelmux`）。
 - **插件层已整体移除（2026-10-13）**：`plugins/` 与 `marketplace.json` 删除，项目更名
- `model-bridge-cli`，定位 = 纯 npx/npm -g 可装的 CLI；集成方式就是「任何 OpenAI 兼容客户端
+ `modelmux`，定位 = 纯 npx/npm -g 可装的 CLI；集成方式就是「任何 OpenAI 兼容客户端
  指向 `http://127.0.0.1:8787/v1`」。（更早：per-channel 插件 → 单插件收敛 → 全部移除。）

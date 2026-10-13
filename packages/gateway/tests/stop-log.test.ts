@@ -21,12 +21,12 @@ describe("stop：终止记录写入日志", () => {
 
   before(() => {
     root = mkdtempSync(join(tmpdir(), "mb-stoplog-"));
-    savedRoot = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    savedRoot = process.env["MODELMUX_HOME"];
+    process.env["MODELMUX_HOME"] = root;
   });
   after(() => {
-    if (savedRoot === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-    else process.env["MODEL_BRIDGE_HOME"] = savedRoot;
+    if (savedRoot === undefined) delete process.env["MODELMUX_HOME"];
+    else process.env["MODELMUX_HOME"] = savedRoot;
     rmSync(root, { recursive: true, force: true });
   });
 

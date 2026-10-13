@@ -13,7 +13,7 @@
  *  8. 额度与活动（裸对象、总额不累加分类、数字 campaignId、benefitAmount、claim+confirm）
  *  9. 端到端网关（假上游）：真实签名头、`x-sdk-content-sha256` 与 body 一致、流式/非流式
  *
- * 数据目录用 MODEL_BRIDGE_HOME 隔离；缓存目录用 DSH_CODEARTS_CACHE_DIR 隔离。
+ * 数据目录用 MODELMUX_HOME 隔离；缓存目录用 DSH_CODEARTS_CACHE_DIR 隔离。
  */
 
 import assert from "node:assert/strict";
@@ -27,7 +27,7 @@ import { after, before, describe, it } from "node:test";
 // 必须在 import 被测模块之前设置（隔离真实凭据与缓存）
 const HOME = mkdtempSync(join(tmpdir(), "ca-selftest-"));
 const CACHE = mkdtempSync(join(tmpdir(), "ca-cache-"));
-process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["MODELMUX_HOME"] = HOME;
 process.env["DSH_CODEARTS_CACHE_DIR"] = CACHE;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
@@ -193,7 +193,7 @@ async function saveFakeCredential(): Promise<void> {
 // ── 测试 ─────────────────────────────────────────────────────────────────────
 
 describe("1. 路径", () => {
-  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/codearts", () => {
+  it("数据目录名固定，受 MODELMUX_HOME 覆盖，渠道层是 <root>/codearts", () => {
     assert.equal(paths.rootDir(), HOME);
     assert.equal(paths.channelDir(), join(HOME, "codearts"));
     assert.ok(paths.credentialsPath().endsWith("credentials.json"));
@@ -202,12 +202,12 @@ describe("1. 路径", () => {
   it("旧目录收拢进统一存储根", () => {
     const alt = mkdtempSync(join(tmpdir(), "ca-legacy-"));
     mkdirSync(join(alt, ".codearts2api"), { recursive: true });
-    const saved = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = alt;
+    const saved = process.env["MODELMUX_HOME"];
+    process.env["MODELMUX_HOME"] = alt;
     try {
       assert.equal(paths.channelDir(), join(alt, "codearts"));
     } finally {
-      process.env["MODEL_BRIDGE_HOME"] = saved;
+      process.env["MODELMUX_HOME"] = saved;
       rmSync(alt, { recursive: true, force: true });
     }
   });

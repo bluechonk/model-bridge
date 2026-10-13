@@ -29,18 +29,16 @@ export class StreamError extends Error {
 /**
  * 抓包落盘目录。
  *
- * 变量名取自渠道的 `debugDumpEnv`（含历史名）。值为 `1`/`true` 时落到渠道层内的
+ * 变量名取自渠道的 `debugDumpEnv`。值为 `1`/`true` 时落到渠道层内的
  * `debug/`；其余值必须是**绝对路径**。未设置则返回 null —— 抓包是 opt-in，
  * 默认不落盘（见 STORAGE-CONVENTION.md §4.5）。
  */
 function debugDumpDir(cid?: string): string | null {
   const { config } = getChannel(cid);
-  for (const name of [config.debugDumpEnv, ...(config.legacyDebugDumpEnv ?? [])]) {
+  {
+    const name = config.debugDumpEnv;
     const value = process.env[name];
-    if (!value) continue;
-    if (name !== config.debugDumpEnv) {
-      noteOnce(`debug-env:${name}`, `${name} is deprecated: use ${config.debugDumpEnv}`);
-    }
+    if (!value) return null;
     if (value === "1" || value.toLowerCase() === "true") return debugDir(cid);
     if (!isAbsolute(value)) {
       noteOnce(`debug-rel:${value}`, `${name} must be an absolute path; ignored: ${value}`);

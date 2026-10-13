@@ -19,13 +19,6 @@ export const config: BridgeConfig = {
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8805",
   uiPort: 8806,
-  legacyDirs: [
-    ".traecn-bridge",
-    ".zcode-connect-trae",
-    ".trae2api",
-    ".trae-gateway",
-  ],
-  legacyEnvVars: ["TRAE_HOME"],
   debugDumpEnv: "TRAECN_DEBUG_DUMP",
 };
 

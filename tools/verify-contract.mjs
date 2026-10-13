@@ -58,7 +58,7 @@ for (const cid of channelDirs) {
     `${where}: devDependencies 含非白名单包 ${devDeps.filter((d) => !DEV_ALLOW.includes(d)).join(", ")}`,
   );
 
-  // 渠道 bin 恰为 `<cid>`（单渠道调试入口；双名 mb/model-bridge 属仓库级 packages/cli）
+  // 渠道 bin 恰为 `<cid>`（单渠道调试入口；双名 modelmux/mx 属仓库级 packages/cli）
   const bin = pkg.bin ?? {};
   check(
     Object.keys(bin).length === 1 && bin[cid] === "./dist/cli.js",
@@ -75,8 +75,8 @@ for (const cid of channelDirs) {
 // 仓库级入口：bin 双名 + 注册清单与渠道目录一致
 const cliPkg = JSON.parse(read("packages/cli/package.json"));
 check(
-  cliPkg.bin?.["mb"] === "./dist/cli.bundle.js" && cliPkg.bin?.["model-bridge"] === "./dist/cli.bundle.js",
-  "packages/cli: bin 必须同时提供 mb 与 model-bridge，且都指向 dist/cli.bundle.js",
+  cliPkg.bin?.["modelmux"] === "./dist/cli.bundle.js" && cliPkg.bin?.["mx"] === "./dist/cli.bundle.js",
+  "packages/cli: bin 必须同时提供 modelmux 与 mx，且都指向 dist/cli.bundle.js",
 );
 const cliDeps = Object.keys(cliPkg.dependencies ?? {});
 check(

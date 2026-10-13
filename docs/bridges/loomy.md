@@ -1,7 +1,7 @@
 # loomy-bridge
 
 Loomy（讯飞）的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 Loomy 后端。
 
@@ -14,17 +14,17 @@ Loomy（讯飞）的本地 OpenAI Chat Completion 透明代理网关（**TypeScr
 
 ```bash
 node channels/loomy/dist/cli.js login   # 交互式登录：菜单选 1) SMS code / 2) WeChat QR code
-mb loomy login                          # 仓库级入口等价写法
+mx loomy login                          # 仓库级入口等价写法
 node channels/loomy/dist/cli.js serve   # 前台无窗口运行（单渠道）
-mb start                                # 守护式启动（幂等，仓库级网关）
-mb status / model list / loomy billing
+mx start                                # 守护式启动（幂等，仓库级网关）
+mx status / model list / loomy billing
 ```
 
 > **登录菜单**（交互终端里弹出，英文）：`1) SMS code` —— 手机号与验证码都**当场输入**；
 > `2) WeChat QR code` —— 扫码授权（未绑手机号时绑定环节需手机号 + 验证码）。
 > 环境变量 `LOOMY_PHONE` / `LOOMY_SMS_CODE` **可选**：给了就作为预填 / 自动化路径
 > （非交互场景不弹菜单，按环境变量自动选；都没设则走扫码）。
-> `mb loomy login --wechat` 可直接指定扫码。
+> `mx loomy login --wechat` 可直接指定扫码。
 
 ## 状态 API
 
@@ -36,7 +36,7 @@ mb status / model list / loomy billing
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作走 `mb` 命令（`mb status` / `mb model list` / `mb login -c <cid>` / `mb <cid> billing`）。。
+日常操作走 `mb` 命令（`mx status` / `mx model list` / `mx login -c <cid>` / `mx <cid> billing`）。。
 
 ## 接入
 

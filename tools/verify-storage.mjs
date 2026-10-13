@@ -18,7 +18,7 @@ import { pathToFileURL } from "node:url";
 
 // ── 安全网：把存储根指向临时目录 ──────────────────────────────────────────────
 // 本脚本只读 config，但渠道模块的 import 可能触碰路径层；显式隔离，绝不碰真实数据。
-process.env["MODEL_BRIDGE_HOME"] = mkdtempSync(join(tmpdir(), "model-bridge-verify-"));
+process.env["MODELMUX_HOME"] = mkdtempSync(join(tmpdir(), "modelmux-verify-"));
 
 const workspaceRoot = dirname(import.meta.dirname);
 const FILENAME_RE = /^[a-z0-9][a-z0-9.-]*$/;
@@ -91,10 +91,6 @@ const { rootDirFor } = await import(
 );
 
 const cids = new Set(bridges.map((b) => b.config.cid));
-/** 历史目录名 → 声明它的渠道（用于发现跨渠道重复声明）。 */
-const dirOwners = new Map();
-const ownDirNames = new Set(bridges.map((b) => `.${b.config.cid}-bridge`));
-const debugEnvs = new Map(bridges.map((b) => [b.config.cid, b.config.debugDumpEnv]));
 const ports = new Map();
 
 for (const { dir, config } of bridges) {
@@ -106,7 +102,7 @@ for (const { dir, config } of bridges) {
 
   // §5.1 落点不再由渠道决定
   check(config.dirName === undefined, `${where}: 不应再有 dirName（落点由共享层按 cid 推导）`);
-  check(config.envVar === undefined, `${where}: 不应再有 envVar（只认 MODEL_BRIDGE_HOME）`);
+  check(config.envVar === undefined, `${where}: 不应再有 envVar（只认 MODELMUX_HOME）`);
 
   // §3.3 调试变量命名
   const expectedDebug = `${cid.toUpperCase().replace(/-/g, "_")}_DEBUG_DUMP`;
@@ -114,56 +110,6 @@ for (const { dir, config } of bridges) {
     config.debugDumpEnv === expectedDebug,
     `${where}: debugDumpEnv 应为 ${expectedDebug}，实际 ${config.debugDumpEnv}`,
   );
-
-  // §3.1 / §4.8 迁移链：真正要防的是**跨渠道劫持** —— 一个历史目录名只能属于一个渠道。
-  // 名字不要求含本渠道 cid：渠道可能改过名（如 workbuddy → workbuddyai），
-  // 改名前的历史名天然不含新 cid，那是正常的历史。
-  for (const name of config.legacyDirs ?? []) {
-    check(typeof name === "string" && name.startsWith("."), `${where}: legacyDirs 项须是以 . 开头的目录名: ${name}`);
-    const claimed = dirOwners.get(name);
-    if (claimed && claimed !== cid) {
-      check(false, `${where}: legacyDirs 名字 ${name} 已被 ${claimed} 声明（跨渠道迁移会劫持数据）`);
-    } else {
-      dirOwners.set(name, cid);
-    }
-    const foreign = [...ownDirNames].filter((d) => d !== `.${cid}-bridge`);
-    check(!foreign.includes(name), `${where}: legacyDirs 含其它渠道的现行目录名 ${name}`);
-    if (typeof name === "string" && !name.includes(cid)) {
-      notes.push(`${where}: legacyDirs ${name} 不含本渠道 cid（改名前的历史名，属正常）`);
-    }
-  }
-
-  // §4.3 旧的分渠道 home 变量仍须被识别
-  // 历史变量名**不要求**等于 `<CID>_HOME`（渠道历史可能叫别的，如 workbuddyai 的历史名是
-  // WORKBUDDY_HOME）；硬要求的是「不含其它渠道的现行变量」。缺 `<CID>_HOME` 只提示不改判。
-  const expectedHome = `${cid.toUpperCase().replace(/-/g, "_")}_HOME`;
-  if (!(config.legacyEnvVars ?? []).includes(expectedHome)) {
-    notes.push(`${where}: legacyEnvVars 未含 ${expectedHome}（历史名不同属正常，确认无遗漏即可）`);
-  }
-  for (const name of config.legacyEnvVars ?? []) {
-    const isOtherHome = bridges.some(
-      (b) => b.config.cid !== cid && name === `${b.config.cid.toUpperCase().replace(/-/g, "_")}_HOME`,
-    );
-    check(!isOtherHome, `${where}: legacyEnvVars 含其它渠道的变量 ${name}`);
-  }
-  for (const name of config.legacyDebugDumpEnv ?? []) {
-    check(
-      ![...debugEnvs].some(([other, env]) => other !== cid && env === name),
-      `${where}: legacyDebugDumpEnv 含其它渠道的变量 ${name}`,
-    );
-  }
-
-  // §4.5 文件级迁移只许落在渠道层内
-  for (const rule of config.fileMigrations ?? []) {
-    check(FILENAME_RE.test(rule.from), `${where}: fileMigrations.from 命名不合规: ${rule.from}`);
-    if (rule.to !== undefined) {
-      check(FILENAME_RE.test(rule.to), `${where}: fileMigrations.to 命名不合规: ${rule.to}`);
-    }
-    check(
-      rule.action === undefined || rule.action === "delete",
-      `${where}: fileMigrations.action 只允许 "delete"`,
-    );
-  }
 
   // §4.9 端口唯一
   const portKey = config.defaultAddr;
@@ -176,8 +122,8 @@ for (const { dir, config } of bridges) {
   // §4.1 单根：所有渠道解析到同一个存储根
   const root = rootDirFor(config);
   check(
-    root === process.env["MODEL_BRIDGE_HOME"],
-    `${where}: 未使用 MODEL_BRIDGE_HOME 作为存储根（${root}）`,
+    root === process.env["MODELMUX_HOME"],
+    `${where}: 未使用 MODELMUX_HOME 作为存储根（${root}）`,
   );
 
   if (config.version === undefined) notes.push(`${where}: 未声明 version`);
