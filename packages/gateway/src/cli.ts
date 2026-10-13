@@ -13,7 +13,6 @@ import { parseArgs } from "node:util";
 import { channelCount, getChannel, hasChannel } from "./channel.js";
 import { CHANNEL_VERBS } from "./command-groups.js";
 import * as groups from "./command-groups.js";
-import * as signinCli from "./signin-cli.js";
 import { defaultAddr, defaultUiPort, version } from "./cli-consts.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
@@ -143,9 +142,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         realm: { type: "string" },
         workspace: { type: "string" },
         channel: { type: "string", short: "c" },
-        status: { type: "boolean" },
-        "daily-only": { type: "boolean" },
-        "fail-if-unclaimed": { type: "boolean" },
         json: { type: "boolean" },
         quiet: { type: "boolean" },
         auto: { type: "boolean" },
@@ -194,9 +190,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     force: boolOpt(o, "force"),
     refresh: boolOpt(o, "refresh"),
     wechat: boolOpt(o, "wechat"),
-    statusOnly: boolOpt(o, "status"),
-    dailyOnly: boolOpt(o, "daily-only"),
-    failIfUnclaimed: boolOpt(o, "fail-if-unclaimed"),
     lines: numOpt(o, "lines") ?? 40,
     ...(strOpt(o, "workspace") !== undefined ? { workspace: strOpt(o, "workspace")! } : {}),
   };
@@ -215,7 +208,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   if (hasChannel(command)) {
     return groups.runChannelCommand(command, positionals.slice(1), ctx);
   }
-  // ② 分组：`model list` / `model show <cid>`
+  // ② 分组：`model list` / `model usage`
   if (command === "model") {
     return groups.runModelGroup(positionals.slice(1), ctx);
   }
@@ -313,19 +306,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         realm: strOpt(o, "realm") ?? "auto",
         force: boolOpt(o, "force"),
       });
-
-    case "checkin":
-    case "signin":
-      return signinCli.runCheckin({
-        json: ctx.json,
-        statusOnly: ctx.statusOnly,
-        dailyOnly: ctx.dailyOnly,
-        failIfUnclaimed: ctx.failIfUnclaimed,
-        ...(cid !== undefined ? { cid } : {}),
-      });
-
-    case "channels":
-      return groups.listChannels(ctx.json, ctx.refresh);
 
     default:
       console.error(`未知命令: ${command}`);

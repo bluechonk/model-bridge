@@ -292,25 +292,6 @@ describe("2. 模型池（model 分组）", () => {
     );
   });
 
-  it("channels 是渠道视角：每个渠道贡献了哪些池模型", async () => {
-    const a = await run(["channels", "--json"]);
-    assert.equal(a.code, 0);
-    const parsed = JSON.parse(a.out) as Array<{ cid: string; models: string[] }>;
-    assert.deepEqual(parsed.map((x) => x.cid), ["alpha", "beta"]);
-    assert.deepEqual(parsed[0]!.models, ["deepseek-v4.1-flash", "glm-5.3-flash"]);
-    assert.deepEqual(parsed[1]!.models, ["deepseek-v4.1-flash"]);
-  });
-
-  it("model show <cid> 看单个渠道的贡献；缺 cid → 2（讲用法）", async () => {
-    const one = await run(["model", "show", "beta"]);
-    assert.equal(one.code, 0);
-    assert.ok(one.out.includes("deepseek-v4.1-flash"), one.out);
-
-    const missing = await run(["model", "show"]);
-    assert.equal(missing.code, 2);
-    assert.ok(missing.err.includes("用法"));
-  });
-
   it("未知 model 子命令 → 2", async () => {
     const r = await run(["model", "乱写"]);
     assert.equal(r.code, 2);
@@ -371,21 +352,6 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
     assert.equal(refreshState.calls, 2, "--refresh 必须真的重拉");
     assert.match(forced.out, /GLM-5.3-Flash-Official/, "重拉后是新内容");
     assert.ok(forced.err.includes("刚从上游拉取"));
-
-    resetChannels();
-  });
-
-  it("model refresh [cid] 强制重拉；不带 cid 时刷全部", async () => {
-    withFreshRoot();
-    useRemoteOnly();
-
-    const one = await run(["model", "refresh", "remote"]);
-    assert.equal(one.code, 0);
-    assert.equal(refreshState.calls, 1);
-
-    const all = await run(["model", "refresh"]);
-    assert.equal(all.code, 0);
-    assert.equal(refreshState.calls, 2, "不带 cid 时刷全部（本例只有一个）");
 
     resetChannels();
   });
@@ -463,13 +429,10 @@ describe("3. <cid> <动词> 路由", () => {
     assert.ok(r.out.includes("← DeepSeek-V4.1-Flash"), "要能看出目录里的原始写法");
   });
 
-  it("<cid> billing 打印额度（等价 credits --channel）", async () => {
+  it("<cid> billing 打印额度", async () => {
     const r = await run(["alpha", "billing"]);
     assert.equal(r.code, 0);
     assert.ok(r.out.includes("12.5 / 100 credits"), r.out);
-
-    const alias = await run(["beta", "credits"]);
-    assert.equal(alias.code, 0);
   });
 
   it("<cid> status 走 daemon（借假地址，不抛错）", async () => {
@@ -534,60 +497,7 @@ describe("3. <cid> <动词> 路由", () => {
   });
 });
 
-describe("4. checkin：走 CLI 的能力分发", () => {
-  it("--status 只查不领；默认会领；已领后不再发领取", async () => {
-    signinCalls.status = 0;
-    signinCalls.claim = 0;
-    signinCalls.claimed = false;
-
-    const s = await run(["alpha", "checkin", "--status"]);
-    assert.equal(s.code, 0);
-    assert.ok(s.out.includes("[alpha] 今天未签到"), s.out);
-    assert.equal(signinCalls.claim, 0, "--status 不该领");
-
-    const c = await run(["alpha", "checkin"]);
-    assert.equal(c.code, 0);
-    assert.equal(signinCalls.claim, 1);
-    assert.ok(c.out.includes("签到成功，+5"), c.out);
-
-    const again = await run(["alpha", "checkin"]);
-    assert.equal(again.code, 0);
-    assert.equal(signinCalls.claim, 1, "无可领时不再发领取请求");
-  });
-
-  it("没有端点的渠道：打印渠道自己的说明文字，且**退出码 0**", async () => {
-    const r = await run(["beta", "checkin", "--status"]);
-    assert.equal(r.code, 0, "「没端点」不是失败");
-    assert.ok(r.out.includes("beta 没有签到端点 —— 说明文字"), r.out);
-  });
-
-  it("仓库级 checkin 覆盖全部渠道（口径统一，不过滤）", async () => {
-    const r = await run(["checkin", "--status"]);
-    assert.equal(r.code, 0);
-    assert.ok(r.out.includes("[alpha]"), "有端点的报状态");
-    assert.ok(r.out.includes("[beta]"), "没端点的也在，输出它自己的说明");
-  });
-
-  it("查询抛错 → 退出码非零（脚本能感知）", async () => {
-    clearChannels();
-    const broken = makeChannel("gamma", { signin: true });
-    (broken.billing as unknown as { signin: { status: () => Promise<never> } }).signin = {
-      status: async () => {
-        throw new Error("上游拒绝");
-      },
-    } as never;
-    setChannel(broken);
-    try {
-      const r = await run(["gamma", "checkin", "--status"]);
-      assert.equal(r.code, 1);
-      assert.ok(r.out.includes("上游查询失败"), r.out);
-    } finally {
-      resetChannels();
-    }
-  });
-});
-
-describe("5. 账号池与落点（也走 CLI）", () => {
+describe("4. 账号池与落点（也走 CLI）", () => {
   it("<cid> accounts 列出池子（首次查看会把现有凭证收进来）", async () => {
     const r = await run(["alpha", "accounts"]);
     assert.equal(r.code, 0);
@@ -640,108 +550,5 @@ describe("5. 账号池与落点（也走 CLI）", () => {
     const r = await run(["paths", "--all", "--workspace", process.cwd()]);
     // 工作区里可能找不到（测试目录不是工作区）→ 报用法即可，不抛错
     assert.ok(r.code === 0 || r.code === 2, `退出码 ${r.code}`);
-  });
-});
-
-describe("6. 今日是否签到过（三层判定：上游 → 本地台账 → 不知道）", () => {
-  const ledgerFile = (cid: string): string => join(root, cid, "state", "signin.json");
-
-  it("上游说已签 → 依据上游，并**回填**台账；之后上游查不到也能答", async () => {
-    clearChannels();
-    setChannel(makeChannel("delta", { signin: true, claimedToday: true }));
-    try {
-      assert.equal(existsSync(ledgerFile("delta")), false, "跑之前没有台账");
-      const r = await run(["delta", "checkin", "--status", "--json"]);
-      assert.equal(r.code, 0);
-      const parsed = JSON.parse(r.out) as { channels: Array<{ today: boolean | null; basis: string }> };
-      assert.equal(parsed.channels[0]!.today, true);
-      assert.equal(parsed.channels[0]!.basis, "upstream", "以上游为准");
-      assert.ok(existsSync(ledgerFile("delta")), "上游说已签 → 回填台账（自愈）");
-
-      clearChannels();
-      setChannel(makeChannel("delta", { signin: true, statusThrows: true }));
-      const again = await run(["delta", "checkin", "--status", "--json"]);
-      assert.equal(again.code, 0, "有台账兜底 → 不算失败");
-      const parsed2 = JSON.parse(again.out) as { channels: Array<{ today: boolean | null; basis: string }> };
-      assert.equal(parsed2.channels[0]!.today, true);
-      assert.equal(parsed2.channels[0]!.basis, "local", "依据：本地记录");
-    } finally {
-      resetChannels();
-    }
-  });
-
-  it("上游说未签 → today=false；--fail-if-unclaimed 退出码 1", async () => {
-    clearChannels();
-    setChannel(makeChannel("epsilon", { signin: true, claimedToday: false }));
-    try {
-      const r = await run(["epsilon", "checkin", "--status", "--json"]);
-      assert.equal(r.code, 0, "只是没签，不是失败");
-      const parsed = JSON.parse(r.out) as { channels: Array<{ today: boolean | null; basis: string }> };
-      assert.equal(parsed.channels[0]!.today, false);
-      assert.equal(parsed.channels[0]!.basis, "upstream");
-      assert.equal((await run(["epsilon", "checkin", "--status", "--fail-if-unclaimed"])).code, 1);
-    } finally {
-      resetChannels();
-    }
-  });
-
-  it("上游查不到 + 无台账 → 未知且失败", async () => {
-    clearChannels();
-    setChannel(makeChannel("zeta", { signin: true, statusThrows: true }));
-    try {
-      const r = await run(["zeta", "checkin", "--status", "--json"]);
-      assert.equal(r.code, 1, "既问不到又没有本地记录 → 失败");
-      const parsed = JSON.parse(r.out) as { channels: Array<{ today: boolean | null; failed?: boolean }> };
-      assert.equal(parsed.channels[0]!.today, null);
-      assert.equal(parsed.channels[0]!.failed, true);
-    } finally {
-      resetChannels();
-    }
-  });
-
-  it("一次性奖励（daily:false）不套「今天」，--daily-only 跳过它", async () => {
-    clearChannels();
-    setChannel(makeChannel("theta", { signin: true, daily: false }));
-    try {
-      const r = await run(["theta", "checkin", "--status", "--json"]);
-      assert.equal(r.code, 0);
-      const parsed = JSON.parse(r.out) as { channels: Array<{ today: boolean | null; daily: boolean }> };
-      assert.equal(parsed.channels[0]!.today, null);
-      assert.equal(parsed.channels[0]!.daily, false);
-
-      const skipped = await run(["checkin", "--status", "--daily-only", "--json"]);
-      const parsed2 = JSON.parse(skipped.out) as { channels: Array<{ cid: string }> };
-      assert.equal(parsed2.channels.some((c) => c.cid === "theta"), false, "被 --daily-only 跳过");
-    } finally {
-      resetChannels();
-    }
-  });
-
-  it("摘要行：今日已签 N/M", async () => {
-    clearChannels();
-    setChannel(makeChannel("delta", { signin: true, claimedToday: true }));
-    setChannel(makeChannel("epsilon", { signin: true, claimedToday: false }));
-    try {
-      const r = await run(["checkin", "--status"]);
-      assert.equal(r.code, 0);
-      assert.match(r.out, /今日已签 1\/2/, r.out);
-    } finally {
-      resetChannels();
-    }
-  });
-
-  it("status 带本地台账摘要（不发网络请求）", async () => {
-    clearChannels();
-    setChannel(makeChannel("delta", { signin: true, claimedToday: true }));
-    try {
-      await run(["delta", "checkin", "--status"]); // 回填台账
-      const r = await run(["delta", "status", "--addr", "127.0.0.1:1", "--ui-port", "1", "--json"]);
-      assert.equal(r.code, 0);
-      const parsed = JSON.parse(r.out) as { signin: { claimed_today: number; tracked: number } };
-      assert.equal(parsed.signin.tracked >= 1, true);
-      assert.equal(parsed.signin.claimed_today, 1);
-    } finally {
-      resetChannels();
-    }
   });
 });

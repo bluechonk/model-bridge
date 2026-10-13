@@ -18,7 +18,7 @@ node channels/raccoon/dist/cli.js login    # 无窗口登录：打印授权链�
 mb raccoon login                           # 仓库级入口等价写法
 node channels/raccoon/dist/cli.js serve    # 前台无窗口运行（单渠道）
 mb start                                   # 守护式启动（幂等，仓库级网关）
-mb status / model list / raccoon credits / raccoon checkin
+mb status / model list / raccoon billing
 ```
 
 > **登录两步**：打开打印出的 `/code/authorize` 授权页用微信/验证码/密码登录 →

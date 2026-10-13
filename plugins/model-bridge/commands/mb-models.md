@@ -16,7 +16,6 @@ skills: model-bridge-gateway
 - **交互约定**：用户问「某个渠道有哪些模型」而没指明渠道时，先 `mb model list` 拿渠道清单，
   再用 `ask_user_query` 让用户选渠道，然后 `mb <cid> models`；
   问「现在能用什么」就直接 `mb model list`（不必先问）。
-- 别名（可用但不教）：`model show <cid>` = `<cid> models`；`channels` = 渠道视角的 `model list` 补集；
-  `model refresh [cid]` = `<cid> models --refresh`。
+- 旧写法 `model show` / `model refresh` / `channels` 已移除，统一用上表三种入口。
 - 某渠道不贡献池内模型通常是未登录、目录拉取失败，或它没有 `(deepseek|glm)` 家族的 flash
   模型（网关级白名单，策略有意为之）。

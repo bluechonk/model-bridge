@@ -4,9 +4,9 @@
  * 设计取向（对应「像 playwright-cli 那样有子命令」的诉求）：
  * - **网关生命周期是仓库级的**：`start/stop/restart/status/logs/serve` 不带渠道，
  *   因为它们操作的是那个服务全部渠道的网关。
- * - **以渠道为第一参数**：`<cid> login` / `<cid> billing` / `<cid> checkin` …
+ * - **以渠道为第一参数**：`<cid> login` / `<cid> billing` / `<cid> models` …
  *   这是「对某个渠道做点什么」的自然读法。
- * - **分组**：`model list`（全部池子）、`model show <cid>`（单个池子）。
+ * - **分组**：`model list`（池视图）、`model usage`（池账本）。
  * - 原来的扁平形式（`status --channel <cid>`、`credits`、`channels`…）**全部保留**，
  *   所以既有脚本与插件命令不用改。
  */
@@ -21,7 +21,6 @@ import * as accountCli from "./account-cli.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
 import * as report from "./report.js";
-import * as signinCli from "./signin-cli.js";
 
 export interface CommandContext {
   json: boolean;
@@ -30,12 +29,6 @@ export interface CommandContext {
   uiPort: number;
   realm: string;
   force: boolean;
-  /** `checkin --status`：只查不领。 */
-  statusOnly: boolean;
-  /** `checkin --daily-only`：只处理"每日"语义的渠道（跳过一次性奖励）。 */
-  dailyOnly: boolean;
-  /** `checkin --fail-if-unclaimed`：今天明确未签 → 退出码非零。 */
-  failIfUnclaimed: boolean;
   /** `model list` / `<cid> models` 的 `--refresh`：强制重拉上游目录。 */
   refresh: boolean;
   /** `login --wechat`：微信扫码登录（渠道声明 loginWechat 才支持）。 */
@@ -50,8 +43,8 @@ export const CHANNEL_VERBS: ReadonlyArray<readonly [string, string]> = [
   ["login", "浏览器授权登录该渠道"],
   ["models", "该渠道池内的模型 id（读本地缓存，不需要网关；`--refresh` 强制重拉）"],
   ["billing", "剩余额度 / 账单（别名 credits；只读，不经网关）"],
-  // checkin 命令仍在（别名 signin），但签到已自动化、不在帮助里展示：
-  // 从此表去掉即从帮助与未知动词提示消失，分发表（runChannelCommand）不受影响。
+  // checkin/signin 已移除（签到自动化接管，见 auto-signin.ts）；
+  // channels/model show/model refresh 等别名也已移除，只保留最终写法。
   ["accounts", "账号池：`list` / `use <key>` / `add` / `remove <key>`"],
   ["paths", "该渠道的存储落点与文件（只读）"],
   ["logs", "该渠道的网关日志尾部"],
@@ -270,66 +263,6 @@ export async function listPoolModels(json: boolean): Promise<number> {
 }
 
 /**
- * `channels`：**渠道视角** —— 每个渠道各自贡献了池内哪些模型。
- *
- * 与 `model list`（模型视角）互补：排查「某个模型为什么没人接」时看前者，
- * 排查「某个渠道到底还能提供什么」时看这个。
- */
-export async function listChannels(json: boolean, force = false): Promise<number> {
-  const list = channels();
-  if (list.length === 0) {
-    console.error("没有渠道被注册（入口忘了 import 渠道包？）");
-    return 2;
-  }
-  const rows: Array<{
-    cid: string;
-    display: string;
-    version: string;
-    models: string[];
-    source: CatalogOrigin["kind"];
-    fetched_at?: string;
-  }> = [];
-  let failures = 0;
-
-  for (const channel of list) {
-    const cid = channel.config.cid;
-    const { origin, error } = await ensureCatalog(channel, force);
-    if (force && error) {
-      failures += 1;
-      if (!json) console.error(`${cid}: 刷新模型目录失败：${error.message}`);
-    }
-    rows.push({
-      cid,
-      display: channel.upstream.DISPLAY_NAME,
-      version: channel.config.version,
-      models: contributedOf(channel),
-      source: origin.kind,
-      ...(origin.kind === "cache" && origin.fetchedAt ? { fetched_at: origin.fetchedAt } : {}),
-    });
-  }
-
-  if (json) {
-    console.log(JSON.stringify(rows, null, 2));
-    return failures > 0 ? 1 : 0;
-  }
-  console.log(`${list.length} 个渠道（每个渠道是池子的一个来源；对外模型只有 ${POOL_MODELS.length} 个）：`);
-  for (const row of rows) {
-    const note =
-      row.source === "cache" && row.fetched_at
-        ? `  [缓存 ${row.fetched_at}]`
-        : row.source === "builtin"
-          ? "  [内置表]"
-          : row.source === "fetched"
-            ? "  [已刷新]"
-            : "";
-    console.log(
-      `  ${row.cid.padEnd(12)} ${row.display.padEnd(18)} ${row.models.join(", ") || "（不贡献池内模型）"}${note}`,
-    );
-  }
-  return failures > 0 ? 1 : 0;
-}
-
-/**
  * `login list`：列出**可以登录哪些渠道**与各自的登录状态（只读，不需要网关）。
  *
  * - 口径与 `status` 的逐渠道凭证探测一致：`cred.load()` 成功 = 已登录
@@ -383,32 +316,11 @@ export async function runModelGroup(args: string[], ctx: CommandContext): Promis
   const sub = args[0] ?? "list";
   switch (sub) {
     case "list":
-    case "ls":
       return listPoolModels(ctx.json);
-    case "show":
-    case "get": {
-      const cid = args[1];
-      if (!cid) {
-        console.error("用法: model show <cid>");
-        return 2;
-      }
-      return listLocalModels(getChannel(cid), ctx.json, ctx.refresh);
-    }
     case "usage":
-    case "billing":
-    case "ledger":
       return showPoolUsage(ctx.json, ctx.refresh);
-    case "refresh":
-    case "update": {
-      // 这里的 `--refresh` 是「重拉上游**目录**」；刷账单走 `model usage --refresh`。
-      const cid = args[1];
-      if (cid) return listLocalModels(getChannel(cid), ctx.json, true);
-      return listChannels(ctx.json, true);
-    }
     default:
-      console.error(
-        `未知的 model 子命令: ${sub}（可用: list / show <cid> / usage / refresh [cid]）`,
-      );
+      console.error(`未知的 model 子命令: ${sub}（可用: list / usage）`);
       return 2;
   }
 }
@@ -453,18 +365,7 @@ export async function runChannelCommand(
     case "models":
       return listLocalModels(channel, ctx.json, ctx.refresh);
     case "billing":
-    case "credits":
       return daemon.credits({ cid, json: ctx.json });
-    case "checkin":
-    case "check-in":
-    case "signin":
-      return signinCli.runCheckin({
-        cid,
-        json: ctx.json,
-        statusOnly: ctx.statusOnly,
-        dailyOnly: ctx.dailyOnly,
-        failIfUnclaimed: ctx.failIfUnclaimed,
-      });
     case "accounts":
       return accountCli.runAccounts({
         cid,

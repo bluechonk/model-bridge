@@ -157,10 +157,8 @@
 | 命令 | 看什么 |
 |---|---|
 | `mb model list` | **池视图**：两个模型，各自挂出候选渠道 + 已用量 + 冷却状态（顺序就是实际路由顺序） |
-| `mb model show <cid>` | **渠道视角**：该渠道贡献了池内哪些模型 |
+| `mb <cid> models` | **渠道视角**：该渠道贡献了池内哪些模型（`--refresh` 重拉上游目录） |
 | `mb model usage [--refresh]` | 看账本；`--refresh` 立刻重查各渠道账单额度 |
-| `mb channels` | 同「渠道视角」，覆盖全部渠道 |
-| `mb model refresh [cid]` | 重拉上游**目录**（与「刷账单」是两件事） |
 
 > 单渠道独立运行（`channels/<cid>/dist/cli.js start`）**也走池**：`/v1/models` 同样是那两条，
 > 只是候选渠道只有一个（提供不了的模型请求时回 503）。

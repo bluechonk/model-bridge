@@ -274,7 +274,7 @@ async function runRefresh(logger: (m: string) => void): Promise<RefreshResult> {
 }
 
 /**
- * 立刻刷新一轮账单（CLI `model refresh` 用；等待完成）。
+ * 立刻刷新一轮账单（CLI `model usage --refresh` 用；等待完成）。
  *
  * 同一时刻只跑一个：重复调用共享同一个 Promise。
  */

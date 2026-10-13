@@ -297,7 +297,7 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 3. **随包快照**（渠道内的 `models.json` / 内置兜底表）—— 拉不到时的最后兜底。
 
 一句话：**第一次 `model list` 把真实目录记到本地，之后一直用那个文件**；
-要更新就 `model refresh` / `--refresh`。
+要更新就 `<cid> models --refresh`。
 
 规则：
 
@@ -312,7 +312,7 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 
 #### `refresh()`：显式刷新的契约
 
-有远端目录层的渠道**必须**实现 `refresh()`（CLI 的 `--refresh` / `model refresh` 调它）：
+有远端目录层的渠道**必须**实现 `refresh()`（CLI 的 `<cid> models --refresh` 与网关每日目录保鲜调它）：
 
 - **绕过 TTL / 冷却**：用户显式要求刷新，不能拿缓存糊弄；
 - **成功写缓存**：下次新进程直接读到新目录；
