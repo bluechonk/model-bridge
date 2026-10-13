@@ -49,7 +49,7 @@ import { runInChannel } from "./channel-context.js";
 import { activateAccount, markActiveHealth, pickAccount, readIndex } from "./account-pool.js";
 import { resolvePoolModel } from "./model-pool.js";
 import { asPoolModel, poolCandidates, POOL_MODELS, POOL_MODEL_META } from "./pool-targets.js";
-import { maybeRefreshBilling, noteFailure, noteSuccess, scoreOf } from "./pool-usage.js";
+import { isCooling, maybeRefreshBilling, noteFailure, noteSuccess, scoreOf } from "./pool-usage.js";
 import * as sseStream from "./sse-stream.js";
 import { baseUrlOf, bindFreeServer, displayBase } from "./portfree.js";
 
@@ -581,8 +581,18 @@ async function handleChat(
     return;
   }
 
-  // 按账本排序：账单已用量降序、失败冷却中当 0；最多试 maxPoolAttempts() 个候选。
-  const attempts = rankCandidates(candidates).slice(0, maxPoolAttempts());
+  // 选候选：**冷却中的渠道硬排除**（失败后暂不可用，下一次请求不走它），
+  // 按账本排序（账单已用量降序）后最多试 maxPoolAttempts() 个。
+  // 全池都在冷却时回退到完整候选——冷却只是短暂状态，服务不能因此不可用。
+  const ranked = rankCandidates(candidates);
+  const available = ranked.filter((c) => !isCooling(c.cid));
+  const attempts = (available.length > 0 ? available : ranked).slice(0, maxPoolAttempts());
+  if (available.length === 0) {
+    // 只记异常路径：部分过滤是设计内行为，逐请求打日志会在冷却窗口内刷屏
+    opts.logger(
+      `pool: all ${ranked.length} candidate(s) cooling down (${target}); falling back to retry`,
+    );
+  }
   const wantStream = Boolean(payload["stream"]);
   const tried: string[] = [];
   let lastError: { status: number; code: string; message: string } | null = null;

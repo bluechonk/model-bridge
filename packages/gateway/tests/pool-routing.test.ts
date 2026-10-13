@@ -152,6 +152,20 @@ describe("4. 账本：得分、冷却、落盘", () => {
     assert.equal(entry.fail, 2);
   });
 
+  it("isCooling：失败进冷却（下一次请求跳过它），成功即清、到期即恢复", () => {
+    poolUsage.resetPoolLedgerForTest();
+    assert.equal(poolUsage.isCooling("beta"), false, "没失败过就不冷却");
+
+    poolUsage.noteFailure("beta");
+    assert.equal(poolUsage.isCooling("beta"), true, "失败后冷却中（路由硬排除）");
+
+    poolUsage.noteSuccess("beta");
+    assert.equal(poolUsage.isCooling("beta"), false, "成功一次提前清冷却");
+
+    poolUsage.noteFailure("beta", 60_000);
+    assert.equal(poolUsage.isCooling("beta", Date.now() + 61_000), false, "冷却到期自动恢复候选");
+  });
+
   it("没查过账单的渠道 → needsBillingRefresh 为 true", () => {
     poolUsage.resetPoolLedgerForTest();
     clearChannels();
