@@ -472,7 +472,7 @@ export async function status(
 
   const info = {
     signin: {
-      note: "仅本地台账（我们发起过的领取）；上游的权威答案用 `<cid> checkin --status`",
+      note: "仅本地台账（我们发起过的领取）；自动签到以此为判定，上游的权威答案见渠道 billing",
       claimed_today: withLedger.filter((r) => r.claimed_today).length,
       tracked: withLedger.length,
       channels: withLedger,

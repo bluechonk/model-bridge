@@ -59,7 +59,7 @@ description: Manage and troubleshoot the local multi-channel model-pool gateway 
 | `mb credits` | 账号剩余额度（只读，不经网关，不消耗额度） |
 | `mb paths`（`--all`） | 存储落点与文件（只读） |
 | `mb accounts`（`--channel`） | **账号池**：列出账号 / `use <key>` / `add` / `remove <key>` |
-| `mb <cid> models` | 该渠道贡献了池内哪些模型（`model show` 是别名，文档不教） |
+| `mb <cid> models` | 该渠道贡献了池内哪些模型（`--refresh` 重拉上游目录） |
 | `mb <cid> login` / `mb login -c <cid>` | 登录该渠道；已有凭据时不重授权（提示加 `--force`）；死凭据由网关自动登出清理 |
 | `mb <cid> billing` | 该渠道额度 / 账单（别名 `credits`） |
 | 签到 | **已自动化**：网关运行期间逐渠道自动签到（未登录跳过、连败 3 次当日熔断；台账见 `mb status`） |

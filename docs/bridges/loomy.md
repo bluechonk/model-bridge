@@ -18,7 +18,7 @@ node channels/loomy/dist/cli.js login   # 交互式登录：菜单选 1) SMS cod
 mb loomy login                          # 仓库级入口等价写法
 node channels/loomy/dist/cli.js serve   # 前台无窗口运行（单渠道）
 mb start                                # 守护式启动（幂等，仓库级网关）
-mb status / model list / loomy credits / loomy checkin
+mb status / model list / loomy billing
 ```
 
 > **登录菜单**（交互终端里弹出，英文）：`1) SMS code` —— 手机号与验证码都**当场输入**；
