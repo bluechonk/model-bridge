@@ -22,6 +22,8 @@ import {
   syncPool,
 } from "../dist/account-pool.js";
 import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { runLogout } from "../dist/command-groups.js";
+import { runLogin } from "../dist/headless.js";
 import * as paths from "../dist/paths.js";
 
 /** 合成渠道：cred 只认 uid/domain/accessToken（契约字段），落盘在 credentials.json。 */
@@ -246,5 +248,50 @@ describe("4. 健康度与权限", () => {
     assert.equal(statSync(poolFile).mode & 0o777, 0o600);
     assert.equal(statSync(paths.credentialsPath(CID)).mode & 0o777, 0o600);
     assert.equal(basename(paths.channelDir(CID)), CID);
+  }));
+});
+
+describe("5. logout 与 login 幂等提示", () => {
+  it("logout：凭证 + 池账号一并移除（登出是干净的未登录态）", withRoot(async () => {
+    seedCredential("user-1");
+    captureActive(CID);
+    assert.equal(listAccounts(CID).accounts.length, 1, "前置：池里有 1 个账号");
+
+    const code = await runLogout({ cid: CID, json: true });
+    assert.equal(code, 0);
+    assert.equal(existsSync(paths.credentialsPath(CID)), false, "凭证文件应被移除");
+    const index = listAccounts(CID);
+    assert.equal(index.accounts.length, 0, "池条目应被清空");
+    assert.equal(index.active, null, "active 不应悄悄回退到别的账号");
+  }));
+
+  it("logout：只有凭证、没有池条目（从未 syncPool）→ 凭证仍被移除", withRoot(async () => {
+    seedCredential("user-2");
+    await runLogout({ cid: CID, json: true });
+    assert.equal(existsSync(paths.credentialsPath(CID)), false, "没进过池的凭证也要清");
+  }));
+
+  it("logout：本来没凭证 → 无操作不报错", withRoot(async () => {
+    const code = await runLogout({ cid: CID, json: true });
+    assert.equal(code, 0);
+  }));
+
+  it("login 幂等：已有凭据时不进授权流程，明确提示 --force", withRoot(async () => {
+    seedCredential("user-3");
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (...args: unknown[]) => {
+      lines.push(args.map(String).join(" "));
+    };
+    try {
+      const code = await runLogin({ cid: CID });
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+    assert.ok(
+      lines.some((l) => l.includes("--force")),
+      `应提示重登用 --force（实际输出: ${lines.join(" | ")}）`,
+    );
   }));
 });

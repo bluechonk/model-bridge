@@ -11,12 +11,15 @@
  *   所以既有脚本与插件命令不用改。
  */
 
+import { existsSync, rmSync } from "node:fs";
+
 import { channels, getChannel, type Channel } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
 import { catalogCacheFetchedAt } from "./catalog-cache.js";
 import { asPoolModel, canonicalModelId, POOL_MODELS, poolCandidates } from "./pool-targets.js";
 import { ledgerSnapshot, refreshBilling, scoreOf } from "./pool-usage.js";
-import { poolUsagePath } from "./paths.js";
+import { credentialsPath, poolUsagePath } from "./paths.js";
+import { readIndex, removeAccount } from "./account-pool.js";
 import * as accountCli from "./account-cli.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
@@ -377,6 +380,64 @@ export async function listLogins(json: boolean): Promise<number> {
   return 0;
 }
 
+export interface LogoutOptions {
+  /** 只登出该渠道；省略 = 全部已注册渠道。 */
+  cid?: string;
+  json?: boolean;
+}
+
+/**
+ * `logout`：移除渠道凭证与账号池条目（登出）。
+ *
+ * 为什么需要它：`login` 对已有凭据是**幂等**的（不会重新授权），而 token 过期的
+ * 凭据仍留在盘上 → 请求持续失败却「看起来已登录」。`login --force` 可重登，
+ * 但「先把这个坏凭据清掉、回到干净的未登录状态」也需要一个出口：
+ * 登出后 `mb login list` 如实显示未登录，池路由与自动签到都不会再碰到它。
+ */
+export async function runLogout(options: LogoutOptions = {}): Promise<number> {
+  const { cid, json = false } = options;
+  const targets = cid !== undefined ? [getChannel(cid)] : channels();
+  if (targets.length === 0) {
+    console.error("没有渠道被注册（入口忘了 import 渠道包？）");
+    return 2;
+  }
+  const rows: Array<Record<string, unknown>> = [];
+  for (const channel of targets) {
+    const c = channel.config.cid;
+    // 先探测凭证文件是否存在（removeAccount 删活动账号时会连带删它，顺序不能反）
+    let credentialExisted = false;
+    try {
+      credentialExisted = existsSync(credentialsPath(c));
+    } catch {
+      credentialExisted = false;
+    }
+    const index = readIndex(c);
+    let removedAccounts = 0;
+    for (const account of index.accounts) {
+      if (removeAccount(account.key, c).removed) removedAccounts += 1;
+    }
+    // 池里可能没有条目（从未 syncPool 过）：凭证文件单独清，保证登出是真的
+    if (credentialExisted) {
+      try {
+        rmSync(credentialsPath(c), { force: true });
+      } catch {
+        /* 删不掉：报告里如实反映（credential_removed 仍是探测值） */
+      }
+    }
+    const didSomething = removedAccounts > 0 || credentialExisted;
+    rows.push({ cid: c, removed_accounts: removedAccounts, credential_removed: credentialExisted });
+    if (!json) {
+      console.log(
+        didSomething
+          ? `[logout] ${c}: 已登出（移除 ${removedAccounts} 个池账号${credentialExisted ? " + 凭证文件" : ""}）`
+          : `[logout] ${c}: 本来就没有凭证（无需操作）`,
+      );
+    }
+  }
+  if (json) console.log(JSON.stringify({ ok: true, channels: rows }, null, 2));
+  return 0;
+}
+
 /** `model <list|show <cid>|usage|refresh [cid]>`。 */
 export async function runModelGroup(args: string[], ctx: CommandContext): Promise<number> {
   const sub = args[0] ?? "list";
@@ -449,6 +510,8 @@ export async function runChannelCommand(
       return daemon.status({ cid, json: ctx.json, addr: ctx.addr, uiPort: ctx.uiPort });
     case "login":
       return headless.runLogin({ cid, json: ctx.json, realm: ctx.realm, force: ctx.force, wechat: ctx.wechat });
+    case "logout":
+      return runLogout({ cid, json: ctx.json });
     case "models":
       return listLocalModels(channel, ctx.json, ctx.refresh);
     case "billing":

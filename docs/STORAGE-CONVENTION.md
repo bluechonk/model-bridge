@@ -32,6 +32,7 @@
 ├── lobsterai/
 ├── loomy/
 ├── raccoon/
+└── qoder/
 ```
 
 分层名 = `cid`（全小写、仅 `[a-z0-9-]`），**不带点、不带 `-bridge` 后缀** —— 它已经是
@@ -50,6 +51,7 @@
 | traecn | `.trae-bridge` | `<root>/traecn` | `TRAE_HOME` | `TRAECN_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-trae`, `.trae2api`, `.trae-gateway` | — |
 | codearts | `.codearts-bridge` | `<root>/codearts` | `CODEARTS_HOME` | `CODEARTS_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-codearts`, `.codearts2api`, `.codearts-gateway` | — |
 | lobsterai | `.lobsterai-bridge` | `<root>/lobsterai` | `LOBSTERAI_HOME` | `LOBSTERAI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-lobsterai`, `.lobsterai2api`, `.lobsterai-gateway` | — |
+| qoder | `.qoder-bridge` | `<root>/qoder` | `QODER_HOME` | `QODER_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-qoder`, `.qoder2api`, `.qoder-gateway` | — |
 | loomy | `.loomy-bridge` | `<root>/loomy` | `LOOMY_HOME` | `LOOMY_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-loomy`, `.loomy2api`, `.loomy-gateway` | — |
 | raccoon | `.raccoon-bridge` | `<root>/raccoon` | `RACCOON_HOME` | `RACCOON_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-raccoon`, `.raccoon2api`, `.raccoon-gateway` | — |
 | gemini | `.gemini-bridge` | `<root>/gemini` | `GEMINI_HOME` | `GEMINI_DEBUG_DUMP` | `.zcode-workbuddy-bridge` , `.zcode-connect-gemini`, `.gemini2api`, `.gemini-gateway` | — |
