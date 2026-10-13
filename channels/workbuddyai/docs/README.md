@@ -29,12 +29,10 @@ WorkBuddyAI 的本地 OpenAI Chat Completion 透明代理网关（**TypeScript**
 
 ## 快速开始
 
-## 快速开始
-
 ```bash
 npm install && npm run build              # 工作区根：装依赖 + 编译全部包
-mx workbuddyai login                            # 仓库级 CLI：登录
-mx workbuddyai status / models / billing        # 状态 / 模型 / 账单
+mx login workbuddyai                            # 仓库级 CLI：登录
+mx status workbuddyai（models / billing 同法）        # 状态 / 模型 / 账单
 node channels/workbuddyai/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
@@ -51,8 +49,8 @@ node channels/workbuddyai/dist/cli.js --help    # 单渠道 CLI（调试 / 回�
 | `GET /api/state` | 状态快照：`ui_state`（probing/login/error/running）、`message`、`auth_url`、`models`、`gateway_error` |
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 
-日常操作走 `mx` 命令（`mx status` / `mx start|stop|restart` / `mx workbuddyai login` /
-`mx model list` / `mx workbuddyai billing`），控制台 API 只是给程序化调用留的口子。
+日常操作走 `mx` 命令（`mx status` / `mx start|stop|restart` / `mx login workbuddyai` /
+`mx model list` / `mx billing workbuddyai`），控制台 API 只是给程序化调用留的口子。
 
 **接入**：任意 OpenAI 兼容客户端，类型 `openai-chat-completions`、
 baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型 `deepseek-v4.1-flash` /

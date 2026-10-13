@@ -1,9 +1,9 @@
 /**
  * CLI 表层（通过 `main(argv)` 驱动，不直接调内部函数）。
  *
- * 为什么这么测：命令解析、路由（`<cid> <动词>` / `model 分组` / 顶层）、退出码、
+ * 为什么这么测：命令解析、路由（`<动词> [<cid>]` / `model 分组` / 顶层）、退出码、
  * 中英文案、以及"失败要非零"这些**都只有走 CLI 才测得到**。直接调
- * `groups.runChannelCommand()` 之类的内部函数会把这些全绕过去。
+ * `groups.runVerb()` 之类的内部函数会把这些全绕过去。
  *
  * 覆盖不到的两类，仍在别处单测（CLI 到不了）：
  * - 进程守护：`start` 会 spawn 分离子进程，测试里跑它会真的起进程（见 daemon 的烟测）；
@@ -319,13 +319,13 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
     withFreshRoot();
     useRemoteOnly();
 
-    const first = await run(["remote", "models"]);
+    const first = await run(["models", "remote"]);
     assert.equal(first.code, 0);
     assert.equal(refreshState.calls, 1, "首次没有缓存，应该拉一次");
     assert.match(first.out, /glm-5.3-flash-0731/);
     assert.ok(first.err.includes("刚从上游拉取"), "要告诉用户这次是现拉的");
 
-    const second = await run(["remote", "models"]);
+    const second = await run(["models", "remote"]);
     assert.equal(second.code, 0);
     assert.equal(refreshState.calls, 1, "第二次应命中缓存，不再拉");
     assert.ok(!second.err.includes("刚从上游拉取"), "命中缓存不必打扰用户");
@@ -338,15 +338,15 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
     withFreshRoot();
     useRemoteOnly();
 
-    await run(["remote", "models"]); // 写入缓存（glm-5.3-flash-0731）
+    await run(["models", "remote"]); // 写入缓存（glm-5.3-flash-0731）
     refreshState.upstream = ["GLM-5.3-Flash-Official"]; // 上游变了
 
-    const cached = await run(["remote", "models"]);
+    const cached = await run(["models", "remote"]);
     assert.equal(refreshState.calls, 1, "仍不该打网络");
     assert.match(cached.out, /glm-5.3-flash-0731/, "用的是本地记录的那份");
     assert.ok(!cached.out.includes("Official"));
 
-    const forced = await run(["remote", "models", "--refresh"]);
+    const forced = await run(["models", "remote", "--refresh"]);
     assert.equal(forced.code, 0);
     assert.equal(refreshState.calls, 2, "--refresh 必须真的重拉");
     assert.match(forced.out, /GLM-5.3-Flash-Official/, "重拉后是新内容");
@@ -358,16 +358,16 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
   it("--refresh 失败必须非零退出（不能拿旧表冒充刷新成功）", async () => {
     withFreshRoot();
     useRemoteOnly();
-    await run(["remote", "models"]); // 先有缓存
+    await run(["models", "remote"]); // 先有缓存
     refreshState.failWith = "上游拒绝：token 失效";
 
-    const r = await run(["remote", "models", "--refresh"]);
+    const r = await run(["models", "remote", "--refresh"]);
     assert.equal(r.code, 1, "显式刷新失败要非零");
     assert.ok(r.err.includes("刷新模型目录失败"), r.err);
     assert.ok(r.err.includes("token 失效"), "要带上真实原因");
 
     // 自动路径（不加 --refresh）仍然静默回落，不打扰、不报错
-    const auto = await run(["remote", "models"]);
+    const auto = await run(["models", "remote"]);
     assert.equal(auto.code, 0);
 
     resetChannels();
@@ -378,7 +378,7 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
     useRemoteOnly();
     refreshState.failWith = "NotLoggedInError: 未登录";
 
-    const r = await run(["remote", "models"]);
+    const r = await run(["models", "remote"]);
     assert.equal(r.code, 0, "列表本身要能打出来，不算命令失败");
     assert.ok(r.err.includes("未能从上游拉取"), r.err);
     assert.ok(r.err.includes("未登录"), "要说明为什么没拉到");
@@ -391,11 +391,11 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
     clearChannels();
     setChannel(makeBuiltinChannel("builtin"));
 
-    const r = await run(["builtin", "models"]);
+    const r = await run(["models", "builtin"]);
     assert.equal(r.code, 0);
     assert.ok(r.err.includes("内置"), r.err);
 
-    const forced = await run(["builtin", "models", "--refresh"]);
+    const forced = await run(["models", "builtin", "--refresh"]);
     assert.equal(forced.code, 0, "没有远端可刷不是错误");
     assert.ok(forced.err.includes("内置"), forced.err);
 
@@ -406,11 +406,11 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
     withFreshRoot();
     useRemoteOnly();
 
-    const fetched = await run(["remote", "models", "--json"]);
+    const fetched = await run(["models", "remote", "--json"]);
     const a = JSON.parse(fetched.out) as { source: string };
     assert.equal(a.source, "fetched");
 
-    const cached = await run(["remote", "models", "--json"]);
+    const cached = await run(["models", "remote", "--json"]);
     const b = JSON.parse(cached.out) as { source: string; fetched_at?: string };
     assert.equal(b.source, "cache");
     assert.ok(b.fetched_at, "缓存命中要给出拉取时刻");
@@ -419,23 +419,23 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
   });
 });
 
-describe("3. <cid> <动词> 路由", () => {
-  it("<cid> models 只列该渠道贡献的池模型（不需要网关）", async () => {
-    const r = await run(["alpha", "models"]);
+describe("3. <动词> [<cid>] 路由", () => {
+  it("models <cid> 只列该渠道贡献的池模型（不需要网关）", async () => {
+    const r = await run(["models", "alpha"]);
     assert.equal(r.code, 0);
     assert.ok(r.out.includes("deepseek-v4.1-flash"), r.out);
     assert.ok(r.out.includes("glm-5.3-flash"), r.out);
     assert.ok(r.out.includes("← DeepSeek-V4.1-Flash"), "要能看出目录里的原始写法");
   });
 
-  it("<cid> billing 打印额度", async () => {
-    const r = await run(["alpha", "billing"]);
+  it("billing <cid> 打印额度", async () => {
+    const r = await run(["billing", "alpha"]);
     assert.equal(r.code, 0);
     assert.ok(r.out.includes("12.5 / 100 credits"), r.out);
   });
 
-  it("<cid> status 走 daemon（借假地址，不抛错）", async () => {
-    const r = await run(["alpha", "status", "--addr", "127.0.0.1:1", "--ui-port", "1", "--json"]);
+  it("status <cid> 走 daemon（借假地址，不抛错）", async () => {
+    const r = await run(["status", "alpha", "--addr", "127.0.0.1:1", "--ui-port", "1", "--json"]);
     assert.equal(r.code, 0);
     const parsed = JSON.parse(r.out) as { gateway: { reachable: boolean }; credentials: unknown };
     assert.equal(parsed.gateway.reachable, false, "假地址当然不可达，但命令本身要成功");
@@ -448,8 +448,8 @@ describe("3. <cid> <动词> 路由", () => {
     assert.deepEqual(parsed.gateway.channels.sort(), ["alpha", "beta"]);
   });
 
-  it("<cid> login 走无窗口登录流程（假渠道不联网）", async () => {
-    const r = await run(["alpha", "login", "--json"]);
+  it("login <cid> 走无窗口登录流程（假渠道不联网）", async () => {
+    const r = await run(["login", "alpha", "--json"]);
     assert.equal(r.code, 0);
     assert.ok(r.out.includes('"event":"start"'), r.out);
     assert.ok(r.out.includes('"event":"done"'), r.out);
@@ -466,7 +466,7 @@ describe("3. <cid> <动词> 路由", () => {
     assert.ok(before.out.includes("alpha") && before.out.includes("beta"), before.out);
 
     // 登一个（假渠道的 login 会落盘）→ 列表应能反映
-    await run(["alpha", "login", "--json"]);
+    await run(["login", "alpha", "--json"]);
     const after = await run(["login", "list", "--json"]);
     assert.equal(after.code, 0);
     const rows = JSON.parse(after.out) as Array<{ cid: string; logged_in: boolean; uid: string }>;
@@ -478,41 +478,41 @@ describe("3. <cid> <动词> 路由", () => {
 
     const text = await run(["login", "list"]);
     assert.ok(text.out.includes("已登录 1 个，未登录 1 个"), text.out);
-    assert.ok(text.out.includes("mx <cid> login"), "末尾给登录提示");
+    assert.ok(text.out.includes("mx login <cid>"), "末尾给登录提示");
   });
 
-  it("<cid> 未知动词 → 2，并列出可用动词", async () => {
+  it("多渠道路由下 login 不给 cid → 2，指路 mx login <cid>", async () => {
+    const r = await run(["login"]);
+    assert.equal(r.code, 2);
+    assert.ok(r.err.includes("mx login <cid>"), r.err);
+  });
+
+  it("旧语法 <cid> <动词> → 2，并指路新语法", async () => {
     const r = await run(["alpha", "乱写的动词"]);
     assert.equal(r.code, 2);
-    assert.ok(r.err.includes("可用动词"));
-  });
-
-  it("<cid> start 不静默做错事：明确指向单渠道 CLI", async () => {
-    const r = await run(["alpha", "start"]);
-    assert.equal(r.code, 2);
-    assert.ok(r.err.includes("仓库级"));
-    assert.ok(r.err.includes("channels/alpha/dist/cli.js"));
+    assert.ok(r.err.includes("未知命令"), r.err);
+    assert.ok(r.err.includes("新语法"), r.err);
   });
 });
 
 describe("4. 账号池与落点（也走 CLI）", () => {
-  it("<cid> accounts 列出池子（首次查看会把现有凭证收进来）", async () => {
-    const r = await run(["alpha", "accounts"]);
+  it("accounts <cid> 列出池子（首次查看会把现有凭证收进来）", async () => {
+    const r = await run(["accounts", "alpha"]);
     assert.equal(r.code, 0);
     assert.ok(r.out.includes("alpha"), r.out);
   });
 
-  it("<cid> login 成功后账号**真的**进池（回归：syncPool 必须包 runInChannel）", async () => {
+  it("login <cid> 成功后账号**真的**进池（回归：syncPool 必须包 runInChannel）", async () => {
     // 曾经的 bug：`runLogin` 里裸调 `syncPool(cid)`，而 `syncPool` → `cred.load()`
     // → `paths.*` 在多渠道模式下靠 ALS 上下文解析；没有上下文时它被 catch 吞掉，
     // 表现为「登录成功但池子是空的」（codearts 实测中招）。
     // ⚠ 必须注册**两个以上**渠道才会暴露这个 bug：只有一个渠道时
     // `getChannel(undefined)` 仍能解析（单渠道特例），裸 `syncPool` 照样成功。
-    // 真实的仓库级 CLI 注册 12 个渠道 —— 那才是 bug 的现场。
-    // ⚠ 断言必须**直接读磁盘**，不能借 `<cid> accounts` 去看：那个命令自己会
+    // 真实的仓库级 CLI 注册 10 个渠道 —— 那才是 bug 的现场。
+    // ⚠ 断言必须**直接读磁盘**，不能借 `accounts <cid>` 去看：那个命令自己会
     // 包着 `runInChannel` 再 syncPool 一次，等于把裸调用漏掉的账号补回来 ——
     // 用它断言就永远看不出这个 bug。
-    // ⚠ 还要先清掉磁盘上的渠道层：套件里更早的用例（如 `alpha accounts`）会留下
+    // ⚠ 还要先清掉磁盘上的渠道层：套件里更早的用例（如 `accounts alpha`）会留下
     // `accounts.json`，不清的话断言读到的是**上一个用例的残留**，永远为真。
     rmSync(join(root, "alpha"), { recursive: true, force: true });
     rmSync(join(root, "beta"), { recursive: true, force: true });
@@ -520,7 +520,7 @@ describe("4. 账号池与落点（也走 CLI）", () => {
     setChannel(makeChannel("alpha", { signin: true }));
     setChannel(makeChannel("beta", { signin: false }));
     try {
-      const login = await run(["alpha", "login"]);
+      const login = await run(["login", "alpha"]);
       assert.equal(login.code, 0);
 
       const indexFile = join(root, "alpha", "accounts.json");
@@ -536,8 +536,8 @@ describe("4. 账号池与落点（也走 CLI）", () => {
     }
   });
 
-  it("<cid> paths 打印该渠道落点，且是只读", async () => {
-    const r = await run(["alpha", "paths", "--json"]);
+  it("paths <cid> 打印该渠道落点，且是只读", async () => {
+    const r = await run(["paths", "alpha", "--json"]);
     assert.equal(r.code, 0);
     const parsed = JSON.parse(r.out) as { cid: string; dir: string };
     assert.equal(parsed.cid, "alpha");

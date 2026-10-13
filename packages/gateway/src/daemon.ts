@@ -530,8 +530,8 @@ export async function status(
     const first = notLoggedIn[0]!;
     console.log(
       list.length === 1
-        ? `建议: mx ${first.cid} login（未登录）`
-        : `建议: ${notLoggedIn.length} 个渠道未登录，逐个 mx <cid> login（如 mx ${first.cid} login）`,
+        ? `建议: mx login ${first.cid}（未登录）`
+        : `建议: ${notLoggedIn.length} 个渠道未登录，逐个 mx login <cid>（如 mx login ${first.cid}）`,
     );
   }
   if (stale.stale) console.log(staleBuildHint(stale));

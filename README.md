@@ -30,7 +30,7 @@ npm test             # build + 校验器 + 全部包的测试
 
 node packages/cli/dist/cli.js start              # 启动网关（守护式，端口 8787）
 node packages/cli/dist/cli.js model list         # 池视图：两个模型分别会落到谁
-node packages/cli/dist/cli.js <cid> login        # 登录某个渠道（浏览器授权）
+node packages/cli/dist/cli.js login <cid>        # 登录某个渠道（浏览器授权）
 ```
 
 ### 全局安装 / npx

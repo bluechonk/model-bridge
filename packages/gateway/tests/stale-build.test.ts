@@ -68,7 +68,7 @@ describe("陈旧构建检测", () => {
 
   it("工作区根判据只认 workspaces 字段（不再要求 `-bridge` 条目）", () => {
     // 本仓库布局早已是 packages/* + channels/*；旧判据在此**永远失败**
-    // （实测 `<cid> paths` 一直报「未找到工作区根」）。
+    // （实测 `paths <cid>` 一直报「未找到工作区根」）。
     const { root } = scaffold("ws-root", T0, T0);
     assert.equal(findWorkspaceRoot(join(root, "packages", "gw", "dist")), root);
 

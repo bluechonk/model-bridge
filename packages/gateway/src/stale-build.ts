@@ -47,7 +47,7 @@ const NOT_STALE: StaleBuildReport = { stale: false, buildMs: null, pidMs: null }
  *
  * 早期判据要求 workspaces 里含 `-bridge` 结尾的条目（旧布局 `channels/*-bridge`），
  * 但本仓库早已改成 `packages/*` + `channels/*` —— 判据失配会让查找**永远失败**
- * （`<cid> paths` 因此一直报「未找到工作区根」）。现在只认 `workspaces` 字段本身，
+ * （`paths <cid>` 因此一直报「未找到工作区根」）。现在只认 `workspaces` 字段本身，
  * 与具体布局解耦。
  *
  * 有 `node_modules` 的祖先目录跳过，避免误认依赖包里的 `package.json`。

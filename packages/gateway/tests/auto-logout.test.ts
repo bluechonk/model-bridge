@@ -69,7 +69,7 @@ function makeChannel(cid: string, upstreamUrl: string): Channel {
       save: async () => {},
       login: async () => ({}),
       refresh: async () => {
-        throw new Error("该渠道没有刷新端点");
+        throw new Error("no refresh endpoint");
       },
       resolveBaseUrl: () => upstreamUrl,
     },
@@ -154,7 +154,7 @@ describe("自动登出：死凭据被清理并退出路由", () => {
     assert.equal(status, 503);
     const payload = JSON.parse(text) as { error: { code: string; message: string } };
     assert.equal(payload.error.code, "not_authenticated");
-    assert.ok(payload.error.message.includes("mx <cid> login"), "提示重新登录的出口");
+    assert.ok(payload.error.message.includes("mx login <cid>"), "提示重新登录的出口");
     assert.equal(upstream.captured.length, 0, "不应触达上游（渠道根本没凭据）");
   });
 });

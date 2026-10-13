@@ -25,12 +25,10 @@ WorkBuddy **国内版**（腾讯 CodeBuddy，`codebuddy.ai`）的本地 OpenAI C
 
 ## 快速开始
 
-## 快速开始
-
 ```bash
 npm install && npm run build              # 工作区根：装依赖 + 编译全部包
-mx workbuddy login                            # 仓库级 CLI：登录
-mx workbuddy status / models / billing        # 状态 / 模型 / 账单
+mx login workbuddy                            # 仓库级 CLI：登录
+mx status workbuddy（models / billing 同法）        # 状态 / 模型 / 账单
 node channels/workbuddy/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
