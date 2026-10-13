@@ -1,7 +1,7 @@
-# model-bridge-cli
+# modelmux
 
 本地多渠道路由网关 CLI：把多个渠道汇成**一个 OpenAI 兼容端点**，对外只暴露两个模型，
-由全部渠道按账单用量自动供给。专注做一件事：`npx model-bridge-cli` 起网关，任何
+由全部渠道按账单用量自动供给。专注做一件事：`npx modelmux` 起网关，任何
 OpenAI 兼容客户端指过来就能用。
 
 ## 这是什么
@@ -16,7 +16,7 @@ OpenAI 兼容客户端指过来就能用。
 
 ```
 packages/gateway/    共享层（网关 / 守护 / 路径 / 渠道注册表，不含任何渠道知识）
-packages/cli/        CLI 入口（bin mb / model-bridge，注册全部渠道后交给共享 CLI）
+packages/cli/        CLI 入口（bin mb / modelmux，注册全部渠道后交给共享 CLI）
 channels/<cid>/      一个渠道 = 一个池子（只实现 cred / upstream / catalog / billing）
 docs/                全部文档（索引见 docs/README.md）
 ```
@@ -36,12 +36,12 @@ node packages/cli/dist/cli.js <cid> login        # 登录某个渠道（浏览�
 ### 全局安装 / npx
 
 `packages/cli` 构建后是自包含的单文件 bundle（`dist/cli.bundle.js`，内联 gateway
-与全部渠道），可脱离本仓库安装；发布到 npm 后支持 `npx model-bridge-cli`：
+与全部渠道），可脱离本仓库安装；发布到 npm 后支持 `npx modelmux`：
 
 ```bash
-npm i -g model-bridge-cli    # 或：cd packages/cli && npm pack && npm i -g ./model-bridge-cli-*.tgz
-mb start                     # 任意目录直接可用（全名 model-bridge 等价）
-mb model list
+npm i -g modelmux    # 或：cd packages/cli && npm pack && npm i -g ./modelmux-*.tgz
+mx start                     # 任意目录直接可用（全名 modelmux 等价）
+mx model list
 ```
 
 注意：bundle 形态下陈旧构建检测（`status` 的 stale_build）找不到工作区根，会退化为

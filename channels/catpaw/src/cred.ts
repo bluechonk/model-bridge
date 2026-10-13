@@ -15,7 +15,7 @@
  * 不依赖浏览器回打本地端口（早期 loopback 回调从未成功，已删除）。
  *
  * 返回的是与桌面端登录同一身份的不透明 SSO token（非 JWT）。
- * 落盘到 `~/.model-bridge/catpaw/credentials.json`。
+ * 落盘到 `~/.modelmux/catpaw/credentials.json`。
  *
  * ## 凭据读取策略（按用户规则 #4）
  *

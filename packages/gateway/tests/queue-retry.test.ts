@@ -209,7 +209,7 @@ describe("排队重试（10605）", () => {
 
   before(async () => {
     root = mkdtempSync(join(tmpdir(), "mb-queue-"));
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream(2); // 前 2 次排队，第 3 次成功
     process.env["MB_TEST_UPSTREAM"] = upstream.url;
 
@@ -228,7 +228,7 @@ describe("排队重试（10605）", () => {
     await gw?.close().catch(() => {});
     await new Promise<void>((r) => upstream.server.close(() => r()));
     delete process.env["MB_TEST_UPSTREAM"];
-    delete process.env["MODEL_BRIDGE_HOME"];
+    delete process.env["MODELMUX_HOME"];
     clearChannels();
     rmSync(root, { recursive: true, force: true });
   });
@@ -262,7 +262,7 @@ describe("上游 HTTP 200 + 流内业务错误帧（非排队）", () => {
 
   before(async () => {
     root = mkdtempSync(join(tmpdir(), "mb-instream-err-"));
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstreamError();
     process.env["MB_TEST_UPSTREAM"] = upstream.url;
 
@@ -281,7 +281,7 @@ describe("上游 HTTP 200 + 流内业务错误帧（非排队）", () => {
     await gw?.close().catch(() => {});
     await new Promise<void>((r) => upstream.server.close(() => r()));
     delete process.env["MB_TEST_UPSTREAM"];
-    delete process.env["MODEL_BRIDGE_HOME"];
+    delete process.env["MODELMUX_HOME"];
     clearChannels();
     rmSync(root, { recursive: true, force: true });
   });
@@ -315,7 +315,7 @@ describe("排队探测消费掉的帧一个都不能丢（回归）", () => {
 
   before(async () => {
     root = mkdtempSync(join(tmpdir(), "mb-frame-split-"));
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstreamFrameSplit();
     process.env["MB_TEST_UPSTREAM"] = upstream.url;
 
@@ -334,7 +334,7 @@ describe("排队探测消费掉的帧一个都不能丢（回归）", () => {
     await gw?.close().catch(() => {});
     await new Promise<void>((r) => upstream.server.close(() => r()));
     delete process.env["MB_TEST_UPSTREAM"];
-    delete process.env["MODEL_BRIDGE_HOME"];
+    delete process.env["MODELMUX_HOME"];
     clearChannels();
     rmSync(root, { recursive: true, force: true });
   });

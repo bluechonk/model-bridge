@@ -21,7 +21,6 @@ export const config: BridgeConfig = {
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8817",
   uiPort: 8818,
-  // 本渠道没有需要迁移的历史目录，刻意**不**声明 `legacyDirs` / `legacyEnvVars`：
   // 那些旧目录里的凭据血统不明（可能是国际版留下的 `domain=qoder.com`），声明在这里
   // 会把国际版数据迁进国内渠道 —— 等于跨区串号。
   debugDumpEnv: "QODERCN_DEBUG_DUMP",

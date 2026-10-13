@@ -20,13 +20,7 @@ export const config: BridgeConfig = {
   defaultAddr: "127.0.0.1:8790",
   uiPort: 8791,
   // 迁移来源（新→旧）：首项是刚被取代的旧顶层目录名
-  legacyDirs: [".catpaw-bridge", ".zcode-catpaw-bridge", ".zcode-connect-catpaw"],
-  legacyEnvVars: ["CATPAW_HOME", "ZCC_HOME"],
   debugDumpEnv: "CATPAW_DEBUG_DUMP",
-  fileMigrations: [
-    // 旧版守护进程写的是 daemon.pid（现规范名 gateway.pid）
-    { from: "daemon.pid", to: "gateway.pid" },
-  ],
 };
 
 export const channel: Channel = { config, cred, upstream, catalog, billing };

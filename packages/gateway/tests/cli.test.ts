@@ -210,15 +210,15 @@ function resetChannels(): void {
 
 before(() => {
   root = mkdtempSync(join(tmpdir(), "mb-cli-"));
-  savedRoot = process.env["MODEL_BRIDGE_HOME"];
-  process.env["MODEL_BRIDGE_HOME"] = root;
+  savedRoot = process.env["MODELMUX_HOME"];
+  process.env["MODELMUX_HOME"] = root;
   resetChannels();
 });
 
 after(() => {
   clearChannels();
-  if (savedRoot === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-  else process.env["MODEL_BRIDGE_HOME"] = savedRoot;
+  if (savedRoot === undefined) delete process.env["MODELMUX_HOME"];
+  else process.env["MODELMUX_HOME"] = savedRoot;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -238,7 +238,7 @@ describe("1. 常见命令与帮助", () => {
     for (const argv of [["--version"], ["-v"], ["version"]]) {
       const r = await run(argv);
       assert.equal(r.code, 0, argv.join(" "));
-      assert.match(r.out, /^mb \S+（2 个渠道；node v/, r.out);
+      assert.match(r.out, /^mx \S+（2 个渠道；node v/, r.out);
     }
   });
 
@@ -304,7 +304,7 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
   function withFreshRoot(): void {
     rmSync(root, { recursive: true, force: true });
     root = mkdtempSync(join(tmpdir(), "mb-cli-catalog-"));
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    process.env["MODELMUX_HOME"] = root;
   }
 
   function useRemoteOnly(): void {
@@ -480,7 +480,7 @@ describe("3. <cid> <动词> 路由", () => {
 
     const text = await run(["login", "list"]);
     assert.ok(text.out.includes("已登录 1 个，未登录 1 个"), text.out);
-    assert.ok(text.out.includes("mb <cid> login"), "末尾给登录提示");
+    assert.ok(text.out.includes("mx <cid> login"), "末尾给登录提示");
   });
 
   it("<cid> 未知动词 → 2，并列出可用动词", async () => {

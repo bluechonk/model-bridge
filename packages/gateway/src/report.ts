@@ -14,7 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { channelCount, channelFor, getChannel, type BridgeConfig } from "./channel.js";
-import { FILES, SUBDIRS, channelDirFor, legacySearchParents, rootDirFor } from "./paths.js";
+import { FILES, SUBDIRS, channelDirFor, rootDirFor } from "./paths.js";
 import { findWorkspaceRoot } from "./stale-build.js";
 
 export interface EntryReport {
@@ -34,10 +34,6 @@ export interface ChannelReport {
   dirExists: boolean;
   files: EntryReport[];
   subdirs: EntryReport[];
-  /** 还没收拢的历史顶层目录（绝对路径）。 */
-  legacyPending: string[];
-  /** 渠道层里还存在的历史文件名（fileMigrations 的 from）。 */
-  staleFiles: string[];
 }
 
 function describe(base: string, name: string): EntryReport {
@@ -61,20 +57,7 @@ export function inspect(config: BridgeConfig): ChannelReport {
   const dir = channelDirFor(config);
   const dirExists = existsSync(dir);
 
-  const legacyPending: string[] = [];
-  for (const parent of legacySearchParents(config)) {
-    for (const name of config.legacyDirs ?? []) {
-      const path = join(parent, name);
-      if (existsSync(path) && path !== dir) legacyPending.push(path);
-    }
-  }
 
-  const staleFiles: string[] = [];
-  if (dirExists) {
-    for (const rule of config.fileMigrations ?? []) {
-      if (existsSync(join(dir, rule.from))) staleFiles.push(rule.from);
-    }
-  }
 
   return {
     cid: config.cid,
@@ -85,8 +68,6 @@ export function inspect(config: BridgeConfig): ChannelReport {
     dirExists,
     files: Object.values(FILES).map((name) => describe(dir, name)),
     subdirs: Object.values(SUBDIRS).map((name) => describe(dir, name)),
-    legacyPending,
-    staleFiles,
   };
 }
 
@@ -151,12 +132,6 @@ export function renderReport(report: ChannelReport): string {
     `  文件     ${report.files.map(formatEntry).join("  ")}`,
     `  子目录   ${report.subdirs.map(formatEntry).join("  ")}`,
   ];
-  if (report.legacyPending.length > 0) {
-    lines.push(`  ⚠ 待收拢 ${report.legacyPending.join(", ")}`);
-  }
-  if (report.staleFiles.length > 0) {
-    lines.push(`  ⚠ 待收敛的历史文件名 ${report.staleFiles.join(", ")}`);
-  }
   return lines.join("\n");
 }
 

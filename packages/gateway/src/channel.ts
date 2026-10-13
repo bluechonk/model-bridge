@@ -19,8 +19,6 @@
  * 所以注册顺序只需早于第一次网络/路径操作即可。
  */
 
-import type { FileMigration } from "./migrate.js";
-
 /** 凭据的最小契约（见 docs/CONTRACT-TS.md §3）。渠道可带更多字段。 */
 export interface Credential {
   readonly accessToken: string;
@@ -257,24 +255,8 @@ export interface BridgeConfig {
   readonly defaultAddr: string;
   /** 单渠道独立运行时的控制台 API 默认端口（仓库级固定用 `REPO_DEFAULT_UI_PORT`）。 */
   readonly uiPort: number;
-  /**
-   * 历史顶层目录名（新→旧），首次访问时收拢进 `<root>/<cid>/`。
-   *
-   * 首项通常是刚被取代的 `.<cid>-bridge`。**只填本渠道的历史名** ——
-   * 混入其它渠道的名字会导致跨渠道数据劫持（见 STORAGE-CONVENTION.md §4 条文第 12 条）。
-   */
-  readonly legacyDirs?: readonly string[];
-  /**
-   * 存储根覆盖变量的历史名（新→旧）。现在只认共享的 `MODEL_BRIDGE_HOME`，
-   * 这些名字仍被兼容读取（按存储根处理并打一次弃用提示）。
-   */
-  readonly legacyEnvVars?: readonly string[];
   /** 抓包落盘目录的环境变量名，如 `ZCODE_DEBUG_DUMP`（值 `1` 表示用渠道内 `debug/`）。 */
   readonly debugDumpEnv: string;
-  /** 抓包落盘变量的历史名（新→旧）。 */
-  readonly legacyDebugDumpEnv?: readonly string[];
-  /** 渠道层内的历史文件名收敛规则（幂等，见 migrate.ts）。 */
-  readonly fileMigrations?: readonly FileMigration[];
 }
 
 /** 一个渠道的完整装配：配置 + 四个渠道独有模块。 */

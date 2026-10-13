@@ -24,7 +24,7 @@ import { after, before, describe, it } from "node:test";
 
 // 必须在 import 被测模块之前设置（隔离真实凭据目录）
 const HOME = mkdtempSync(join(tmpdir(), "lb-selftest-"));
-process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["MODELMUX_HOME"] = HOME;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
 const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
@@ -153,7 +153,7 @@ async function pointUpstreamAt(base: string): Promise<void> {
 // ── 测试 ─────────────────────────────────────────────────────────────────────
 
 describe("1. 路径", () => {
-  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/lobsterai", () => {
+  it("数据目录名固定，受 MODELMUX_HOME 覆盖，渠道层是 <root>/lobsterai", () => {
     assert.equal(paths.rootDir(), HOME);
     assert.equal(paths.channelDir(), join(HOME, "lobsterai"));
     assert.ok(paths.credentialsPath().endsWith("credentials.json"));
@@ -165,13 +165,13 @@ describe("1. 路径", () => {
     const legacy = join(alt, ".lobsterai2api");
     mkdirSync(legacy, { recursive: true });
     writeFileSync(join(legacy, "credentials.json"), '{"access_token":"legacy"}', "utf8");
-    const saved = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = alt;
+    const saved = process.env["MODELMUX_HOME"];
+    process.env["MODELMUX_HOME"] = alt;
     try {
       assert.equal(paths.channelDir(), join(alt, "lobsterai"));
       assert.ok(paths.credentialsPath().includes("lobsterai"));
     } finally {
-      process.env["MODEL_BRIDGE_HOME"] = saved;
+      process.env["MODELMUX_HOME"] = saved;
       rmSync(alt, { recursive: true, force: true });
     }
   });

@@ -90,17 +90,17 @@ const QUEUE_RETRY_BUDGET_MS = 300_000;
  * 故 `daemon.gatewayHealthy()` 会核对 `service` 字段。
  *
  * 取值：单渠道模式为 `<cid>-bridge`（兼容既有守护进程判据）；多渠道路由下为
- * 仓库级身份 `model-bridge` —— 它同时服务所有已注册渠道。
+ * 仓库级身份 `modelmux` —— 它同时服务所有已注册渠道。
  */
 export function serviceName(cid?: string): string {
   if (cid !== undefined) return `${channelFor(cid).config.cid}-bridge`;
   if (channelCount() === 1) return `${channels()[0]!.config.cid}-bridge`;
-  return "model-bridge";
+  return "modelmux";
 }
 
-/** 本进程认得的全部服务标识（单渠道的 `<cid>-bridge` 与仓库级的 `model-bridge`）。 */
+/** 本进程认得的全部服务标识（单渠道的 `<cid>-bridge` 与仓库级的 `modelmux`）。 */
 export function knownServiceNames(): string[] {
-  return ["model-bridge", ...channels().map((c) => `${c.config.cid}-bridge`)];
+  return ["modelmux", ...channels().map((c) => `${c.config.cid}-bridge`)];
 }
 
 /** 本实现的语言标识（供 status 区分同名的旧实现）。 */
@@ -511,7 +511,7 @@ async function callUpstream(
       logger(
         `auto logout (${cid}): token rejected by upstream and refresh unusable; ` +
           `removed ${purged.accounts} pool account(s)${purged.credential ? " + stored credential" : ""}; ` +
-          `run \`mb login -c ${cid}\` to re-authorize`,
+          `run \`mx login -c ${cid}\` to re-authorize`,
       );
       return {
         kind: "auth_exhausted",
@@ -604,7 +604,7 @@ async function handleChat(
       res,
       503,
       "not_authenticated",
-      `no logged-in channel provides ${target}; run \`mb login -c <cid>\` for one of: ${candidates.map((c) => c.cid).join(", ")}`,
+      `no logged-in channel provides ${target}; run \`mx login -c <cid>\` for one of: ${candidates.map((c) => c.cid).join(", ")}`,
     );
     return;
   }
@@ -943,7 +943,7 @@ function handleRoot(res: ServerResponse, path: string): void {
     const list = channels();
     writeJson(res, {
       service: serviceName(),
-      display: list.length === 1 ? list[0]!.upstream.DISPLAY_NAME : "model-bridge",
+      display: list.length === 1 ? list[0]!.upstream.DISPLAY_NAME : "modelmux",
       channels: list.map((c) => c.config.cid),
       endpoints: ENDPOINTS,
     });

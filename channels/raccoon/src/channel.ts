@@ -19,13 +19,6 @@ export const config: BridgeConfig = {
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8815",
   uiPort: 8816,
-  legacyDirs: [
-    ".raccoon-bridge",
-    ".zcode-connect-raccoon",
-    ".raccoon2api",
-    ".raccoon-gateway",
-  ],
-  legacyEnvVars: ["RACCOON_HOME"],
   debugDumpEnv: "RACCOON_DEBUG_DUMP",
 };
 

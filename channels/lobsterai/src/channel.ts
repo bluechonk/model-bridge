@@ -19,13 +19,6 @@ export const config: BridgeConfig = {
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8809",
   uiPort: 8810,
-  legacyDirs: [
-    ".lobsterai-bridge",
-    ".zcode-connect-lobsterai",
-    ".lobsterai2api",
-    ".lobsterai-gateway",
-  ],
-  legacyEnvVars: ["LOBSTERAI_HOME"],
   debugDumpEnv: "LOBSTERAI_DEBUG_DUMP",
 };
 

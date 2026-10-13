@@ -19,13 +19,6 @@ export const config: BridgeConfig = {
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8813",
   uiPort: 8814,
-  legacyDirs: [
-    ".loomy-bridge",
-    ".zcode-connect-loomy",
-    ".loomy2api",
-    ".loomy-gateway",
-  ],
-  legacyEnvVars: ["LOOMY_HOME"],
   debugDumpEnv: "LOOMY_DEBUG_DUMP",
 };
 

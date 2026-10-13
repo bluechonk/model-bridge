@@ -25,13 +25,13 @@ const { claimedTodayPerLedger, readLedger } = signinLedger;
 
 async function withIsolatedRoot<T>(fn: () => Promise<T>): Promise<T> {
   const root = mkdtempSync(join(tmpdir(), "mb-autosignin-"));
-  const saved = process.env["MODEL_BRIDGE_HOME"];
-  process.env["MODEL_BRIDGE_HOME"] = root;
+  const saved = process.env["MODELMUX_HOME"];
+  process.env["MODELMUX_HOME"] = root;
   try {
     return await fn();
   } finally {
-    if (saved === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-    else process.env["MODEL_BRIDGE_HOME"] = saved;
+    if (saved === undefined) delete process.env["MODELMUX_HOME"];
+    else process.env["MODELMUX_HOME"] = saved;
     rmSync(root, { recursive: true, force: true });
   }
 }

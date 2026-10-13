@@ -3,7 +3,7 @@
  *
  * 布局（见 docs/STORAGE-CONVENTION.md §1/§4）：
  *
- *   ~/.model-bridge/             ← 唯一存储根（`MODEL_BRIDGE_HOME` 可覆盖）
+ *   ~/.modelmux/                 ← 唯一存储根（`MODELMUX_HOME` 可覆盖）
  *       prefs.json               （可选）跨渠道共享偏好
  *       <cid>/                   ← 渠道层，cid 取自 BridgeConfig
  *           credentials.json     登录凭证
@@ -14,23 +14,23 @@
  *           cache/  state/  debug/
  *
  * 根目录名与分层规则是共享常量，渠道**不得**自行决定（也不得自行拼绝对路径）——
- * 渠道只能给 `cid` 与历史名清单。首次访问某个根时把历史顶层目录（`legacyDirs`）
- * 收拢进 `<root>/<cid>/`，并收敛渠道层内的历史文件名（`fileMigrations`）。
+ * 渠道只能给 `cid`。历史布局兼容（legacyDirs / fileMigrations / 旧环境变量）已随
+ * modelmux 更名整体移除：只认 `<root>/<cid>/` 这一种布局。
  */
 
-import { existsSync, mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { channels, channelCount, channelFor, getChannel, type BridgeConfig } from "./channel.js";
+import { channelFor, getChannel, type BridgeConfig } from "./channel.js";
 import { activeCid } from "./channel-context.js";
-import { collectLegacyDirs, enforcePermissions, migrateChannelFiles } from "./migrate.js";
+import { enforcePermissions } from "./permissions.js";
 
 /** 存储根目录名（用户主目录下）。 */
-export const ROOT_DIR_NAME = ".model-bridge";
+export const ROOT_DIR_NAME = ".modelmux";
 
-/** 覆盖存储根的环境变量名（**唯一**；旧的分渠道 `<CID>_HOME` 见 legacyEnvVars）。 */
-export const ROOT_ENV = "MODEL_BRIDGE_HOME";
+/** 覆盖存储根的环境变量名（唯一）。 */
+export const ROOT_ENV = "MODELMUX_HOME";
 
 /** 渠道层内的固定文件名（唯一定义处）。 */
 export const FILES = {
@@ -54,47 +54,17 @@ const warned = new Set<string>();
 export function noteOnce(key: string, message: string): void {
   if (warned.has(key)) return;
   warned.add(key);
-  console.error(`[model-bridge] ${message}`);
+  console.error(`[modelmux] ${message}`);
 }
 
-/** 解析存储根，并记下它是否由环境变量**显式**指定。 */
-function resolveRoot(config?: BridgeConfig): { root: string; fromEnv: boolean } {
-  const explicit = process.env[ROOT_ENV];
-  if (explicit) return { root: explicit, fromEnv: true };
-  // config 省略 = 仓库级（多渠道路由）：根是**共享的**，不需要单个渠道的配置，
-  // 历史环境变量按注册顺序逐个检查（任一渠道的历史变量仍按存储根处理）。
-  const names = config
-    ? (config.legacyEnvVars ?? [])
-    : channels().flatMap((c) => c.config.legacyEnvVars ?? []);
-  for (const name of names) {
-    const value = process.env[name];
-    if (!value) continue;
-    noteOnce(`env:${name}`, `${name} is deprecated: only MODEL_BRIDGE_HOME is honored now (this var is still treated as the storage root)`);
-    return { root: value, fromEnv: true };
-  }
-  return { root: join(homedir(), ROOT_DIR_NAME), fromEnv: false };
+/** 解析存储根：`MODELMUX_HOME` > `~/.modelmux`。 */
+function resolveRoot(): string {
+  return process.env[ROOT_ENV] || join(homedir(), ROOT_DIR_NAME);
 }
 
-/**
- * 存储根（纯函数，**不触发迁移**，供巡检/统计用）。
- *
- * 优先级：`MODEL_BRIDGE_HOME` > 渠道的历史变量（兼容读取，打一次弃用提示）> `~/.model-bridge`。
- */
-export function rootDirFor(config: BridgeConfig): string {
-  return resolveRoot(config).root;
-}
-
-/**
- * 搜索历史顶层目录的父目录清单。
- *
- * ⚠ 只有根**不是**由环境变量显式指定时，才把用户主目录算进来。否则
- * （测试 / 便携模式把根指到别处）迁移会去动真实主目录里的旧目录 ——
- * 那既是意外的读盘，也可能把用户的数据搬进一个临时根。
- */
-export function legacySearchParents(config: BridgeConfig): string[] {
-  const { root, fromEnv } = resolveRoot(config);
-  if (fromEnv || root === homedir()) return [root];
-  return [root, homedir()];
+/** 存储根（纯函数）。 */
+export function rootDirFor(_config: BridgeConfig): string {
+  return resolveRoot();
 }
 
 /** 渠道层目录（纯函数，**不触发迁移**，供巡检/统计用）。 */
@@ -109,49 +79,16 @@ function configOf(cid?: string): BridgeConfig {
   return getChannel().config;
 }
 
-/** 存储根（不触发迁移）。 */
+/** 存储根。 */
 export function rootDir(cid?: string): string {
-  if (cid !== undefined) return rootDirFor(channelFor(cid).config);
-  // 仓库级：根与任何单个渠道无关，直接解析（不能要求"唯一渠道"，多渠道路由下没有）
-  if (channelCount() === 1) return rootDirFor(getChannel().config);
-  return resolveRoot().root;
+  void cid; // 根是共享的，与单渠道无关；参数保留供调用方统一形状
+  return resolveRoot();
 }
 
-/** 每个 (根, cid) 只做一次收拢：缓存键 → 实际渠道目录（收拢失败时可能仍指向旧目录）。 */
-const resolvedDirs = new Map<string, string>();
-
-/**
- * 渠道层目录 `<root>/<cid>/`（首次调用时收拢历史顶层目录）。
- *
- * 收拢失败（例如旧目录里还有进程占用的文件）时返回**旧目录**，宁可暂时不在
- * 统一根下，也不让渠道读不到既有凭证。
- */
+/** 渠道层目录 `<root>/<cid>/`（唯一布局，无迁移）。 */
 export function channelDir(cid?: string): string {
   const config = configOf(cid);
-  const { root } = resolveRoot(config);
-  const cacheKey = `${root}\u0000${config.cid}`;
-  const cached = resolvedDirs.get(cacheKey);
-  if (cached) return cached;
-
-  const target = join(root, config.cid);
-  const fileMigrations = config.fileMigrations ?? [];
-  const resolved = collectLegacyDirs({
-    root,
-    parents: legacySearchParents(config),
-    cid: config.cid,
-    target,
-    legacyDirs: config.legacyDirs ?? [],
-    skipMerge: fileMigrations.filter((m) => m.action === "delete").map((m) => m.from),
-    log: (message) => noteOnce(`migrate:${message}`, message),
-  });
-  resolvedDirs.set(cacheKey, resolved);
-
-  if (resolved === target) {
-    migrateChannelFiles(target, fileMigrations, (message) =>
-      noteOnce(`migrate:${message}`, message),
-    );
-  }
-  return resolved;
+  return join(resolveRoot(), config.cid);
 }
 
 /** 渠道层目录，缺失时创建（并设权限基线）。 */

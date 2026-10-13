@@ -1,7 +1,7 @@
 # codearts-bridge
 
 CodeArts（华为云）的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 CodeArts 后端。
 
@@ -49,7 +49,7 @@ CodeArts 的 STS 信封**只给 `credentials` + `refresh_token`**，从不给 `u
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作走 `mb` 命令（`mb status` / `mb model list` / `mb login -c <cid>` / `mb <cid> billing`）。。
+日常操作走 `mb` 命令（`mx status` / `mx model list` / `mx login -c <cid>` / `mx <cid> billing`）。。
 
 ## 鉴权失效识别（APIG.0602）
 

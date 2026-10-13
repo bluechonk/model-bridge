@@ -25,7 +25,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "loomy-selftest-"));
-process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["MODELMUX_HOME"] = HOME;
 // 固定为非交互：否则在真终端里跑 `npm test`，login() 会弹菜单/等信息输入而挂住。
 // 交互路径由 loginSmsInteractive + 脚本化 LinePrompt 直接测（不碰真实 stdin）。
 Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
@@ -413,27 +413,12 @@ after(() => {
 // ── 1. 路径 ───────────────────────────────────────────────────────────────────
 
 describe("1. 路径", () => {
-  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/loomy", () => {
+  it("数据目录名固定，受 MODELMUX_HOME 覆盖，渠道层是 <root>/loomy", () => {
     assert.equal(paths.rootDir(), HOME);
     assert.equal(paths.channelDir(), join(HOME, "loomy"));
     assert.ok(paths.credentialsPath().endsWith("credentials.json"));
   });
 
-  it("旧目录存在时整目录迁移", () => {
-    const alt = mkdtempSync(join(tmpdir(), "loomy-legacy-"));
-    const legacy = join(alt, ".loomy2api");
-    mkdirSync(legacy, { recursive: true });
-    writeFileSync(join(legacy, "credentials.json"), '{"access_token":"legacy"}', "utf8");
-    const saved = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = alt;
-    try {
-      assert.equal(paths.channelDir(), join(alt, "loomy"));
-      assert.ok(readFileSync(paths.credentialsPath(), "utf8").includes("legacy"));
-    } finally {
-      process.env["MODEL_BRIDGE_HOME"] = saved;
-      rmSync(alt, { recursive: true, force: true });
-    }
-  });
 });
 
 // ── 2. 签名 ───────────────────────────────────────────────────────────────────

@@ -76,7 +76,7 @@ function scopeOf(cid?: string): Scope {
     };
   }
   return {
-    name: "model-bridge",
+    name: "modelmux",
     pidPath: () => paths.rootPidPath(),
     logPath: () => paths.rootLogPath(),
     prefsPath: () => paths.rootPrefsPath(),
@@ -128,7 +128,7 @@ async function probe(addr: string): Promise<Record<string, unknown> | null> {
     if (resp.status !== 200) return null;
     const payload = (await resp.json()) as Record<string, unknown>;
     if (payload["ok"] !== true) return null;
-    // 接受本进程认得的**所有**身份：单渠道 `<cid>-bridge` 与仓库级 `model-bridge`。
+    // 接受本进程认得的**所有**身份：单渠道 `<cid>-bridge` 与仓库级 `modelmux`。
     // 仓库级网关同时服务各渠道，故单渠道的 status 也应把它认作「自己的网关」。
     const service = payload["service"];
     if (typeof service !== "string" || !gateway.knownServiceNames().includes(service)) return null;
@@ -524,8 +524,8 @@ export async function status(
     const first = notLoggedIn[0]!;
     console.log(
       list.length === 1
-        ? `建议: mb login -c ${first.cid}（未登录）`
-        : `建议: ${notLoggedIn.length} 个渠道未登录，逐个 mb login -c <cid>（如 mb login -c ${first.cid}）`,
+        ? `建议: mx login -c ${first.cid}（未登录）`
+        : `建议: ${notLoggedIn.length} 个渠道未登录，逐个 mx login -c <cid>（如 mx login -c ${first.cid}）`,
     );
   }
   if (stale.stale) console.log(staleBuildHint(stale));

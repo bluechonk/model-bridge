@@ -14,7 +14,6 @@ export * as gateway from "./gateway.js";
 export * as headless from "./headless.js";
 export * as login from "./login.js";
 export * as loginFlow from "./login-flow.js";
-export * as migrate from "./migrate.js";
 export * as modelFamily from "./model-family.js";
 export * as paths from "./paths.js";
 export * as portfree from "./portfree.js";
@@ -46,7 +45,6 @@ export {
   type SigninStatus,
   type SigninOutcome,
 } from "./channel.js";
-export type { FileMigration } from "./migrate.js";
 
 // 含密文件的原子写（账号池 / 签到台账共用）
 export { writeSecretFile, writeJsonSecret } from "./secret-file.js";
@@ -111,7 +109,6 @@ export {
   channelDir,
   rootDirFor,
   channelDirFor,
-  legacySearchParents,
   channelFile,
   rootFile,
   rootPidPath,

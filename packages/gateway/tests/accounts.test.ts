@@ -89,15 +89,15 @@ const CID = "alpha";
 function withRoot(fn: (root: string) => void | Promise<void>): () => Promise<void> {
   return async () => {
     const root = mkdtempSync(join(tmpdir(), "mb-accounts-"));
-    const saved = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    const saved = process.env["MODELMUX_HOME"];
+    process.env["MODELMUX_HOME"] = root;
     clearChannels();
     setChannel(makeChannel(CID));
     try {
       await fn(root);
     } finally {
-      if (saved === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-      else process.env["MODEL_BRIDGE_HOME"] = saved;
+      if (saved === undefined) delete process.env["MODELMUX_HOME"];
+      else process.env["MODELMUX_HOME"] = saved;
       clearChannels();
       rmSync(root, { recursive: true, force: true });
     }

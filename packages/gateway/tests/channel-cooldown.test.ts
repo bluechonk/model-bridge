@@ -118,7 +118,7 @@ describe("渠道级冷却：失败的渠道下一次请求被跳过", () => {
 
   before(async () => {
     root = mkdtempSync(join(tmpdir(), "mb-cooldown-"));
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream();
 
     clearChannels();
@@ -135,7 +135,7 @@ describe("渠道级冷却：失败的渠道下一次请求被跳过", () => {
   after(async () => {
     await gw?.close().catch(() => {});
     await new Promise<void>((r) => upstream.server.close(() => r()));
-    delete process.env["MODEL_BRIDGE_HOME"];
+    delete process.env["MODELMUX_HOME"];
     clearChannels();
     rmSync(root, { recursive: true, force: true });
   });

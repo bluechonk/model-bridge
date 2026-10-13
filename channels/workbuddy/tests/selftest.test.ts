@@ -9,7 +9,7 @@
  *  5. SSE 规范化（注释行剔除、空 tool_calls 剔除）与聚合
  *  6. 端到端网关（假上游）：system 注入、强制流式、指纹改写、非流式聚合、错误信封
  *
- * 数据目录用 MODEL_BRIDGE_HOME 隔离，绝不碰真实凭据。
+ * 数据目录用 MODELMUX_HOME 隔离，绝不碰真实凭据。
  */
 
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ import { after, before, describe, it } from "node:test";
 
 // 必须在 import 被测模块之前设置（paths 每次调用都重新解析存储根）
 const HOME = mkdtempSync(join(tmpdir(), "wb-cn-selftest-"));
-process.env["MODEL_BRIDGE_HOME"] = HOME;
+process.env["MODELMUX_HOME"] = HOME;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
 const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
@@ -111,7 +111,7 @@ async function readSseFrames(url: string, body: unknown): Promise<string> {
 // ── 测试 ─────────────────────────────────────────────────────────────────────
 
 describe("1. 路径", () => {
-  it("数据目录名固定，受 MODEL_BRIDGE_HOME 覆盖，渠道层是 <root>/workbuddy", () => {
+  it("数据目录名固定，受 MODELMUX_HOME 覆盖，渠道层是 <root>/workbuddy", () => {
     assert.equal(paths.rootDir(), HOME);
     assert.equal(paths.channelDir(), join(HOME, "workbuddy"));
     assert.ok(paths.credentialsPath().endsWith("credentials.json"));
@@ -119,13 +119,6 @@ describe("1. 路径", () => {
     assert.ok(paths.logPath().endsWith("gateway.log"));
   });
 
-  it("不认国际版的历史目录与变量（跨产品串号防护）", () => {
-    // 本渠道是拆分后新建的：`.workbuddy-bridge` 里是国际版凭证，归 workbuddyai。
-    // 声明它会把这些数据迁进国内渠道 —— 所以必须为空。
-    assert.deepEqual([...channelModule.config.legacyDirs], []);
-    assert.deepEqual([...channelModule.config.legacyEnvVars], []);
-    assert.equal(channelModule.config.debugDumpEnv, "WORKBUDDY_DEBUG_DUMP");
-  });
 });
 
 describe("2. 模型目录", () => {

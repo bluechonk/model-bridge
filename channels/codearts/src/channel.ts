@@ -19,13 +19,6 @@ export const config: BridgeConfig = {
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8807",
   uiPort: 8808,
-  legacyDirs: [
-    ".codearts-bridge",
-    ".zcode-connect-codearts",
-    ".codearts2api",
-    ".codearts-gateway",
-  ],
-  legacyEnvVars: ["CODEARTS_HOME"],
   debugDumpEnv: "CODEARTS_DEBUG_DUMP",
 };
 

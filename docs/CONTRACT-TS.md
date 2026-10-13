@@ -1,4 +1,4 @@
-# TypeScript 渠道项目契约（工作区 `model-bridge`）
+# TypeScript 渠道项目契约（工作区 `modelmux`）
 
 本文件描述**统一后的共享包架构**。所有渠道的实现都必须遵守本契约。
 
@@ -15,7 +15,7 @@
 ## 1. 工作区布局
 
 ```
-model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根 + 插件宿主
+modelmux/                     ← 仓库根 = 工作区根 + ZCode 市场根 + 插件宿主
 ├── packages/gateway/             ← **共享包** `@model-bridge/gateway`
 │   └── src/
 │       ├── channel.ts            ← 渠道注册表（共享层与渠道层的**唯一边界**）
@@ -31,9 +31,9 @@ model-bridge/                     ← 仓库根 = 工作区根 + ZCode 市场根
 │       ├── sse-stream.ts         ← SSE 规范化、聚合、中继
 │       ├── model-family.ts       ← 模型池白名单（见 §4）
 │       └── index.ts              ← 对外的统一出口
-├── channels/                     ← 渠道（每个 = 一个模型池 + 账号池；清单以 mb model list 为准）
+├── channels/                     ← 渠道（每个 = 一个模型池 + 账号池；清单以 mx model list 为准）
 │   └── <cid>/                    ← 结构见下
-├── packages/cli/                 ← **仓库级入口**（bin `mb` / `model-bridge`）
+├── packages/cli/                 ← **仓库级入口**（bin `mb` / `modelmux`）
 │   └── src/
 │       ├── channels.ts           ← import 全部渠道包（副作用 = setChannel）
 │       └── cli.ts                ← bin 入口：注册全部渠道后调共享 `main()`
@@ -136,7 +136,7 @@ interface BridgeConfig {
  defaultAddr: string;         // **单渠道独立运行**的网关默认地址，如 "127.0.0.1:8803"
  uiPort: number;              // **单渠道独立运行**的控制台端口（仓库级路由用 REPO_DEFAULT_*）
  legacyDirs?: string[];       // 历史顶层目录名（新→旧），收拢进 <root>/<cid>/（首项通常是 ".<cid>-bridge"）
- legacyEnvVars?: string[];    // 存储根覆盖变量的历史名（新→旧）；现行名是共享的 MODEL_BRIDGE_HOME
+ legacyEnvVars?: string[];    // 存储根覆盖变量的历史名（新→旧）；现行名是共享的 MODELMUX_HOME
  debugDumpEnv: string;        // 抓包落盘目录的环境变量名（值 "1" 表示用渠道内 debug/）
  legacyDebugDumpEnv?: string[]; // 抓包变量的历史名（新→旧）
  fileMigrations?: FileMigration[]; // 渠道层内的历史文件名收敛（幂等）
@@ -370,12 +370,12 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 每个渠道要有 `tests/selftest.test.ts`，用 `node:test`，**照已有渠道写**：
 
 1. **完全离线**：所有上游调用指向本机假服务（`node:http` 起）
-2. **不需要真实凭据**：`cred.save()` 写假凭据，存储根用 `MODEL_BRIDGE_HOME` 指向
+2. **不需要真实凭据**：`cred.save()` 写假凭据，存储根用 `MODELMUX_HOME` 指向
   `mkdtempSync()` 的临时目录（旧的 `<CID>_HOME` 仍兼容，但已弃用）
 3. **import 顺序**：先 `await import("@model-bridge/gateway")`，再
   `await import("../dist/channel.js")`（触发注册），最后引渠道模块
 4. **覆盖**：
-  - `paths`：存储根覆盖（`MODEL_BRIDGE_HOME`）、`<cid>` 分层、历史目录收拢
+  - `paths`：存储根覆盖（`MODELMUX_HOME`）、`<cid>` 分层、历史目录收拢
   - `catalog`：别名映射、未知名透传、**白名单过滤只作用于呈现层**（`details()` 仍全量）
   - `cred`：未登录抛错、落盘读回、损坏容忍
   - `upstream`：URL 组装、鉴权头、请求体改写的关键字段（对照 `docs/protocols/<cid>/PROTOCOL.md`）
@@ -414,10 +414,10 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 `packages/*/dist`、`channels/*/dist` 下的 `.js`）与**守护进程启动时刻**
 （pid 文件的 mtime，`start` 亲手写的那一刻，等价且零平台依赖）。
 
-- `mb status`：命中时打印
- ` 网关在跑旧代码：构建产物 <t1> 比进程启动 <t2> 新。跑 mb restart …`；
+- `mx status`：命中时打印
+ ` 网关在跑旧代码：构建产物 <t1> 比进程启动 <t2> 新。跑 mx restart …`；
  `status --json` 里是 `stale_build: true`
-- `mb start`：**「已在运行」分支**也要检查 —— 那正是「改完 build 再来 start
+- `mx start`：**「已在运行」分支**也要检查 —— 那正是「改完 build 再来 start
  被拦下、用户以为已经启动好了」的漏点
 
 只**报告**、不自动重启：是否重启由用户决定（自动重启会打断正在服务的会话）。

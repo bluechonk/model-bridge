@@ -9,7 +9,7 @@
 1. `POST {base}/v2/plugin/auth/state?platform=workbuddy`（匿名头 `X-No-*`）→ `{state, authUrl}`
 2. 浏览器打开 authUrl，人工授权（唯一人工步骤）
 3. `GET {base}/v2/plugin/auth/token?state=...` 每 5s 轮询，≤5 分钟 → accessToken / refreshToken 等
-4. 凭据落盘 `~/.model-bridge/workbuddyai/credentials.json`（字段名与 Go 版一致，camelCase；uid 取 JWT sub）
+4. 凭据落盘 `~/.modelmux/workbuddyai/credentials.json`（字段名与 Go 版一致，camelCase；uid 取 JWT sub）
 5. 续期：`POST /v2/plugin/auth/refresh`，纯 HTTP
 
 有凭证时先 `fetch_models` 探测；401/403 先 refresh，刷新失败删凭证引导重登。

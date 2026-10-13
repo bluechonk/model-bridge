@@ -1,5 +1,5 @@
 {
-  "name": "model-bridge-cli",
+  "name": "modelmux",
   "version": "0.1.0",
   "type": "module",
   "description": "多渠道本地模型池网关 CLI：多个渠道汇成一个 OpenAI 兼容端点，只对外暴露两个池内模型",
@@ -7,8 +7,8 @@
     "node": ">=22.6"
   },
   "bin": {
-    "model-bridge": "./dist/cli.bundle.js",
-    "mb": "./dist/cli.bundle.js"
+    "modelmux": "./dist/cli.bundle.js",
+    "mx": "./dist/cli.bundle.js"
   },
   "files": [
     "dist/cli.bundle.js"

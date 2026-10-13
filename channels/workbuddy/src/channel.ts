@@ -29,10 +29,7 @@ export const config: BridgeConfig = {
   // （实测 `domain=www.workbuddy.ai`），血统属于 workbuddyai；声明在这里会把
   // 国际数据迁进国内渠道，等于跨产品串号。同理不认 `WORKBUDDY_HOME` /
   // `WORKBUDDY_DEBUG_DUMP` 的历史值。见 docs/STORAGE-CONVENTION.md「拆分歧义名」。
-  legacyDirs: [],
-  legacyEnvVars: [],
   debugDumpEnv: "WORKBUDDY_DEBUG_DUMP",
-  legacyDebugDumpEnv: [],
 };
 
 export const channel: Channel = { config, cred, upstream, catalog, billing };

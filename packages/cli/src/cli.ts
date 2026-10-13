@@ -17,6 +17,6 @@ main()
     process.exitCode = code;
   })
   .catch((err: unknown) => {
-    console.error(`[model-bridge] uncaught exception: ${String(err)}`);
+    console.error(`[modelmux] uncaught exception: ${String(err)}`);
     process.exitCode = 1;
   });

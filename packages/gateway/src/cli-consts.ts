@@ -14,7 +14,7 @@ import { channelCount, getChannel } from "./channel.js";
 /**
  * 入口包（`process.argv[1]` 所在包）的版本。
  *
- * 多渠道路由下没有"渠道版本"可言，`--version` 该报**仓库级 CLI**（bin `mb` / `model-bridge`）的版本；
+ * 多渠道路由下没有"渠道版本"可言，`--version` 该报**仓库级 CLI**（bin `mb` / `modelmux`）的版本；
  * 而共享层不知道自己在哪个入口下被跑，故从入口脚本的位置反推它的 package.json。
  */
 function entryVersion(): string {
@@ -33,7 +33,7 @@ function entryVersion(): string {
  * 仓库级（多渠道路由）默认值。
  *
  * 一个网关进程服务多个渠道时，它不属于任何单个渠道，故不取渠道的 `defaultAddr`。
- * `8787` 是既有的仓库级端口约定（ZCode 里的 `model-bridge` provider 就指向它）。
+ * `8787` 是既有的仓库级端口约定（ZCode 里的 `modelmux` provider 就指向它）。
  */
 export const REPO_DEFAULT_ADDR = "127.0.0.1:8787";
 export const REPO_DEFAULT_UI_PORT = 8788;

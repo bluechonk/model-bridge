@@ -154,7 +154,7 @@ describe("账号池失败转移", () => {
 
   before(async () => {
     root = mkdtempSync(join(tmpdir(), "mb-failover-"));
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream();
     process.env["MB_TEST_UPSTREAM"] = upstream.url;
 
@@ -173,7 +173,7 @@ describe("账号池失败转移", () => {
     await gw?.close().catch(() => {});
     await new Promise<void>((r) => upstream.server.close(() => r()));
     delete process.env["MB_TEST_UPSTREAM"];
-    delete process.env["MODEL_BRIDGE_HOME"];
+    delete process.env["MODELMUX_HOME"];
     clearChannels();
     rmSync(root, { recursive: true, force: true });
   });

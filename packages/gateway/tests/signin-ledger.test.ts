@@ -28,8 +28,8 @@ const CID = "alpha";
 function withRoot(fn: (root: string) => void): () => void {
   return () => {
     const root = mkdtempSync(join(tmpdir(), "mb-ledger-"));
-    const saved = process.env["MODEL_BRIDGE_HOME"];
-    process.env["MODEL_BRIDGE_HOME"] = root;
+    const saved = process.env["MODELMUX_HOME"];
+    process.env["MODELMUX_HOME"] = root;
     const config: BridgeConfig = {
       cid: CID,
       display: CID,
@@ -45,8 +45,8 @@ function withRoot(fn: (root: string) => void): () => void {
       fn(root);
     } finally {
       clearChannels();
-      if (saved === undefined) delete process.env["MODEL_BRIDGE_HOME"];
-      else process.env["MODEL_BRIDGE_HOME"] = saved;
+      if (saved === undefined) delete process.env["MODELMUX_HOME"];
+      else process.env["MODELMUX_HOME"] = saved;
       rmSync(root, { recursive: true, force: true });
     }
   };

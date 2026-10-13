@@ -1,5 +1,5 @@
 /**
- * 命令分组：`mb <cid> <动词>` 与 `mb model <子命令>`。
+ * 命令分组：`mx <cid> <动词>` 与 `mx model <子命令>`。
  *
  * 设计取向（对应「像 playwright-cli 那样有子命令」的诉求）：
  * - **网关生命周期是仓库级的**：`start/stop/restart/status/logs/serve` 不带渠道，
@@ -307,7 +307,7 @@ export async function listLogins(json: boolean): Promise<number> {
     const status = row.logged_in ? `已登录${row.uid ? `  uid=${row.uid}` : ""}` : "未登录";
     console.log(`  ${row.cid.padEnd(12)} ${row.display.padEnd(18)} ${status}`);
   }
-  console.log("登录某个渠道：`mb <cid> login`（详见 `mb login --help` 与插件 /model-bridge-login）。");
+  console.log("登录某个渠道：`mx <cid> login`（详见 `mx login --help`）。");
   return 0;
 }
 
@@ -347,7 +347,7 @@ export async function showPoolUsage(json: boolean, force = false): Promise<numbe
   return listPoolModels(json);
 }
 
-/** `mb <cid> <动词> [参数]`。 */
+/** `mx <cid> <动词> [参数]`。 */
 export async function runChannelCommand(
   cid: string,
   args: string[],
@@ -381,14 +381,14 @@ export async function runChannelCommand(
     case "stop":
     case "restart":
       console.error(
-        `网关是**仓库级**的：\`mb ${verb}\` 管的是服务全部渠道的那个网关。\n` +
+        `网关是**仓库级**的：\`mx ${verb}\` 管的是服务全部渠道的那个网关。\n` +
           `只想跑 ${cid} 一个渠道调试，用 \`node channels/${cid}/dist/cli.js ${verb}\`（独立端口）。`,
       );
       return 2;
     default:
       console.error(
         `未知动词: ${verb}\n` +
-          `用法: mb <cid> <动词>；可用动词: ${CHANNEL_VERBS.map(([v]) => v).join(" / ")}`,
+          `用法: mx <cid> <动词>；可用动词: ${CHANNEL_VERBS.map(([v]) => v).join(" / ")}`,
       );
       return 2;
   }
