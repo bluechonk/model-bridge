@@ -160,13 +160,23 @@ function scheduleSave(): void {
 /**
  * 渠道的排序得分：冷却期内**当 0**，否则是账单已用量。
  *
- * 得分只用于排序，不做剔除 —— 所有渠道都在冷却时仍然会按注册顺序尝试，
- * 服务不会因为冷却而不可用。
+ * ⚠ 冷却渠道的正常路径是**被路由剔除**（`isCooling`）；本函数只在
+ * 「全池都在冷却 → 回退兜底」时决定谁先试。得分本身不做剔除。
  */
 export function scoreOf(cid: string, now = Date.now()): number {
   const entry = entryOf(load(), cid);
   if (entry.cooldown_until > now) return 0;
   return entry.used;
+}
+
+/**
+ * 渠道是否在失败冷却中 —— **下一次请求应跳过它**（路由侧硬排除）。
+ *
+ * 与 `scoreOf` 的分工：得分影响排序，本函数影响**剔除**。
+ * 冷却到期自动恢复候选；成功一次由 `noteSuccess` 提前清冷却。
+ */
+export function isCooling(cid: string, now = Date.now()): boolean {
+  return entryOf(load(), cid).cooldown_until > now;
 }
 
 /** 一次成功转发：清冷却（失败计数不动）。 */
