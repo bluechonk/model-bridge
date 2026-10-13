@@ -360,7 +360,7 @@ export function exchangeRefreshToken(
  *
  * `refresh_token` 是 JWT，其 `user_profile` 声明里带着真实且**稳定**的身份
  * （`account_id` / `principal_id`），同一个人跨登录完全一致（实测三个伪账号的
- * `account_id` 都是 `0123456789abcdef0123456789abcdef`）。
+ * `account_id` 都是同一稳定值（此处不落具体值））。
  *
  * ⚠ 只做 base64 解码，**不验签**：这个值仅用于「是不是同一个人」的去重，
  * 不参与鉴权判断 —— 真伪由上游对 token 本身的校验负责。解不开就返回空串，

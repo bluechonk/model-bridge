@@ -1,5 +1,5 @@
 """终端报告排版：所有研究脚本共用同一套标题/键值/表格格式，
-便于把 stdout 直接贴进 docs/**/RUN-LOG.md 当作证据。
+便于把 stdout 直接贴进文档当作证据。
 """
 
 from __future__ import annotations

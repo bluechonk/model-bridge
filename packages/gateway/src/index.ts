@@ -70,7 +70,7 @@ export type { CachedModel } from "./catalog-cache.js";
 // 渠道目录里的名字 → 上游 slug
 export { resolvePoolModel } from "./model-pool.js";
 
-// 公共模型池：三个跨渠道模型 + 归一化匹配
+// 公共模型池：两个跨渠道模型 + 归一化匹配
 export {
   POOL_MODELS,
   canonicalModelId,

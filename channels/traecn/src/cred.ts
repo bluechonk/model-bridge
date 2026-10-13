@@ -643,7 +643,6 @@ export async function rotateCheckinGeneration(c: Credentials): Promise<Credentia
 
 // ── 续期 ─────────────────────────────────────────────────────────────────────
 
-/** JWT 的 exp（秒）；不可用时返回 null。 */
 /** JWT 的 `exp`（秒）；无 exp 时返回 null（转发共享层原语，毫秒→秒）。 */
 function jwtExp(token: string): number | null {
   const ms = sharedLogin.jwtExpMs(token);

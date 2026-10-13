@@ -224,7 +224,7 @@ export function captureActive(
   try {
     chmodSync(accountFile(key, cid), 0o600);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
 
   const accounts = [...index.accounts.filter((a) => a.key !== key), account];
@@ -247,7 +247,7 @@ export function activateAccount(key: string, cid?: string): PoolAccount {
   try {
     chmodSync(credentialsPath(cid), 0o600);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
   account.last_used_at = nowIso();
   writeIndex({ version: 1, active: key, accounts: index.accounts }, cid);
@@ -372,7 +372,7 @@ function reconcileActive(cid: string | undefined, index: PoolIndex): boolean {
   try {
     chmodSync(pool, 0o600);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
   const hit = index.accounts.find((a) => a.key === index.active);
   if (hit) {

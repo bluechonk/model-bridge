@@ -179,7 +179,7 @@ def reconnaissance(layout: CatPawLayout | None = None) -> ReconReport:
 
 
 def format_recon_report(report: ReconReport) -> str:
-    """渲染为可直接贴进 RUN-LOG 的文本。"""
+    """渲染为可直接贴进文档的文本。"""
 
     def state(probe: PathProbe) -> str:
         return "OK" if probe.exists else "MISSING"

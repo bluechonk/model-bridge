@@ -35,18 +35,15 @@ export class StreamError extends Error {
  */
 function debugDumpDir(cid?: string): string | null {
   const { config } = getChannel(cid);
-  {
-    const name = config.debugDumpEnv;
-    const value = process.env[name];
-    if (!value) return null;
-    if (value === "1" || value.toLowerCase() === "true") return debugDir(cid);
-    if (!isAbsolute(value)) {
-      noteOnce(`debug-rel:${value}`, `${name} must be an absolute path; ignored: ${value}`);
-      return null;
-    }
-    return value;
+  const name = config.debugDumpEnv;
+  const value = process.env[name];
+  if (!value) return null;
+  if (value === "1" || value.toLowerCase() === "true") return debugDir(cid);
+  if (!isAbsolute(value)) {
+    noteOnce(`debug-rel:${value}`, `${name} must be an absolute path; ignored: ${value}`);
+    return null;
   }
-  return null;
+  return value;
 }
 
 /** 把抓包数据原样落盘（目录由 debugDumpDir() 决定，未启用则不落盘）。 */
