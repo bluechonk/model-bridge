@@ -3,9 +3,8 @@
  * 文档归属检查（规则见根 `AGENTS.md` §2）。
  *
  * **所有 `.md` 必须落在 `docs/` 里**，只有三类按固定路径加载的文件例外：
- *   1. `plugins/model-bridge/**`      —— 插件的命令/技能/说明
- *   2. `channels/<cid>/README.md`     —— 包根指针（只许指向 docs/）
- *   3. `channels/<cid>/AGENTS.md`     —— 目录级工具指令
+ *   1. `channels/<cid>/README.md`     —— 包根指针（只许指向 docs/）
+ *   2. `channels/<cid>/AGENTS.md`     —— 目录级工具指令
  *
  * 这个检查把「docs 统一管理 md」从口头约定变成会失败的测试 —— 有 md 散落在
  * 别处时 `npm test` 直接红，而不是等人发现。
@@ -24,7 +23,6 @@ const ALLOWED = [
   /^docs\//,
   /^AGENTS\.md$/, // 规则文件本身：工具从仓库根读，不能搬
   /^README\.md$/, // 仓库门面：GitHub 只渲染根 README，必须留在原处
-  /^plugins\/model-bridge\//, // 插件：ZCode / 技能加载器按固定路径读
   /^channels\/[a-z0-9-]+\/README\.md$/, // 包根指针 README
   /^channels\/[a-z0-9-]+\/AGENTS\.md$/, // 目录级工具指令
 ];

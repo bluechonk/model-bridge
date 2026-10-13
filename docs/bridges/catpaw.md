@@ -1,8 +1,7 @@
 # catpaw-bridge
 
 美团妙手（CatPaw）的本地 OpenAI Chat Completion 兼容网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `catpaw` CLI 与
-[ZCode 插件](../../plugins/model-bridge/)（插件市场在工作区根的 `marketplace.json`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，翻译成妙手的 conversation 协议
 （round → event → turn 三段式）转发到上游。
@@ -37,15 +36,14 @@ mb catpaw status / models / billing        # 状态 / 模型 / 账单
 node channels/catpaw/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-日常使用走**仓库级网关**：`mb start` 后在 ZCode 设置里把 provider 指到
+日常使用走**仓库级网关**：`mb start` 后把任意 OpenAI 客户端指到
 `http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
 单渠道独立运行（`node channels/catpaw/dist/cli.js serve`）仅在调试该渠道时用。
 
-## 状态 API 与 ZCode 插件
+## 状态 API
 
-`serve` 提供本地网关（`/health` `/v1/models` `/v1/chat/completions`）。
-插件（工作区级 `plugins/model-bridge/`）提供 hooks + skills + commands，
-接入 ZCode 后把 provider 的 baseUrl 指到仓库级网关 `http://127.0.0.1:8787/v1`。
+`serve` 提供本地网关（`/health` `/v1/models` `/v1/chat/completions`）；
+客户端把 baseUrl 指到仓库级网关 `http://127.0.0.1:8787/v1` 即可。
 
 ## 与共享 gateway 层的关系
 

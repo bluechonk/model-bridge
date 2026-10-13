@@ -1,8 +1,7 @@
 # codearts-bridge
 
 CodeArts（华为云）的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 API 和
-[ZCode 插件](../../plugins/model-bridge/) 的 hooks + skills + commands（仓库级单插件，管全部渠道）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 CodeArts 后端。
 
@@ -40,7 +39,7 @@ CodeArts 的 STS 信封**只给 `credentials` + `refresh_token`**，从不给 `u
 - `pruneLegacyAccounts()` 在登录后清理池内同一人的历史伪账号（按 JWT 身份分组，
   保留当前生效那份；解不出身份的一律各自独立，绝不误删）。
 
-## 状态 API 与 ZCode 插件
+## 状态 API
 
 `serve` 会启动控制台 API（默认 `http://127.0.0.1:8808`，无页面托管）：
 
@@ -50,7 +49,7 @@ CodeArts 的 STS 信封**只给 `credentials` + `refresh_token`**，从不给 `u
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作不用直接打这些接口 —— 插件 `codearts-bridge` 用命令与技能把能力包好了。
+日常操作走 `mb` 命令（`mb status` / `mb model list` / `mb login -c <cid>` / `mb <cid> billing`）。。
 
 ## 鉴权失效识别（APIG.0602）
 
@@ -59,11 +58,10 @@ CodeArts 的 APIG 网关对**过期 token** 回 `HTTP 400 + {"error_code":"APIG.
 `isAuthError` 判定），网关收到这类响应会归一成 401，走既有的「刷新 token →
 换池内账号」链路。详见 `docs/POOL-ARCHITECTURE.md` §2.4。
 
-## 让 ZCode 走这个网关
+## 接入
 
-在 ZCode 设置里添加 provider：类型 `openai-chat-completions`、
-baseUrl `http://127.0.0.1:8807/v1`、API key 任意非空、模型用 `codearts models` 的输出。
-插件注册不了 provider，这一步需手动。
+**接入**：任意 OpenAI 兼容客户端，baseUrl `http://127.0.0.1:8787/v1`（仓库级网关）、
+API key 任意非空、模型 `deepseek-v4.1-flash` / `glm-5.3-flash`（不带渠道前缀）。
 
 ## 许可证
 

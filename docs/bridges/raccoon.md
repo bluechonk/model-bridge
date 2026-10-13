@@ -1,8 +1,7 @@
 # raccoon-bridge
 
 Raccoon（商汤）的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 API 和
-[ZCode 插件](../../plugins/model-bridge/) 的 hooks + skills + commands（仓库级单插件，管全部渠道）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 Raccoon 后端。
 
@@ -25,7 +24,7 @@ mb status / model list / raccoon billing
 > 把浏览器地址栏里的整条 `office-raccoon://auth/callback?…` URL 粘贴回终端。
 > 细节见 [PROTOCOL.md §2.4](../protocols/raccoon/PROTOCOL.md)。
 
-## 状态 API 与 ZCode 插件
+## 状态 API
 
 `serve` 会启动控制台 API（默认 `http://127.0.0.1:8816`，无页面托管）：
 
@@ -35,13 +34,12 @@ mb status / model list / raccoon billing
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作不用直接打这些接口 —— 插件 `raccoon-bridge` 用命令与技能把能力包好了。
+日常操作走 `mb` 命令（`mb status` / `mb model list` / `mb login -c <cid>` / `mb <cid> billing`）。。
 
-## 让 ZCode 走这个网关
+## 接入
 
-在 ZCode 设置里添加 provider：类型 `openai-chat-completions`、
-baseUrl `http://127.0.0.1:8815/v1`、API key 任意非空、模型用 `raccoon models` 的输出。
-插件注册不了 provider，这一步需手动。
+**接入**：任意 OpenAI 兼容客户端，baseUrl `http://127.0.0.1:8787/v1`（仓库级网关）、
+API key 任意非空、模型 `deepseek-v4.1-flash` / `glm-5.3-flash`（不带渠道前缀）。
 
 ## 许可证
 

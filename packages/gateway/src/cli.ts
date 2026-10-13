@@ -26,7 +26,7 @@ export function usage(): string {
   const cid = single ? getChannel().config.cid : "mb";
   const display = single ? getChannel().config.display : "多渠道路由（模型池）";
   const verbLines = CHANNEL_VERBS.map(([v, d]) => `  ${("<cid> " + v).padEnd(24)} ${d}`);
-  return `${cid} — ${display} OpenAI Chat Completion 网关（无窗口运行，供 ZCode 插件驱动）
+  return `${cid} — ${display} OpenAI Chat Completion 网关（本地多渠道）
 
 用法: ${cid} <命令> [选项]
       ${cid} <cid2> <动词> [参数]     # 对某个渠道操作，如 ${single ? cid : "traecn"} login

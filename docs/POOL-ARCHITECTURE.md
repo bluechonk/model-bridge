@@ -1,6 +1,6 @@
-# 池化架构：模型池 + 账号池（工作区 `model-bridge`）
+# 池化架构：模型池 + 账号池（`model-bridge-cli`）
 
-本文件回答「仓库级插件 + 渠道即池子」这一形态转变下的公共层设计，并给出
+本文件回答「一个 CLI + 渠道即池子」形态下的公共层设计，并给出
 **账号池要不要现在做**的结论与顺序。实现契约仍见 `CONTRACT-TS.md`，落点见
 `STORAGE-CONVENTION.md`。
 
@@ -18,10 +18,10 @@
 一句话：**先定「形状」（接口、目录、id），后做「策略」。** 形状晚定，就要连带重做存储迁移
 与调用点改造；策略晚做只是少个功能。
 
-## 1. 形态改变：仓库即插件，渠道即池子
+## 1. 形态：一个 CLI，渠道即池子
 
-- **一个插件**：`plugins/model-bridge/` —— 一个 marketplace 条目、一个 CLI（`mb`）、
- 一个 hook、一个网关进程。渠道不再各自成插件。
+- **一个 CLI**：`mb`（bin `model-bridge` 等价）—— 一个网关进程、一个入口；
+  早期 per-channel 插件形态已全部移除（2026-10-13）。
 - **渠道的新角色**：不是「一个网关」，而是**一个池子**。
  - **模型池**：该渠道能提供哪些模型（= 现有 `catalog` + 白名单 `FAMILY_ALLOWLIST = [/flash/i]`）。
  - **账号池**：该渠道背后有几个账号（现状：只有 1 个）。
@@ -177,7 +177,7 @@
    └── <account-key>.json  ← 单账号凭证（account-key = 稳定账号标识）
 ```
 
-- **为什么保留 `credentials.json`**：全部渠道的 `cred.load()/save()`、插件命令、以及刚统一的
+- **为什么保留 `credentials.json`**：全部渠道的 `cred.load()/save()`、CLI 命令、以及刚统一的
  `paths` 全都依赖它。保留 = 零改动兼容，池子新增的 `accounts/` 承载多账号。
 - `accounts.json` 每条的元信息建议：`key` / `uid` / `nickname` / `domain`（realm）/ `expires_at` /
  `last_used` / `health`（ok / unauthorized / quota）。
@@ -273,7 +273,7 @@ interface CredModule {
 
 ## 4. 「先完成公共层」的具体含义
 
-公共层要完成三件事，才有「仓库级插件」：
+公共层要完成三件事，才有「仓库级 CLI」：
 
 ### 4.1 注册表：单槽 → 多槽（已落地）
 
@@ -308,9 +308,9 @@ hasChannel(cid?: string): boolean;
 
 现状：各渠道都有自己的 `defaultAddr` / `uiPort` 与单渠道守护进程（仓库级网关不用它们，见上文）。
 
-目标：仓库级插件只跑**一个**网关进程 + **一个**控制台端口；各渠道的 bin 保留为
-「单渠道独立运行」的调试入口（不删，但不再是主路径）。插件只挂一个 hook、暴露一个 CLI
-（子命令用 `--channel <cid>` 选渠道）。
+目标：仓库级 CLI 只跑**一个**网关进程 + **一个**控制台端口；各渠道的 bin 保留为
+「单渠道独立运行」的调试入口（不删，但不再是主路径）。对外只有一个 CLI
+（子命令用 `-c/--channel <cid>` 选渠道）。
 
 已落地：
 
@@ -319,15 +319,15 @@ hasChannel(cid?: string): boolean;
  `<root>/<cid>/gateway.pid|gateway.log|prefs.json`；**仓库级**（多渠道路由、未指定 cid）
  用根级 `<root>/gateway.pid|gateway.log|prefs.json` —— 一个服务多池的进程不属于任何单个渠道。
 - **仓库级默认端口**：多渠道路由时用 `REPO_DEFAULT_ADDR = 127.0.0.1:8787` /
- `REPO_DEFAULT_UI_PORT = 8788`（与 ZCode 里既有 provider 一致），而不是取某个渠道的端口。
+ `REPO_DEFAULT_UI_PORT = 8788`，而不是取某个渠道的端口。
 - **修掉一个潜伏 bug**：`daemon.start` 原本 spawn **共享包的 `cli.js`**，而那个文件只是一组
  导出、没有自带入口调用 → 守护进程起来立刻退出（TS 版 `start` 一直是坏的）。现在改为重跑
  **当前进程的入口**（`process.argv[1]`），任何入口（单渠道 bin / 仓库级 bin）都自洽。
 - **服务身份**：单渠道 = `<cid>-bridge`；多渠道路由 = `model-bridge`。守护进程探测时接受
  「本进程认得的全部身份」，所以单渠道的 `status` 也认得多渠道路由的网关。
-- **`channels` / `model list` 子命令**：前者是**渠道视角**（每个渠道贡献了池内哪些模型），
- 后者是**池视图**（两个模型各自会落到哪家、账本用量与冷却）。
+- **`model list` / `model usage` 子命令**：池视图（两个模型各自会落到哪家、账本用量与
+ 冷却/暂不可用）与池账本；渠道视角并入 `<cid> models`。
 - **仓库级 CLI 已可用**：`packages/cli`（bin `mb` / `model-bridge`）。
-- **插件收敛已完成**：`<工作区>/plugins/model-bridge/`（单插件）+ `<工作区>/marketplace.json`（单条目）。
- 各 bridge 的 bin 保留为「单渠道独立运行」的调试入口，但不再各带一套插件。
- 未动：`.hermes-plugin/`（Hermes 侧的另一套集成，不在本次范围）。
+- **插件层已整体移除（2026-10-13）**：`plugins/` 与 `marketplace.json` 删除，项目更名
+ `model-bridge-cli`，定位 = 纯 npx/npm -g 可装的 CLI；集成方式就是「任何 OpenAI 兼容客户端
+ 指向 `http://127.0.0.1:8787/v1`」。（更早：per-channel 插件 → 单插件收敛 → 全部移除。）

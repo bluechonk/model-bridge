@@ -1,9 +1,9 @@
 {
-  "name": "model-bridge",
+  "name": "model-bridge-cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "多渠道路由网关工作区：共享 gateway 层 + 仓库级 CLI + 各渠道（channels/ 下，每个渠道 = 一个模型池/账号池）",
+  "description": "多渠道本地模型池网关：把多个渠道汇成一个 OpenAI 兼容端点，只暴露两个池内模型（model-bridge CLI）",
   "workspaces": [
     "packages/*",
     "channels/*"

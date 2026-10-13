@@ -1,15 +1,13 @@
 # workbuddyai-bridge
 
 WorkBuddyAI 的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 API 和
-[ZCode 插件](../../plugins/model-bridge/)（工作区 `plugins/` 下的**仓库级**插件）的
-hooks + skills + commands。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `model-bridge-cli`）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 WorkBuddyAI 后端。
 
 > **国际版 / 国内版是两条渠道**：本文件是**国际版**（`workbuddy.ai`，cid `workbuddyai`）。
 > 国内版（腾讯 CodeBuddy，`codebuddy.ai`）是**独立渠道** `workbuddy`，见
-> [`workbuddy.md`](workbuddy.md)。两者共用一个插件与一套网关，但账号、
+> [`workbuddy.md`](workbuddy.md)。两者共用同一套网关，但账号、
 > 凭证落点、模型池各自独立 —— 账号在哪个域就用哪个渠道登录。
 > 早期版本用一个 `--realm intl|cn` 参数在两者间切换，现已**移除**：域是渠道身份的一部分。
 
@@ -40,11 +38,11 @@ mb workbuddyai status / models / billing        # 状态 / 模型 / 账单
 node channels/workbuddyai/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 
-日常使用走**仓库级网关**：`mb start` 后在 ZCode 设置里把 provider 指到
+日常使用走**仓库级网关**：`mb start` 后把任意 OpenAI 兼容客户端指到
 `http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
 单渠道独立运行（`node channels/workbuddyai/dist/cli.js serve`）仅在调试该渠道时用。
 
-## 状态 API 与 ZCode 插件
+## 状态 API
 
 `serve` 会启动控制台 API（默认 `http://127.0.0.1:8788`，无页面托管）：
 
@@ -54,20 +52,17 @@ node channels/workbuddyai/dist/cli.js --help    # 单渠道 CLI（调试 / 回�
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作不用直接打这些接口 —— ZCode 插件 `workbuddy-bridge`
-用命令与技能把这些能力包好了，落到 `workbuddy` CLI 上：
+日常操作走 `mb` 命令（`mb status` / `mb start|stop|restart` / `mb login -c workbuddyai` /
+`mb model list` / `mb workbuddyai billing`），控制台 API 只是给程序化调用留的口子：
 
-| 插件命令 | 作用 |
+| 端点 | 说明 |
 | --- | --- |
-| `/workbuddyai-status` | 网关/控制台可达性、登录状态、模型、凭证 |
-| `/workbuddyai-start` `/workbuddyai-stop` `/workbuddyai-restart` | 守护式启停 |
-| `/workbuddyai-login` | 无窗口登录，返回授权链接给用户在浏览器完成授权 |
-| `/workbuddyai-models` | 列出模型短名 |
-| `/workbuddyai-banner` `/workbuddyai-credits` `/workbuddyai-logs` | 状态一屏 / 剩余额度 / 日志 |
+| `GET /api/state` | 状态快照：`ui_state`、`message`、`auth_url`、`models`、`gateway_error` |
+| `POST /api/retry-login` | 投递「重试登录」意图 |
 
-要让 ZCode 真正走这个网关，还需在 ZCode 设置里添加 provider：
-类型 `openai-chat-completions`、baseUrl `http://127.0.0.1:8787/v1`、
-API key 任意非空、模型 `deepseek-v4.1-flash`。插件注册不了 provider，这一步需手动。
+**接入**：任意 OpenAI 兼容客户端，类型 `openai-chat-completions`、
+baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型 `deepseek-v4.1-flash` /
+`glm-5.3-flash`（不带渠道前缀）。
 
 ## 源码结构
 
