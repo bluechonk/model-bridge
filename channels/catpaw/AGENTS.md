@@ -37,4 +37,4 @@ npm run build && npm run test --workspaces --if-present
 ```
 
 涉及登录链路、上游协议翻译的改动，必须额外跑一次真实机器验证：
-`mx catpaw login` → `mx catpaw status` → 一次真实流式 chat。
+`mx login catpaw` → `mx status catpaw` → 一次真实流式 chat。

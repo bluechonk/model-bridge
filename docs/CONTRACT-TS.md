@@ -292,7 +292,7 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 3. **随包快照**（渠道内的 `models.json` / 内置兜底表）—— 拉不到时的最后兜底。
 
 一句话：**第一次 `model list` 把真实目录记到本地，之后一直用那个文件**；
-要更新就 `<cid> models --refresh`。
+要更新就 `models <cid> --refresh`。
 
 规则：
 
@@ -307,7 +307,7 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 
 #### `refresh()`：显式刷新的契约
 
-有远端目录层的渠道**必须**实现 `refresh()`（CLI 的 `<cid> models --refresh` 与网关每日目录保鲜调它）：
+有远端目录层的渠道**必须**实现 `refresh()`（CLI 的 `models <cid> --refresh` 与网关每日目录保鲜调它）：
 
 - **绕过 TTL / 冷却**：用户显式要求刷新，不能拿缓存糊弄；
 - **成功写缓存**：下次新进程直接读到新目录；
@@ -430,11 +430,35 @@ Ctrl+点击 / 复制），用户自行在浏览器打开，再轮询/回调拿�
 ### 8.3 agent 的操作规则
 
 改完共享层/渠道代码并 `npm run build` 后，**主动 `restart` 再验证**；
-涉及登录链路/上游协议的改动必须走一次真机验证（`<cid> login` → `status` → 一次真实对话）。
+涉及登录链路/上游协议的改动必须走一次真机验证（`login <cid>` → `status` → 一次真实对话）。
 
 ---
 
-## 9. 交付检查清单
+## 9. CLI 命令形态（动词优先）
+
+`mx`（发布名 `modelmux`）的命令形态固定为「**动词在前、渠道在后**」：
+
+```
+mx <动词> [<cid>] [参数...]              # mx login traecn / mx status traecn / mx billing traecn
+mx <命令组> <子命令> [参数...]           # mx model list / mx model usage / mx accounts <cid> add
+```
+
+- **动词永远在位置 1**；渠道 id 是**位置 2 的操作对象**（operand），可省略 ——
+ 省略时按「单渠道模式 / 仓库级」解析（沿用既有语义）。
+- 心智对齐 `git` / `docker` / `gh` / `kubectl` / `npm`：清一色 `<动词> [<对象>]`。
+- **TAB 补全**：`mx login <TAB>` 直接列出已注册渠道 —— 补全器只需对位置 2 补「渠道」一个维度，
+ 不必先猜位置 1 是动词还是渠道名。
+- **生命周期动词不接受 cid**：`start` / `stop` / `restart` 操作的是服务全部渠道的那个网关；
+ `status` / `logs` 则**可选** cid（不给 = 仓库级聚合，给 = 该渠道）——两条语义靠**是否带 operand** 区分。
+- **不采用 `mx <cid> <动词>`**：渠道名与动词共享位置 1 会二义（某渠道一旦叫 `models`，
+ `mx models` 就分不清是「列渠道模型」还是「仓库级模型列表」），且与主流 CLI 心智相悖。
+
+实现落点：`packages/gateway/src/cli.ts` 的分发（动词表在前、cid 作 operand）、
+`command-groups.ts` 的 `CHANNEL_VERBS`（动词 → 说明表）与 `runVerb`（动词 + 可选 cid）。
+
+---
+
+## 10. 交付检查清单
 
 - [ ] `src/` 只有 7 个文件；无共享模块副本残留
 - [ ] `package.json` 的 `dependencies` 只含 `@modelmux/gateway`

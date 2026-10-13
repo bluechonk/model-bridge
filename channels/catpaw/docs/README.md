@@ -31,8 +31,8 @@
 
 ```bash
 npm install && npm run build              # 工作区根：装依赖 + 编译全部包
-mx catpaw login                            # 仓库级 CLI：登录
-mx catpaw status / models / billing        # 状态 / 模型 / 账单
+mx login catpaw                            # 仓库级 CLI：登录
+mx status catpaw（models / billing 同法）        # 状态 / 模型 / 账单
 node channels/catpaw/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 

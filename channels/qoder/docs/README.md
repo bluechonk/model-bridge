@@ -16,8 +16,8 @@ Qoder（阿里系）的本地 OpenAI Chat Completion 透明代理网关（**Type
 
 ```bash
 npm install && npm run build              # 工作区根：装依赖 + 编译全部包
-mx qoder login                            # 仓库级 CLI：登录
-mx qoder status / models / billing        # 状态 / 模型 / 账单
+mx login qoder                            # 仓库级 CLI：登录
+mx status qoder（models / billing 同法）        # 状态 / 模型 / 账单
 node channels/qoder/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 ```
 

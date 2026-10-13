@@ -71,9 +71,23 @@ npm run build --workspace=channels/<cid>    # 只编一个渠道（也走引用�
 node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，**唯一网关端口 8787**（REPO_DEFAULT_ADDR）
 node packages/cli/dist/cli.js model list    # 池视图：两个模型 → 候选渠道 + 账单用量 + 冷却
 node packages/cli/dist/cli.js model usage   # 池账本；--refresh 立刻重查
-node packages/cli/dist/cli.js <cid> login   # 对某个渠道操作：login / status / models / billing / accounts / paths / logs
+node packages/cli/dist/cli.js login <cid>   # 对某个渠道操作：login / relogin / status / models / billing / accounts / paths / logs
 node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用；只有它才用该渠道的 defaultAddr）
 ```
+
+**命令形态（动词优先）**：`mx` 的**动词永远在第一个位置**，渠道 id 是**第二个位置的操作对象**：
+
+```
+mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn / mx models traecn / mx billing traecn
+```
+
+- 对齐 `git` / `docker` / `gh` / `kubectl` / `npm` 的心智（`<动词> [<对象>]`），也让 `mx login <TAB>`
+ 能直接补全渠道名 —— 补全器只需在位置 2 补「已注册渠道」这一个维度。
+- **命令组**（名词在位置 1、子命令在位置 2）同样遵循「动词在前」：`mx model list` / `mx model usage`。
+- **仓库级动词**（`start` / `stop` / `restart` / `status` / `logs`）**不接受**渠道 id ——
+ 它们操作的网关是仓库级的（见「端口语义」）；`mx status <cid>` 才是「某渠道的状态」。
+- **反面写法 `mx <cid> <动词>` 一律不采用**：渠道名与动词共享位置 1 的命名空间会让两者二义
+ （一旦某个渠道叫 `models`，`mx models` 就无法区分），且与主流 CLI 心智相悖。
 
 **端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，
 控制台 8788），10 个渠道从它后面供给那两个公共模型；`ChannelConfig.defaultAddr`/`uiPort`
@@ -116,7 +130,7 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 规则：
 
 1. 改完共享层或渠道代码并 `npm run build` 后，**主动 `restart`**，别只 build。
-2. 涉及登录链路/上游协议的改动，必须走一次真机验证（`<cid> login` → `status` → 一次真实对话）。
+2. 涉及登录链路/上游协议的改动，必须走一次真机验证（`login <cid>` → `status` → 一次真实对话）。
 3. 判断当前进程是不是旧代码：`node packages/cli/dist/cli.js status`
   —— 它会主动报 ` 网关在跑旧代码：构建产物 … 比进程启动 … 新`；
   `status --json` 里是 `stale_build: true`。实现见 `packages/gateway/src/stale-build.ts`。

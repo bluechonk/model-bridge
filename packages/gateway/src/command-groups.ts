@@ -1,14 +1,14 @@
 /**
- * 命令分组：`mx <cid> <动词>` 与 `mx model <子命令>`。
+ * 命令分组：`mx <动词> [<cid>] [参数]` 与 `mx model <子命令>`。
  *
- * 设计取向（对应「像 playwright-cli 那样有子命令」的诉求）：
- * - **网关生命周期是仓库级的**：`start/stop/restart/status/logs/serve` 不带渠道，
+ * 设计取向（动词优先：`<动词> [<对象>]`，对齐 git / docker / gh）：
+ * - **生命周期动词是仓库级的**：`start/stop/restart/serve` 不带渠道，
  *   因为它们操作的是那个服务全部渠道的网关。
- * - **以渠道为第一参数**：`<cid> login` / `<cid> billing` / `<cid> models` …
- *   这是「对某个渠道做点什么」的自然读法。
+ * - **动词在前、渠道在后**：`login <cid>` / `billing <cid>` / `models <cid>` …
+ *   渠道 id 是位置 2 的操作对象，可省略（省略时按仓库级 / 全部渠道解析）。
  * - **分组**：`model list`（池视图）、`model usage`（池账本）。
- * - 不带渠道的扁平形式（`status` / `credits` / `paths`…）保留，便于脚本化；
- *   渠道一律写成第一参数（旧的 `--channel` / `-c` 选项已移除）。
+ * - 不带渠道的形式（`status` / `billing` / `paths`…）落到仓库级语义，便于脚本化；
+ *   旧的 `mx <cid> <动词>` 写法一律不采用。
  */
 
 import { channels, getChannel, hasChannel, type Channel } from "./channel.js";
@@ -29,7 +29,7 @@ export interface CommandContext {
   uiPort: number;
   realm: string;
   force: boolean;
-  /** `model list` / `<cid> models` 的 `--refresh`：强制重拉上游目录。 */
+  /** `models <cid>` / `model usage` 的 `--refresh`：强制重拉上游目录。 */
   refresh: boolean;
   /** `login --wechat`：微信扫码登录（渠道声明 loginWechat 才支持）。 */
   wechat: boolean;
@@ -118,9 +118,9 @@ function originNote(origin: CatalogOrigin): string {
 }
 
 /**
- * `<cid> models`：该渠道贡献了池内哪些模型。
+ * `models <cid>`：该渠道贡献了池内哪些模型。
  *
- * 对外 id 恒为**池 id**（`deepseek-v4-flash` 这种），客户端不指定渠道。
+ * 对外 id 恒为**池 id**（`deepseek-v4.1-flash` 这种），客户端不指定渠道。
  * 渠道目录里没进池的条目只报数量（可能几十条，全列是噪音）。
  */
 async function listLocalModels(

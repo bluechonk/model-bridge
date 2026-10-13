@@ -52,7 +52,7 @@ class ServiceState {
   readonly base: string;
   readonly baseUrl: string;
   readonly chatUrl: string;
-  private uiState = "probing"; // probing / login / error / running
+  private uiState = "probing"; // 状态取值（英文枚举）：probing / login / error / running
   private stateMessage = "";
   private authUrl = "";
   private gatewayError = "";
@@ -181,7 +181,7 @@ export async function runLogin(options: {
       } else {
         console.log(
           `[login] 已有凭据${uid ? `（uid ${uid}）` : ""}，未做任何操作；` +
-            `要重新授权（如 token 过期）用：mx ${cid ?? "<cid>"} relogin`,
+            `要重新授权（如 token 过期）用：mx relogin ${cid ?? "<cid>"}`,
         );
       }
       return 0;

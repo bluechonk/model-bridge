@@ -185,6 +185,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     refresh: boolOpt(o, "refresh"),
     wechat: boolOpt(o, "wechat"),
     lines: numOpt(o, "lines") ?? 40,
+    all: boolOpt(o, "all"),
+    follow: boolOpt(o, "follow"),
     ...(strOpt(o, "workspace") !== undefined ? { workspace: strOpt(o, "workspace")! } : {}),
   };
 
@@ -198,15 +200,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
 
-  // ① 以渠道为第一参数：`mx <cid> <动词>`
-  if (hasChannel(command)) {
-    return groups.runChannelCommand(command, positionals.slice(1), ctx);
-  }
-  // ② 分组：`model list` / `model usage`
+  // ① 分组：`model list` / `model usage`
   if (command === "model") {
     return groups.runModelGroup(positionals.slice(1), ctx);
   }
+  // ② 渠道动词：`mx <动词> [<cid>] [参数]`（cid 在动词之后）
+  if (isChannelVerb(command)) {
+    return groups.runVerb(command, positionals.slice(1), ctx);
+  }
 
+  // ③ 仓库级动词（不带 <cid>）
   switch (command) {
     case "serve":
       return headless.runServe({
@@ -218,24 +221,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         json: boolOpt(o, "json"),
         consoleEnabled: !boolOpt(o, "no-console"),
         realm: strOpt(o, "realm") ?? "auto",
-      });
-
-    case "login":
-      // `login list`：列出可登录的渠道与登录状态（只读）
-      if (positionals[1] === "list") return groups.listLogins(boolOpt(o, "json"));
-      return headless.runLogin({
-        json: boolOpt(o, "json"),
-        realm: strOpt(o, "realm") ?? "auto",
-        wechat: boolOpt(o, "wechat"),
-      });
-
-    case "relogin":
-      // 重新授权（= 清掉现有凭据后走登录流程）；与 start/restart 的对称命名
-      return headless.runLogin({
-        force: true,
-        json: boolOpt(o, "json"),
-        realm: strOpt(o, "realm") ?? "auto",
-        wechat: boolOpt(o, "wechat"),
       });
 
     case "start":
@@ -263,45 +248,15 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         strict: boolOpt(o, "strict"),
       });
 
-    case "status":
-      return daemon.status({
-        json: boolOpt(o, "json"),
-        addr,
-        uiPort,
-      });
-
-    case "models":
-      return daemon.models({
-        json: boolOpt(o, "json"),
-        addr,
-      });
-
-    case "credits":
-      return daemon.credits({ json: boolOpt(o, "json") });
-
-    case "logs":
-      return boolOpt(o, "follow")
-        ? daemon.followLogs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"))
-        : daemon.logs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"));
-
-    case "paths":
-      return report.runPaths({
-        json: boolOpt(o, "json"),
-        all: boolOpt(o, "all"),
-        ...(strOpt(o, "workspace") !== undefined ? { workspace: strOpt(o, "workspace")! } : {}),
-      });
-
-    case "accounts":
-      return accountCli.runAccounts({
-        verb: parsed.positionals[1] ?? "list",
-        ...(parsed.positionals[2] !== undefined ? { target: parsed.positionals[2] } : {}),
-        json: boolOpt(o, "json"),
-        realm: strOpt(o, "realm") ?? "auto",
-        force: boolOpt(o, "force"),
-      });
-
     default:
-      console.error(`未知命令: ${command}`);
+      // 旧语法 `mx <cid> <动词>` 的指路：渠道名现在写在动词之后。
+      if (hasChannel(command)) {
+        console.error(
+          `未知命令: ${command}（新语法把渠道写在动词之后：\`mx <动词> ${command}\`，如 \`mx login ${command}\`）`,
+        );
+      } else {
+        console.error(`未知命令: ${command}`);
+      }
       console.error(usage());
       return 2;
   }

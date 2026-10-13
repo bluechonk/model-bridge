@@ -511,7 +511,7 @@ async function callUpstream(
       logger(
         `auto logout (${cid}): token rejected by upstream and refresh unusable; ` +
           `removed ${purged.accounts} pool account(s)${purged.credential ? " + stored credential" : ""}; ` +
-          `run \`mx ${cid} login\` to re-authorize`,
+          `run \`mx login ${cid}\` to re-authorize`,
       );
       return {
         kind: "auth_exhausted",
@@ -604,7 +604,7 @@ async function handleChat(
       res,
       503,
       "not_authenticated",
-      `no logged-in channel provides ${target}; run \`mx <cid> login\` for one of: ${candidates.map((c) => c.cid).join(", ")}`,
+      `no logged-in channel provides ${target}; run \`mx login <cid>\` for one of: ${candidates.map((c) => c.cid).join(", ")}`,
     );
     return;
   }

@@ -13,10 +13,10 @@ CodeArts（华为云）的本地 OpenAI Chat Completion 透明代理网关（**T
 ## 快速开始
 
 ```bash
-node packages/cli/dist/cli.js codearts login     # 登录（浏览器授权；--json 拿 auth_url）
-node packages/cli/dist/cli.js codearts models    # 池内模型（读本地缓存，--refresh 强制重拉）
-node packages/cli/dist/cli.js codearts billing   # 额度 / 活动
-node packages/cli/dist/cli.js codearts status    # 网关与登录状态
+node packages/cli/dist/cli.js login codearts     # 登录（浏览器授权；--json 拿 auth_url）
+node packages/cli/dist/cli.js models codearts    # 池内模型（读本地缓存，--refresh 强制重拉）
+node packages/cli/dist/cli.js billing codearts   # 额度 / 活动
+node packages/cli/dist/cli.js status codearts    # 网关与登录状态
 node packages/cli/dist/cli.js start              # 起仓库级网关（一个端口服务全部渠道）
 ```
 
@@ -49,7 +49,7 @@ CodeArts 的 STS 信封**只给 `credentials` + `refresh_token`**，从不给 `u
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作走 `mx` 命令（`mx status` / `mx model list` / `mx <cid> login` / `mx <cid> billing`）。
+日常操作走 `mx` 命令（`mx status` / `mx model list` / `mx login <cid>` / `mx billing <cid>`）。
 
 ## 鉴权失效识别（APIG.0602）
 
