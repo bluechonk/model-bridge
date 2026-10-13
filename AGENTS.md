@@ -150,3 +150,28 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 
 > 这一节是全局偏好的**项目内落点**：全局规则在 `~/.zcode/AGENTS.md`，本仓库要遵守的具体形态写在这里
 > （例如"日志英文"在本项目的边界是——运行时日志英文、CLI 报表中文）。
+
+### 提交信息规范
+
+主题固定 `type(scope): 中文描述`，由 `tools/verify-commits.mjs` 校验（已接入 `npm test`）。
+
+| 部分 | 要求 |
+| --- | --- |
+| type | 只用 `feat` / `fix` / `refactor` / `docs` / `test` / `chore` 之一 |
+| scope | **必填**，变更涉及的模块或对象名，如 `cli` / `gateway` / `traecn` / `repo` |
+| 描述 | 简体中文，一句话说清这次**改了什么**，**结尾不加句号** |
+| `!` | 破坏性变更加在 scope 后，如 `refactor(repo)!:` |
+
+正文（可选）：
+
+- **不要求解释「为什么」**，也不必复述 diff；有需要时补充影响面或注意事项即可。
+- 72 列换行为宜（中文按 2 列）；等宽内容（表格、代码块）不换行；不用 emoji。
+- 一次逻辑变更一个提交，避免把多件事塞进同一条。
+
+示例：
+
+```
+feat(cli): 新增 login list 列出可登录渠道与状态
+fix(gateway): 排队探测退出点丢帧导致流式 tool_call 参数被截断
+refactor(repo)!: 更名 modelmux，旧兼容整体移除
+```
