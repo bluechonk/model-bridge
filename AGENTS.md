@@ -144,7 +144,7 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 | 注释 | **中文**、简洁、不复述代码；随代码同步更新，**禁止留过时或误导性注释** |
 | 日志 | 运行时日志一律**英文**（避免 Git Bash / PowerShell 下的编码问题）；CLI 报表属**产品界面**，保持中文 |
 | 文档 | 全部**中文**、**不使用 emoji**；根 `README.md` 是仓库门面，必须全中文 |
-| 提交信息 | 格式 `type(scope): 中文描述`（`type` ∈ feat / fix / refactor / docs / test / chore）；**scope 必填**（模块或对象名）；描述简体中文、**结尾不加句号**；破坏性变更可加 `!`（如 `refactor(repo)!:`）。校验器 `tools/verify-commits.mjs`（已接入 `npm test`） |
+| 提交信息 | 遵循 Conventional Commits 并改中文：格式 `type(scope): 中文描述`（`type` ∈ feat / fix / docs / style / refactor / perf / test / chore）；**scope 必填**（模块或对象名）；描述简体中文、**结尾不加句号**；破坏性变更可加 `!`（如 `refactor(repo)!:`）。校验器 `tools/verify-commits.mjs`（已接入 `npm test`） |
 | 依赖与环境 | Python 一律走 `uv`（`uv add` / `uv run` / `uv sync` / `uv venv`）；命令行只用 PowerShell 7 与 Git Bash |
 | 复用优先 | 开发前先检索现成方案（GitHub 优先），优先复用而非自建；借鉴重构前先检查许可证 |
 
@@ -157,7 +157,7 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 
 | 部分 | 要求 |
 | --- | --- |
-| type | 只用 `feat` / `fix` / `refactor` / `docs` / `test` / `chore` 之一 |
+| type | 只用 `feat` / `fix` / `docs` / `style` / `refactor` / `perf` / `test` / `chore` 之一（Conventional Commits） |
 | scope | **必填**，变更涉及的模块或对象名，如 `cli` / `gateway` / `traecn` / `repo` |
 | 描述 | 简体中文，一句话说清这次**改了什么**，**结尾不加句号** |
 | `!` | 破坏性变更加在 scope 后，如 `refactor(repo)!:` |
