@@ -1,8 +1,9 @@
 /**
  * 提交信息规范校验：`type(scope)!: 中文描述`。
  *
- * 规则（见 AGENTS.md §7）：
- * - type 只允许 feat / fix / refactor / docs / test / chore；
+ * 规范遵循 Conventional Commits 并改中文（见 AGENTS.md §7），与 github 插件的
+ * `$commit` 技能一致：
+ * - type 只允许 feat / fix / docs / style / refactor / perf / test / chore；
  * - scope（`(git事件)`）**必填**，为变更涉及的模块或对象名；
  * - 描述为简体中文，**结尾不加句号**；
  * - 破坏性变更可加 `!`（如 `refactor(repo)!:`）。
@@ -12,7 +13,7 @@
  */
 import { execFileSync } from "node:child_process";
 
-const TYPES = new Set(["feat", "fix", "refactor", "docs", "test", "chore"]);
+const TYPES = new Set(["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore"]);
 const SUBJECT = /^([a-z]+)(\(([^)]*)\))?(!)?: (.+)$/;
 const CJK = /[\u3400-\u9fff]/;
 
@@ -40,7 +41,7 @@ for (const line of lines) {
     continue;
   }
   const [, type, scopeGroup, scope, , desc] = m;
-  if (!TYPES.has(type)) problems.push(`${hash}  type 不在白名单（feat/fix/refactor/docs/test/chore）：${subject}`);
+  if (!TYPES.has(type)) problems.push(`${hash}  type 不在白名单（feat/fix/docs/style/refactor/perf/test/chore）：${subject}`);
   if (!scopeGroup || scope.trim() === "") problems.push(`${hash}  缺少 scope（type(模块): …）：${subject}`);
   if (!CJK.test(desc)) problems.push(`${hash}  描述应为简体中文：${subject}`);
   if (/[.。]$/.test(desc)) problems.push(`${hash}  描述结尾不应加句号：${subject}`);
