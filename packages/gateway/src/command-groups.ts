@@ -50,7 +50,8 @@ export const CHANNEL_VERBS: ReadonlyArray<readonly [string, string]> = [
   ["login", "浏览器授权登录该渠道"],
   ["models", "该渠道池内的模型 id（读本地缓存，不需要网关；`--refresh` 强制重拉）"],
   ["billing", "剩余额度 / 账单（别名 credits；只读，不经网关）"],
-  ["checkin", "签到 / 领奖励（`--status` 只查不领、`--daily-only` 跳过一次性；别名 signin）"],
+  // checkin 命令仍在（别名 signin），但签到已自动化、不在帮助里展示：
+  // 从此表去掉即从帮助与未知动词提示消失，分发表（runChannelCommand）不受影响。
   ["accounts", "账号池：`list` / `use <key>` / `add` / `remove <key>`"],
   ["paths", "该渠道的存储落点与文件（只读）"],
   ["logs", "该渠道的网关日志尾部"],
