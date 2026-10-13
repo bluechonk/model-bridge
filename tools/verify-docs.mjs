@@ -29,7 +29,7 @@ const ALLOWED = [
   /^channels\/[a-z0-9-]+\/AGENTS\.md$/, // 目录级工具指令
 ];
 
-const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".tmp", ".box-agent", ".box-agent-scratch"]);
+const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".tmp", ".box-agent", ".box-agent-scratch", ".planning"]);
 
 /**
  * 被 git 忽略的路径（如 `channels/<cid>/reference/` 里 clone 的第三方实现）

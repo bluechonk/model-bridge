@@ -20,3 +20,6 @@ __pycache__/
 
 # ZCode 工具自动生成（每次可能重写），不入库
 .zcodeignore
+
+# 规划过程文件（planning-with-files；结项即删）
+.planning/
