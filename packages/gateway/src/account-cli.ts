@@ -78,13 +78,13 @@ function render(pool: ChannelPool): string {
   return lines.join("\n");
 }
 
-/** 跨渠道找 key 所属的池子；命中多于一个时报错要求 `--channel`。 */
+/** 跨渠道找 key 所属的池子；命中多于一个时报错要求显式指定渠道。 */
 function locator(collected: ChannelPool[], key: string): ChannelPool {
   const hits = collected.filter((p) => p.index.accounts.some((a) => a.key === key));
   if (hits.length === 0) throw new Error(`no channel pool contains account ${key}`);
   if (hits.length > 1) {
     throw new Error(
-      `account ${key} exists in multiple channels (${hits.map((h) => h.cid).join(", ")}); use --channel to pick one`,
+      `account ${key} exists in multiple channels (${hits.map((h) => h.cid).join(", ")}); use the channel form: mx <cid> accounts use <key>`,
     );
   }
   return hits[0]!;
@@ -113,7 +113,7 @@ export async function runAccounts(options: AccountsOptions = {}): Promise<number
 
     case "use": {
       if (!target) {
-        console.error("用法: accounts use <key> [--channel <cid>]");
+        console.error("用法: <cid> accounts use <key>");
         return 2;
       }
       const pools = targets.map(poolOf);
@@ -135,7 +135,7 @@ export async function runAccounts(options: AccountsOptions = {}): Promise<number
 
     case "remove": {
       if (!target) {
-        console.error("用法: accounts remove <key> [--channel <cid>]");
+        console.error("用法: <cid> accounts remove <key>");
         return 2;
       }
       const pools = targets.map(poolOf);
@@ -166,7 +166,7 @@ export async function runAccounts(options: AccountsOptions = {}): Promise<number
       // 新增 = 走该渠道自己的登录流程（浏览器授权）→ 登录成功即自动入池
       const channel = targets.length === 1 ? targets[0]! : null;
       if (!channel) {
-        console.error("新增账号需要在某个渠道上登录：请加 --channel <cid>");
+        console.error("新增账号需要在某个渠道上登录：请把渠道名写在最前：mx <cid> accounts add");
         return 2;
       }
       const code = await headless.runLogin({

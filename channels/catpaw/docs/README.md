@@ -1,7 +1,7 @@
-# catpaw-bridge
+# @modelmux/catpaw
 
 美团妙手（CatPaw）的本地 OpenAI Chat Completion 兼容网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mx` CLI（仓库级 modelmux）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，翻译成妙手的 conversation 协议
 （round → event → turn 三段式）转发到上游。
@@ -47,7 +47,7 @@ node channels/catpaw/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 
 ## 与共享 gateway 层的关系
 
-本仓库只实现 4 个渠道特有模块，其余一律复用 `@model-bridge/gateway`：
+本仓库只实现 4 个渠道特有模块，其余一律复用 `@modelmux/gateway`：
 
 | 模块 | 职责 |
 |------|------|

@@ -8,21 +8,19 @@
  * 模型目录、账单口径都可能各自演进，共享抽象会把「一个改了两边都变」变成默认行为。
  */
 
-import { setChannel, type BridgeConfig, type Channel } from "@model-bridge/gateway";
+import { setChannel, type ChannelConfig, type Channel } from "@modelmux/gateway";
 
 import * as billing from "./billing.js";
 import * as catalog from "./catalog.js";
 import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
 
-export const config: BridgeConfig = {
+export const config: ChannelConfig = {
   cid: "qodercn",
   display: "Qoder 国内版",
   version: "0.1.0",
   defaultAddr: "127.0.0.1:8817",
   uiPort: 8818,
-  // 那些旧目录里的凭据血统不明（可能是国际版留下的 `domain=qoder.com`），声明在这里
-  // 会把国际版数据迁进国内渠道 —— 等于跨区串号。
   debugDumpEnv: "QODERCN_DEBUG_DUMP",
 };
 

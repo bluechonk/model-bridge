@@ -1,13 +1,13 @@
-# codearts-bridge
+# @modelmux/codearts
 
 CodeArts（华为云）的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mx` CLI（仓库级 modelmux）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 CodeArts 后端。
 
 ## 协议规格
 
-实现依据见 [`docs/protocols/codearts/PROTOCOL.md`](../protocols/codearts/PROTOCOL.md) —— 从上游实现提取的完整协议规格，
+实现依据见 [`docs/PROTOCOL.md`](./PROTOCOL.md) —— 从上游实现提取的完整协议规格，
 含端点、认证、请求/响应形状与实测踩坑记录。
 
 ## 快速开始
@@ -31,7 +31,7 @@ CodeArts 的 STS 信封**只给 `credentials` + `refresh_token`**，从不给 `u
 放大成多次无效重试。
 
 稳定身份在 `refresh_token` 的 JWT 里（`user_profile.account_id`）。取值优先级与
-实测证据见 [PROTOCOL.md §2.3.1](../protocols/codearts/PROTOCOL.md)。
+实测证据见 [PROTOCOL.md §2.3.1](./PROTOCOL.md)。
 
 渠道侧的兜底：
 
@@ -49,7 +49,7 @@ CodeArts 的 STS 信封**只给 `credentials` + `refresh_token`**，从不给 `u
 | `POST /api/retry-login` | 投递「重试登录」意图 |
 | `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作走 `mb` 命令（`mx status` / `mx model list` / `mx login -c <cid>` / `mx <cid> billing`）。。
+日常操作走 `mx` 命令（`mx status` / `mx model list` / `mx <cid> login` / `mx <cid> billing`）。
 
 ## 鉴权失效识别（APIG.0602）
 

@@ -1,7 +1,7 @@
 /**
  * CatPaw 认证：真实 URL 登录流程、凭证持久化与有效性探测。
  *
- * ## 登录协议（实测，见 docs/protocols/catpaw/PROTOCOL.md）
+ * ## 登录协议（实测，见 channels/catpaw/docs/PROTOCOL.md）
  *
  *   1. GET  {LOGIN_CONFIG_URL}                          → { loginEntryUrl }
  *   2. auth_url = `${loginEntryUrl}?sid=&state=&redirect=`（三参数缺一不可；
@@ -30,11 +30,10 @@
 import { readFileSync } from "node:fs";
 import { writeFile, rename, chmod } from "node:fs/promises";
 
-import { credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
+import { credentialsPath, ensureDir, login as sharedLogin } from "@modelmux/gateway";
 
 const {
   fetchWithTimeout,
-  openBrowser,
   randomHex,
   sha256Hex,
   str,
@@ -362,8 +361,7 @@ export async function login(baseUrl: string, options: LoginOptions = {}): Promis
   const finalAuthUrl = buildAuthUrl(loginEntryUrl, redirect, sid, state);
 
   onUrl?.(finalAuthUrl);
-  onStatus?.('Complete the login in your browser (the page shows "登录成功" when done)');
-  if (process.env["CATPAW_NO_BROWSER"] !== "1") openBrowser(finalAuthUrl);
+  onStatus?.('Open the URL above in your browser and complete the login (the page shows "登录成功" when done)');
 
   onStatus?.("Waiting for authorization (up to 10 minutes)...");
 

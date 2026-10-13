@@ -1,7 +1,7 @@
 /**
  * Loomy 本地 OpenAI 兼容网关（无窗口引擎）—— 对外出口。
  *
- * 共享层模块来自 `@model-bridge/gateway`；本渠道独有的是 cred / upstream /
+ * 共享层模块来自 `@modelmux/gateway`；本渠道独有的是 cred / upstream /
  * catalog / billing。导入本文件会顺带注册渠道（见 `./channel.js`）。
  */
 
@@ -26,7 +26,7 @@ export {
   isAllowedFamily,
   filterAllowedFamily,
   allowlistSummary,
-} from "@model-bridge/gateway";
+} from "@modelmux/gateway";
 
 // 渠道独有模块
 export * as billing from "./billing.js";

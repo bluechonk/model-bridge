@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 import { credentialsPath } from "../dist/paths.js";
 import { main } from "../dist/cli.js";
 import { writeCatalogCache } from "../dist/catalog-cache.js";
@@ -54,13 +54,12 @@ interface FakeSigninSpec {
 }
 
 function makeChannel(cid: string, opts: FakeSigninSpec): Channel {
-  const config: BridgeConfig = {
+  const config: ChannelConfig = {
     cid,
     display: cid === "alpha" ? "Alpha 池" : "Beta 池",
     version: "9.9.9",
     defaultAddr: "127.0.0.1:1",
     uiPort: 2,
-    legacyDirs: [`.${cid}`],
     debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
   };
   // ⚠ 必须像真实渠道那样用 **`credentialsPath()`（不带 cid）**：它内部走
@@ -209,7 +208,7 @@ function resetChannels(): void {
 }
 
 before(() => {
-  root = mkdtempSync(join(tmpdir(), "mb-cli-"));
+  root = mkdtempSync(join(tmpdir(), "modelmux-cli-"));
   savedRoot = process.env["MODELMUX_HOME"];
   process.env["MODELMUX_HOME"] = root;
   resetChannels();
@@ -230,7 +229,7 @@ describe("1. 常见命令与帮助", () => {
       assert.ok(r.out.includes("用法:"), "有用法说明");
       assert.ok(r.out.includes("按渠道操作"), "有按渠道操作一节");
       assert.ok(r.out.includes("示例:"), "有中文示例");
-      assert.ok(r.out.includes("--channel <cid>"), "选项有中文说明");
+      assert.ok(r.out.includes("--json"), "选项有中文说明");
     }
   });
 
@@ -248,16 +247,16 @@ describe("1. 常见命令与帮助", () => {
     assert.ok(r.err.includes("未知命令"));
   });
 
-  it("-c 是 --channel 的短参（同一渠道作用域）", async () => {
-    const short = await run(["status", "-c", "alpha", "--json"]);
-    assert.equal(short.code, 0, short.err);
-    const long = await run(["status", "--channel", "alpha", "--json"]);
-    assert.equal(long.code, 0, long.err);
-    // 两种写法作用于同一渠道作用域：daemon 段报告同一组 channels
-    const a = JSON.parse(short.out) as { gateway: { channels: string[] } };
-    const b = JSON.parse(long.out) as { gateway: { channels: string[] } };
-    assert.deepEqual(a.gateway.channels, b.gateway.channels);
-    assert.deepEqual(a.gateway.channels, ["alpha"], "作用域应是单个渠道");
+  it("已移除的渠道选项（--cname / --channel / -c）直接报错，不再静默忽略", async () => {
+    for (const argv of [
+      ["status", "--cname", "alpha"],
+      ["status", "--channel", "alpha"],
+      ["status", "-c", "alpha"],
+    ]) {
+      const r = await run(argv);
+      assert.equal(r.code, 2, argv.join(" "));
+      assert.ok(r.err.includes("参数错误"), r.err);
+    }
   });
 
   it("logs --lines 0 不打印历史行（回归：slice(-0) 曾把整个日志打出来）", async () => {
@@ -303,7 +302,7 @@ describe("2b. 模型目录：缓存优先 / 首次拉取 / --refresh", () => {
   /** 每个用例都在干净存储根上跑，避免上一条留下的 cache/models.json 串味。 */
   function withFreshRoot(): void {
     rmSync(root, { recursive: true, force: true });
-    root = mkdtempSync(join(tmpdir(), "mb-cli-catalog-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-cli-catalog-"));
     process.env["MODELMUX_HOME"] = root;
   }
 
@@ -442,12 +441,11 @@ describe("3. <cid> <动词> 路由", () => {
     assert.equal(parsed.gateway.reachable, false, "假地址当然不可达，但命令本身要成功");
   });
 
-  it("扁平写法与 <cid> 写法等价：status --channel alpha", async () => {
-    const a = await run(["alpha", "status", "--addr", "127.0.0.1:1", "--ui-port", "1", "--json"]);
-    const b = await run(["status", "--channel", "alpha", "--addr", "127.0.0.1:1", "--ui-port", "1", "--json"]);
-    assert.equal(a.code, 0);
-    assert.equal(b.code, 0);
-    assert.equal(a.out, b.out);
+  it("不带渠道的 status 是仓库级：报告全部渠道", async () => {
+    const r = await run(["status", "--addr", "127.0.0.1:1", "--ui-port", "1", "--json"]);
+    assert.equal(r.code, 0);
+    const parsed = JSON.parse(r.out) as { gateway: { channels: string[] } };
+    assert.deepEqual(parsed.gateway.channels.sort(), ["alpha", "beta"]);
   });
 
   it("<cid> login 走无窗口登录流程（假渠道不联网）", async () => {

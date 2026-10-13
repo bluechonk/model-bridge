@@ -41,7 +41,7 @@ import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 
-import { accounts, credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
+import { accounts, credentialsPath, ensureDir, login as sharedLogin } from "@modelmux/gateway";
 import * as upstream from "./upstream.js";
 
 /** 上游 API 基址（snap-access 网关，硬编码 cn-north-4，无多区域）。 */
@@ -616,11 +616,6 @@ export function buildPortalLoginResultUrl(succeeded: boolean): string {
   );
 }
 
-/** Windows 下用 `cmd /c start "" "{url}"` 打开浏览器（空标题防 `&` 截断 URL）。 */
-export function openBrowser(url: string): void {
-  sharedLogin.openBrowser(url);
-}
-
 /** 已启动的回调服务器。 */
 export interface CallbackServer {
   port: number;
@@ -826,10 +821,9 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   const ticketId = randomBytes(32).toString("hex");
   const callback = await startCallbackServer({ pkce, keyPair, ticketId });
   const url = buildLoginUrl(callback.port, pkce, ticketId);
-  // ⚠️ 拿到 URL 后**立刻**回调（界面据此弹窗），不等浏览器启动结果。
+  // ⚠️ 拿到 URL 后**立刻**回调（命令行据此展示链接，用户自行在浏览器打开）
   options.onUrl?.(url);
-  options.onStatus?.(`authorization page opened, waiting for authorization (up to ${LOGIN_TIMEOUT_MS / 1000}s)...`);
-  openBrowser(url);
+  options.onStatus?.(`waiting for authorization (open the URL above in a browser; up to ${LOGIN_TIMEOUT_MS / 1000}s)...`);
   try {
     const c = await callback.result;
     await save(c);

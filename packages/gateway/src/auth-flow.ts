@@ -6,7 +6,7 @@
  *
  * 三种情形的处置（关键差异）：
  *  - **无凭证**：非交互模式只报告状态并返回 false（由 `login` 子命令补凭证）；
- *    交互模式走浏览器授权
+ *    交互模式引导授权（链接交给 `LoginUi` 展示，用户在浏览器里打开）
  *  - **凭证被拒**：先刷新；刷新失败**删除本地凭证**，让「重试登录」真正走重新
  *    登录流程，而不是重复同一条失败路径
  *  - **网络不通等临时问题**：照常启动，运行期请求失败会自动刷新
@@ -24,7 +24,7 @@ export type { LoginUi };
 /**
  * 保证存在可用登录凭证；必要时引导登录。
  *
- * @param interactive 无窗口被动模式下传 false —— 缺凭证**不开浏览器**，
+ * @param interactive 无窗口被动模式下传 false —— 缺凭证**不发起登录**，
  *   只报告状态并返回 false。
  * @returns true 表示可以启动网关
  */
@@ -49,14 +49,18 @@ export async function ensureLogin(
 
   if (!c) {
     if (!interactive) {
-      ui.setState("login", "not logged in: run the login subcommand for browser authorization, then retry.");
+      ui.setState("login", "not logged in: run the login subcommand, open the printed authorization URL in a browser, then retry.");
       return false;
     }
     ui.setState("login", "requesting authorization URL...");
     try {
       c = await cred.login(baseUrl ?? cred.DEFAULT_BASE_URL, {
         onUrl: (url) =>
-          ui.setState("login", "complete authorization in the browser that just opened; this window will continue automatically.", url),
+          ui.setState(
+            "login",
+            "open the URL below in your browser to authorize (Ctrl+click or copy); login continues automatically once authorized.",
+            url,
+          ),
         onStatus: (msg) => ui.setState("login", msg),
       });
     } catch (err) {

@@ -89,18 +89,18 @@ const QUEUE_RETRY_BUDGET_MS = 300_000;
  * 报成「自己的网关 OK」，而请求实际发去了另一个程序。
  * 故 `daemon.gatewayHealthy()` 会核对 `service` 字段。
  *
- * 取值：单渠道模式为 `<cid>-bridge`（兼容既有守护进程判据）；多渠道路由下为
- * 仓库级身份 `modelmux` —— 它同时服务所有已注册渠道。
+ * 取值：单渠道模式为**渠道身份 `cid`**；多渠道路由下为仓库级身份 `modelmux`
+ * —— 它同时服务所有已注册渠道。
  */
 export function serviceName(cid?: string): string {
-  if (cid !== undefined) return `${channelFor(cid).config.cid}-bridge`;
-  if (channelCount() === 1) return `${channels()[0]!.config.cid}-bridge`;
+  if (cid !== undefined) return channelFor(cid).config.cid;
+  if (channelCount() === 1) return channels()[0]!.config.cid;
   return "modelmux";
 }
 
-/** 本进程认得的全部服务标识（单渠道的 `<cid>-bridge` 与仓库级的 `modelmux`）。 */
+/** 本进程认得的全部服务标识（单渠道的 `cid` 与仓库级的 `modelmux`）。 */
 export function knownServiceNames(): string[] {
-  return ["modelmux", ...channels().map((c) => `${c.config.cid}-bridge`)];
+  return ["modelmux", ...channels().map((c) => c.config.cid)];
 }
 
 /** 本实现的语言标识（供 status 区分同名的旧实现）。 */
@@ -148,12 +148,12 @@ function isCustomWire(channel: Channel): boolean {
  *
  * 为什么要有上限：候选可能有一大片（某个模型有 4~5 家候选），逐个串行尝试会让
  * 最坏情况的延迟成倍增长。默认 3 与账号池的转移上限一致。
- * `BRIDGE_POOL_MAX_TRIES` 可覆盖。
+ * `MODELMUX_POOL_MAX_TRIES` 可覆盖。
  */
 const DEFAULT_POOL_ATTEMPTS = 3;
 
 function maxPoolAttempts(): number {
-  const raw = process.env["BRIDGE_POOL_MAX_TRIES"];
+  const raw = process.env["MODELMUX_POOL_MAX_TRIES"];
   const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_POOL_ATTEMPTS;
 }
@@ -511,7 +511,7 @@ async function callUpstream(
       logger(
         `auto logout (${cid}): token rejected by upstream and refresh unusable; ` +
           `removed ${purged.accounts} pool account(s)${purged.credential ? " + stored credential" : ""}; ` +
-          `run \`mx login -c ${cid}\` to re-authorize`,
+          `run \`mx ${cid} login\` to re-authorize`,
       );
       return {
         kind: "auth_exhausted",
@@ -604,7 +604,7 @@ async function handleChat(
       res,
       503,
       "not_authenticated",
-      `no logged-in channel provides ${target}; run \`mx login -c <cid>\` for one of: ${candidates.map((c) => c.cid).join(", ")}`,
+      `no logged-in channel provides ${target}; run \`mx <cid> login\` for one of: ${candidates.map((c) => c.cid).join(", ")}`,
     );
     return;
   }

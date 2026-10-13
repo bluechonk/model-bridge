@@ -1,7 +1,7 @@
 /**
  * TRAE（字节跳动）认证：浏览器授权登录、设备指纹、ExchangeToken 续期。
  *
- * ## 登录（实测，docs/protocols/traecn/PROTOCOL.md §2）
+ * ## 登录（实测，channels/traecn/docs/PROTOCOL.md §2）
  *
  * - 登录页参数名必须是 **`auth_callback_url`**（没有 `callback_url`/`redirect_uri`），
  *   写错登录页**永远停在授权中**（真实缺陷）。
@@ -33,7 +33,7 @@ import { chmodSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 
-import { credentialsPath, ensureDir, login as sharedLogin, prefsPath } from "@model-bridge/gateway";
+import { credentialsPath, ensureDir, login as sharedLogin, prefsPath } from "@modelmux/gateway";
 
 /** agentHost（对话 + 模型列表）。 */
 export const DEFAULT_BASE_URL = "https://trae-api-cn.mchost.guru";
@@ -502,9 +502,8 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
     const callbackUrl = `http://127.0.0.1:${callback.port}${CALLBACK_PATH}`;
     // 授权页固定在 consoleHost（www.trae.cn）；共享层传入的 baseUrl 是 agentHost，误传会导致登录域名错误
     const authorizeUrl = buildAuthorizeUrl(callbackUrl, machineId, deviceId);
-    onUrl?.(authorizeUrl); // 拿到 URL 立刻回调（界面据此弹窗）
-    onStatus?.(`Opened the browser authorization page, waiting for callback (local port ${callback.port})…`);
-    openBrowser(authorizeUrl);
+    onUrl?.(authorizeUrl); // 拿到 URL 立刻回调（命令行展示，用户自行打开）
+    onStatus?.(`Waiting for the authorization callback (local port ${callback.port})…`);
 
     const flat = await callback.wait(LOGIN_TIMEOUT_MS);
     const fields = parseCallback(flat);
@@ -756,13 +755,4 @@ export async function refresh(c: Credentials): Promise<Credentials> {
   };
   await save(next);
   return next;
-}
-
-/**
- * Windows 下用 `cmd /c start "" "{url}"` 打开浏览器（转发共享层原语）。
- *
- * ⚠ 空标题 `""` 不可省：否则 URL 里的 `&` 会被 cmd 当命令分隔符截断。
- */
-export function openBrowser(url: string): void {
-  sharedLogin.openBrowser(url);
 }

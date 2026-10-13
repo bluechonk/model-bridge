@@ -20,7 +20,7 @@ let root = "";
 let savedRoot: string | undefined;
 
 before(() => {
-  root = mkdtempSync(join(tmpdir(), "mb-poolroute-"));
+  root = mkdtempSync(join(tmpdir(), "modelmux-poolroute-"));
   savedRoot = process.env["MODELMUX_HOME"];
   process.env["MODELMUX_HOME"] = root;
 });

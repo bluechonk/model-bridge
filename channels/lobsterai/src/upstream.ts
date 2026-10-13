@@ -24,7 +24,7 @@ import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 
 import * as catalog from "./catalog.js";
-import { ensureDir, upstreamPath } from "@model-bridge/gateway";
+import { ensureDir, upstreamPath } from "@modelmux/gateway";
 
 /** 上游 API 基址（单一域名，无多区域）。 */
 export const DEFAULT_BASE_URL = "https://lobsterai-server.youdao.com";

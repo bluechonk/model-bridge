@@ -19,16 +19,15 @@ import {
   readCatalogCache,
   writeCatalogCache,
 } from "../dist/catalog-cache.js";
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 
 function useChannel(cid: string): void {
-  const config: BridgeConfig = {
+  const config: ChannelConfig = {
     cid,
     display: cid,
     version: "0.0.0",
     defaultAddr: "127.0.0.1:1",
     uiPort: 2,
-    legacyDirs: [`.${cid}`],
     debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
   };
   clearChannels();
@@ -36,7 +35,7 @@ function useChannel(cid: string): void {
 }
 
 function withRoot(fn: (root: string) => void): void {
-  const root = mkdtempSync(join(tmpdir(), "mb-catalog-cache-"));
+  const root = mkdtempSync(join(tmpdir(), "modelmux-catalog-cache-"));
   const saved = process.env["MODELMUX_HOME"];
   process.env["MODELMUX_HOME"] = root;
   try {

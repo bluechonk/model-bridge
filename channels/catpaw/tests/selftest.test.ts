@@ -1,5 +1,5 @@
 /**
- * catpaw-bridge 自检（**完全离线**，不出网、不需要真实凭据）。
+ * @modelmux/catpaw 自检（**完全离线**，不出网、不需要真实凭据）。
  *
  * 覆盖 PROTOCOL.md 的关键结论：
  *  1. 路径（CATPAW_HOME 隔离）
@@ -23,16 +23,15 @@ import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "catpaw-selftest-"));
 process.env["MODELMUX_HOME"] = HOME;
-process.env["CATPAW_NO_BROWSER"] = "1";
 
 // 先注册渠道再引模块
-await import("@model-bridge/gateway");
+await import("@modelmux/gateway");
 await import("../dist/channel.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");
 const catalog = await import("../dist/catalog.js");
 const billing = await import("../dist/billing.js");
-const { paths, gateway, modelFamily } = await import("@model-bridge/gateway");
+const { paths, gateway, modelFamily } = await import("@modelmux/gateway");
 
 // ── 工具 ────────────────────────────────────────────────────────────────────
 
@@ -215,37 +214,13 @@ describe("cred", () => {
     }
   });
 
-  it("浏览器命令：不经 cmd（URL 不被截断、且真的能打开）", async () => {
-    // 回归（实测 2026-10-08，本机逐一验证）：
-    //  - `cmd /c start "" <url>` 未 verbatim → cmd 在第一个 `&` 处截断命令行，
-    //    浏览器只拿到 `...?sid=xxx`，用户看到「未获取到登录票据」；
-    //  - 补上 verbatim + 引号后参数拼对了，但**浏览器根本不再被启动**
-    //    （本地服务器 0 次请求）—— 三种 start 变体都是 0 次。
-    // 改用 `rundll32 url.dll,FileProtocolHandler`：不经 cmd，实测打开成功且 URL 完整。
-    const { login } = await import("@model-bridge/gateway");
-    const url =
-      "https://catpaw.meituan.com/api/gateway/passport/login-entry?sid=AAA&state=BBB&redirect=http%3A%2F%2F127.0.0.1%3A62007%2Fcallback";
-
-    const win = login.browserCommand(url, "win32");
-    assert.equal(win.cmd, "rundll32", "Windows 下不得再走 cmd start");
-    assert.deepEqual(
-      win.args,
-      ["url.dll,FileProtocolHandler", url],
-      "URL 必须作为**单个 argv** 原样传入（`&` 不经 shell，无需引号）",
-    );
-    assert.ok(!win.args.some((a) => a.includes("start")), "不得再出现 cmd start");
-
-    const mac = login.browserCommand(url, "darwin");
-    assert.deepEqual(mac.args, [url], "非 Windows 平台原样传 URL");
-  });
-
   it("login 只走 poll-token（不再起本地回调服务器），并补上 current-user 的 uid", async () => {
     // 回归：早期实现起 loopback 回调与轮询 race，但三次真机登录回调一次都没赢
     // （source 恒为 catpaw-login-poll），已删除回调通道。这里锁住：
     //   ① 全程不监听任何端口（无回调服务器）
     //   ② token 来自 poll-token
     //   ③ 落盘 source 为 catpaw-login-poll，uid 来自 current-user
-    const { login } = await import("@model-bridge/gateway");
+    const { login } = await import("@modelmux/gateway");
     let gwPort = 0;
     let pollHits = 0;
 

@@ -26,13 +26,11 @@
  *
  * 缓存文件落在渠道层内：`<存储根>/codearts/cache/models.json` 与 `benefit-models.json`
  * （`DSH_CODEARTS_CACHE_DIR` / `CODEARTS_CACHE_DIR` 可显式覆盖），**同步读写**：chat 签名前要读它。
- * 旧位置 `~/.cache/deveco/codearts_*.json` 只作一次性兼容读（见 STORAGE-CONVENTION.md）。
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { cacheDir as sharedCacheDir, isAllowedFamily } from "@model-bridge/gateway";
+import { cacheDir as sharedCacheDir, isAllowedFamily } from "@modelmux/gateway";
 
 /** 一条目录条目。 */
 export interface ModelEntry {
@@ -88,13 +86,6 @@ export const BENEFIT_FALLBACK: readonly string[] = ["glm-5.3-flash", "deepseek-v
 const BENEFIT_CACHE_FILENAME = "benefit-models.json";
 const MODELS_CACHE_FILENAME = "models.json";
 
-/** 旧位置/旧文件名（一次性兼容读；新位置有内容就不看它）。 */
-const LEGACY_CACHE_DIR = join(homedir(), ".cache", "deveco");
-const LEGACY_FILENAMES: Record<string, readonly string[]> = {
-  [MODELS_CACHE_FILENAME]: ["codearts_models.json"],
-  [BENEFIT_CACHE_FILENAME]: ["codearts_benefit_models.json"],
-};
-
 /**
  * 缓存目录：`DSH_CODEARTS_CACHE_DIR`（或 `CODEARTS_CACHE_DIR`）可显式覆盖，
  * 默认落在渠道层内（`<存储根>/codearts/cache/`）。
@@ -105,17 +96,9 @@ export function cacheDir(): string {
   return sharedCacheDir();
 }
 
-/** 读缓存：新位置/新名优先，回落到旧位置与旧文件名。 */
+/** 读缓存。 */
 function readCache(filename: string): unknown[] | null {
-  const direct = readCacheArray(join(cacheDir(), filename));
-  if (direct) return direct;
-  for (const dir of [cacheDir(), LEGACY_CACHE_DIR]) {
-    for (const legacyName of LEGACY_FILENAMES[filename] ?? []) {
-      const found = readCacheArray(join(dir, legacyName));
-      if (found) return found;
-    }
-  }
-  return null;
+  return readCacheArray(join(cacheDir(), filename));
 }
 
 /** 写缓存：一律写新位置/新名（写不进去不影响主流程）。 */

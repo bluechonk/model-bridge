@@ -412,7 +412,7 @@ export async function claimCheckin(): Promise<ClaimResult> {
 
 // ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
 
-import type { SigninModule } from "@model-bridge/gateway";
+import type { SigninModule } from "@modelmux/gateway";
 /**
  * 签到 / 领取能力（`<cid> checkin`）。
  *

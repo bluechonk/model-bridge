@@ -23,7 +23,7 @@
  * 否则「池子为空」会被误读成渠道坏了。
  */
 
-import { readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
+import { readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";

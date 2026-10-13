@@ -4,7 +4,7 @@
 
 ## 0. 一句话架构
 
-**共享层在 `packages/gateway`（工作区名 `@model-bridge/gateway`），渠道差异通过
+**共享层在 `packages/gateway`（工作区名 `@modelmux/gateway`），渠道差异通过
 `Channel` 注册表注入。每个 `channels/<cid>/` 只实现 4 个渠道特有模块，其余一律复用共享包。**
 
 旧实现（已废弃）是「每个项目各存一份共享模块副本 + 用 `scaffold_ts.py` 做字符串替换」，
@@ -15,8 +15,8 @@
 ## 1. 工作区布局
 
 ```
-modelmux/                     ← 仓库根 = 工作区根 + ZCode 市场根 + 插件宿主
-├── packages/gateway/             ← **共享包** `@model-bridge/gateway`
+modelmux/                     ← 仓库根 = 工作区根
+├── packages/gateway/             ← **共享包** `@modelmux/gateway`
 │   └── src/
 │       ├── channel.ts            ← 渠道注册表（共享层与渠道层的**唯一边界**）
 │       ├── gateway.ts            ← HTTP 网关：/v1/chat/completions、/v1/models、/health
@@ -33,11 +33,11 @@ modelmux/                     ← 仓库根 = 工作区根 + ZCode 市场根 + �
 │       └── index.ts              ← 对外的统一出口
 ├── channels/                     ← 渠道（每个 = 一个模型池 + 账号池；清单以 mx model list 为准）
 │   └── <cid>/                    ← 结构见下
-├── packages/cli/                 ← **仓库级入口**（bin `mb` / `modelmux`）
+├── packages/cli/                 ← **CLI 入口**（bin `modelmux` / `mx`）
 │   └── src/
 │       ├── channels.ts           ← import 全部渠道包（副作用 = setChannel）
 │       └── cli.ts                ← bin 入口：注册全部渠道后调共享 `main()`
-├── docs/                         ← 契约、渠道协议（protocols/）、渠道说明（bridges/）、进度（journals/）
+├── docs/                         ← 契约与规范（渠道文档在各包 channels/<cid>/docs/）
 └── tools/                        ← 仓库级校验器（verify-contract / verify-storage / verify-docs）
 ```
 
@@ -45,8 +45,9 @@ modelmux/                     ← 仓库根 = 工作区根 + ZCode 市场根 + �
 
 ```
 channels/<cid>/
+├── docs/                       ← 渠道文档：README.md（说明）+ PROTOCOL.md（协议规格），随包走
 └── src/
-   ├── channel.ts                ← **本渠道装配**：BridgeConfig + 4 个模块 → setChannel()
+   ├── channel.ts                ← **本渠道装配**：ChannelConfig + 4 个模块 → setChannel()
    ├── cli.ts                    ← bin 入口：注册本渠道后调共享 `main()`（单渠道调试用）
    ├── index.ts                  ← 重导出共享层 + 渠道模块
    ├── cred.ts                   ← **渠道特有**
@@ -67,16 +68,16 @@ channels/<cid>/
 每个 `channels/<cid>/package.json` 必须声明：
 
 ```json
-{ "dependencies": { "@model-bridge/gateway": "*" } }
+{ "dependencies": { "@modelmux/gateway": "*" } }
 ```
 
-工作区根 `npm install` 会把共享包软链到 `node_modules/@model-bridge/`。
+工作区根 `npm install` 会把共享包软链到 `node_modules/@modelmux/`。
 
 ---
 
 ## 2. 零运行依赖
 
-`package.json` 的 `dependencies` **只允许 `@model-bridge/gateway`**（工作区内互相引用）。
+`package.json` 的 `dependencies` **只允许 `@modelmux/gateway`**（工作区内互相引用）。
 技术选型：
 
 | 需要什么 | 用什么 |
@@ -97,7 +98,7 @@ channels/<cid>/
 ### 2.1 发布构建：单文件 bundle（`packages/cli/scripts/bundle.mjs`）
 
 `packages/cli` 是**唯一可全局安装/发布的单元**。它的运行时依赖是 workspace 软链
-（`catpaw-bridge` → `channels/catpaw`），直接 `npm i -g` 会因软链断裂而失败。
+（`@modelmux/catpaw` → `channels/catpaw`），直接 `npm i -g` 会因软链断裂而失败。
 因此 `npm run build` 在 `tsc -b` 之后追加一步 esbuild 打包：从唯一聚合点
 `src/cli.ts` 沿静态 import 把 cli + gateway + 全部渠道内联成
 `dist/cli.bundle.js`（带 shebang），`bin` 指向它，tarball 自包含。
@@ -126,32 +127,28 @@ getChannel(): Channel;        // 未注册时抛错
 hasChannel(): boolean;        // 供测试/工具探测，不抛错
 ```
 
-### 3.1 `BridgeConfig`（旧实现里靠字符串替换注入的那批常量）
+### 3.1 `ChannelConfig`（旧实现里靠字符串替换注入的那批常量）
 
 ```ts
-interface BridgeConfig {
+interface ChannelConfig {
  cid: string;                 // 渠道 id，如 "catpaw"（日志前缀、服务名、CLI 名、**存储分层名**）
- display: string;             // 展示名，如 "ZCode"
+ display: string;             // 展示名，如 "CatPaw"
  version: string;             // CLI 版本号
  defaultAddr: string;         // **单渠道独立运行**的网关默认地址，如 "127.0.0.1:8803"
  uiPort: number;              // **单渠道独立运行**的控制台端口（仓库级路由用 REPO_DEFAULT_*）
- legacyDirs?: string[];       // 历史顶层目录名（新→旧），收拢进 <root>/<cid>/（首项通常是 ".<cid>-bridge"）
- legacyEnvVars?: string[];    // 存储根覆盖变量的历史名（新→旧）；现行名是共享的 MODELMUX_HOME
  debugDumpEnv: string;        // 抓包落盘目录的环境变量名（值 "1" 表示用渠道内 debug/）
- legacyDebugDumpEnv?: string[]; // 抓包变量的历史名（新→旧）
- fileMigrations?: FileMigration[]; // 渠道层内的历史文件名收敛（幂等）
 }
 ```
 
 **落点不由渠道决定**：存储根、`<cid>` 分层、目录内文件名全部由共享层
-`paths.ts` 推导；渠道只给 `cid` 与历史名清单。完整规范与迁移规则见
-[STORAGE-CONVENTION.md](./STORAGE-CONVENTION.md)（含 `FileMigration` 定义）。
+`paths.ts` 推导；渠道只给 `cid`，没有任何历史名清单（旧布局兼容已整体移除）。
+完整规范见 [STORAGE-CONVENTION.md](./STORAGE-CONVENTION.md)。
 
 ### 3.2 `Channel`
 
 ```ts
 interface Channel {
- config: BridgeConfig;
+ config: ChannelConfig;
  cred: CredModule;
  upstream: UpstreamModule;
  catalog: CatalogModule;
@@ -208,10 +205,10 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
  数据不丢。各渠道的 `resolveModel()` 对这些 id 仍能正常解析。
 - 想放行全部模型：把 `FAMILY_ALLOWLIST` 置为 `[]`。
 - 想放宽型号要求：把 `REQUIRED_ALLOWLIST` 置为 `[]`（不再强制 flash）。
-- 临时排查：设 `BRIDGE_ALLOW_ALL_MODELS=1` 绕过白名单（不改代码）。
+- 临时排查：设 `MODELMUX_ALLOW_ALL_MODELS=1` 绕过白名单（不改代码）。
 
 >  策略收窄有**渠道级后果**：没有 deepseek/glm 产品的渠道池子会恒空。
-> `gemini` / `minimax` 两个渠道因此已被删除（见 `docs/README.md` 的「已移除的渠道」）。
+>  若未来再删渠道，记得同步登记表与 `docs/README.md`。
 
 >  各渠道 **不要**在自己的 `catalog.ts` 里再实现一遍家族过滤。`exposedIds()`
 > 只需调用共享的 `isAllowedFamily()`，被判据覆盖的完整条目仍从 `details()` 给出。
@@ -289,7 +286,7 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 1. **磁盘缓存** `<root>/<cid>/cache/models.json` —— **常态来源**。上次真实拉到的目录，
   由共享层 `readCatalogCache()` / `writeCatalogCache()` 读写（信封
   `{version, fetched_at, models}`，原子写入 + `0600`；落点见
-  `STORAGE-CONVENTION.md` §4 第 5 条）。
+  `STORAGE-CONVENTION.md` §3 第 5 条）。
 2. **远端目录**（`upstream.fetchModels()`）—— **只在本地没有缓存时才拉**（首次使用），
   拉到后**必须立刻写一次缓存**，否则下一个进程拿不到它。
 3. **随包快照**（渠道内的 `models.json` / 内置兜底表）—— 拉不到时的最后兜底。
@@ -325,10 +322,10 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 
 ### 5.4 `billing.ts`
 
-**「今日是否签到过」的判定顺序**（CLI 侧）：① 上游 `claimedToday` → ② 本地台账
-`state/signin.json`（记"我们发起过的领取"）→ ③ 都没有就明确报未知，不猜。上游说已签而台账
-没有时会**回填**台账（自愈：覆盖"在客户端签的"这种情况）。`claimedToday` 缺失 + 台账也没有时，
-CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查不到"）。
+**签到语义**（供自动签到 `auto-signin.ts` 与台账判定使用）：上游 `status().claimedToday`
+→ 本地台账 `state/signin.json`（记"我们发起过的领取"）。上游说已签而台账没有时会
+**回填**台账（自愈：覆盖"在客户端签的"这种情况）。`claimedToday` 缺失 + 台账也没有时，
+原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查不到"）。
 
 `signin` 是**必需**的（契约统一，共享层**不做能力探测、不特判任何渠道**）：
 上游确实没有签到端点的渠道，也照样实现它 —— `status()` 返回 `claimable: false` + 一句**自己的说明**，
@@ -346,7 +343,8 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 
 ## 6. 登录：真实 URL 链路（禁止读本地文件）
 
-登录必须走**渠道自己的真实授权 URL**，由程序解析出 URL 后交给浏览器，再轮询/回调拿令牌。
+登录必须走**渠道自己的真实授权 URL**：程序解析出 URL 后**打印给用户**（终端里可
+Ctrl+点击 / 复制），用户自行在浏览器打开，再轮询/回调拿令牌。**不自动打开浏览器**。
 下面是已验证的三类骨架（`src/cred.ts` 里实现）。**不得**从其它 AI 应用的本地文件
 （凭据数据库、`auth.json`、Local Storage 等）读取登录态。
 
@@ -358,7 +356,8 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 
 共同要求：
 
-1. **`onUrl(url)` 拿到 URL 后立刻回调**，再 `openBrowser(url)`（打不开浏览器不影响轮询）。
+1. **`onUrl(url)` 拿到 URL 后立刻回调**（命令行据此展示链接，用户自行打开；
+   `openBrowser` 已整体移除，任何渠道都不得自动拉起浏览器）。
 2. **轮询的终态判据**：HTTP 4xx（除 408/429）才是失败；5xx 与网络错误继续重试。
 3. **超时**给明确上限，超时抛错并提示重试。
 4. 成功即 `save()` 落盘（原子替换 + 0600）。
@@ -371,14 +370,14 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 
 1. **完全离线**：所有上游调用指向本机假服务（`node:http` 起）
 2. **不需要真实凭据**：`cred.save()` 写假凭据，存储根用 `MODELMUX_HOME` 指向
-  `mkdtempSync()` 的临时目录（旧的 `<CID>_HOME` 仍兼容，但已弃用）
-3. **import 顺序**：先 `await import("@model-bridge/gateway")`，再
+  `mkdtempSync()` 的临时目录
+3. **import 顺序**：先 `await import("@modelmux/gateway")`，再
   `await import("../dist/channel.js")`（触发注册），最后引渠道模块
 4. **覆盖**：
-  - `paths`：存储根覆盖（`MODELMUX_HOME`）、`<cid>` 分层、历史目录收拢
+  - `paths`：存储根覆盖（`MODELMUX_HOME`）、`<cid>` 分层
   - `catalog`：别名映射、未知名透传、**白名单过滤只作用于呈现层**（`details()` 仍全量）
   - `cred`：未登录抛错、落盘读回、损坏容忍
-  - `upstream`：URL 组装、鉴权头、请求体改写的关键字段（对照 `docs/protocols/<cid>/PROTOCOL.md`）
+  - `upstream`：URL 组装、鉴权头、请求体改写的关键字段（对照 `channels/<cid>/docs/PROTOCOL.md`）
   - **`newTranslator()`（`WIRE === "custom"` 时）**：事件映射、`finish()` 补帧，
     且**必须测逐字节喂入**（切帧 bug 的高发区）
   - **端到端网关**：假上游 + 真实网关，断言流式与非流式都能出正文，
@@ -388,7 +387,7 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 
 **未实现的渠道**（`cred`/`upstream`/`catalog`/`billing` 是桩）必须让每个函数
 **立即抛错且消息含「尚未实现 + 实现依据指引」**，而不是返回空值。
-测试要锁定这个语义（见 `qodercn-bridge/tests/selftest.test.ts`）。
+测试要锁定这个语义（见 `@modelmux/qodercn/tests/selftest.test.ts`）。
 
 ---
 
@@ -438,12 +437,12 @@ CLI 原样输出渠道自己的 `summary`（它最清楚是"没端点"还是"查
 ## 9. 交付检查清单
 
 - [ ] `src/` 只有 7 个文件；无共享模块副本残留
-- [ ] `package.json` 的 `dependencies` 只含 `@model-bridge/gateway`
-- [ ] `channel.ts` 用 `setChannel()` 注册了 `BridgeConfig` + 4 个模块
+- [ ] `package.json` 的 `dependencies` 只含 `@modelmux/gateway`
+- [ ] `channel.ts` 用 `setChannel()` 注册了 `ChannelConfig` + 4 个模块
 - [ ] `catalog.ts` 调用共享 `isAllowedFamily()`，未自行实现家族判据
 - [ ] 登录是真实 URL 链路，未读取其它应用的本地文件
 - [ ] `npm install && npm run build` 无错误（`tsc -b`，严格模式；各包 `extends` 根 `tsconfig.base.json`）
 - [ ] `node --test tests/selftest.test.ts` 全绿
-- [ ] 全仓验证：`npm run build && npm test` 退出码 0（根 `tsconfig.json` 为 solution 文件，一次 `tsc -b` 编全仓）
-- [ ] README 更新为 TypeScript 安装/使用说明，并指向 `docs/protocols/<cid>/PROTOCOL.md`
-- [ ] `docs/protocols/<cid>/PROTOCOL.md` 保留（协议规格，实现的依据）
+- [ ] 全仓验证：`npm test` 退出码 0（自带 `build`；根 `tsconfig.json` 为 solution 文件，一次 `tsc -b` 编全仓）
+- [ ] README 更新为 TypeScript 安装/使用说明，并指向 `channels/<cid>/docs/PROTOCOL.md`
+- [ ] `channels/<cid>/docs/PROTOCOL.md` 保留（协议规格，实现的依据）

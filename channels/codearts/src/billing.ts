@@ -482,7 +482,7 @@ export async function fetchCredits(
 
 // ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
 
-import type { SigninModule } from "@model-bridge/gateway";
+import type { SigninModule } from "@modelmux/gateway";
 /**
  * 每日签到的「今天」状态：从活动列表里挑出 `USER_LOGIN` 类活动判断。
  *

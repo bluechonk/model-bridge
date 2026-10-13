@@ -1,7 +1,7 @@
 /**
  * Raccoon（商汤小浣熊）上游：端点、三种请求头形态、思考通道与请求体安全化。
  *
- * ## 本模块承载的渠道知识（每条都是实测结论，见 docs/protocols/raccoon/PROTOCOL.md）
+ * ## 本模块承载的渠道知识（每条都是实测结论，见 channels/raccoon/docs/PROTOCOL.md）
  *
  * 1. **思考控制的唯一有效通道是 `extra_body.thinking.type`**（`enabled` / `disabled`，
  *    服务端报错原文确认枚举还含 `adaptive`）：
@@ -26,7 +26,7 @@
 import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 
-import { ensureDir, upstreamPath } from "@model-bridge/gateway";
+import { ensureDir, upstreamPath } from "@modelmux/gateway";
 
 export { DEFAULT_BASE_URL, AUTH_PREFIX, LLM_PREFIX, POINTS_PREFIX, DESKTOP_PREFIX, CLIENT_PLATFORM, CLIENT_VERSION, USER_AGENT, EXCHANGE_PATH, AUTHORIZATION_CODE_NOT_FOUND } from "./cred.js";
 import {

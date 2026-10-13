@@ -9,13 +9,12 @@
     "channels/*"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && npm run build --workspace=packages/cli",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "verify:contract": "node tools/verify-contract.mjs",
     "verify:storage": "node tools/verify-storage.mjs",
     "verify:docs": "node tools/verify-docs.mjs",
-    "test": "npm run verify:contract && npm run verify:storage && npm run verify:docs && npm run test --workspaces --if-present",
-    "test:all": "npm run build && npm test"
+    "test": "npm run build && npm run verify:contract && npm run verify:storage && npm run verify:docs && npm run test --workspaces --if-present"
   },
   "engines": {
     "node": ">=22.6"

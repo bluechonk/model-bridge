@@ -17,7 +17,7 @@ describe("logs --follow：增量读取 readAppended", () => {
   let file: string;
 
   before(() => {
-    dir = mkdtempSync(join(tmpdir(), "mb-follow-"));
+    dir = mkdtempSync(join(tmpdir(), "modelmux-follow-"));
     file = join(dir, "gateway.log");
   });
   after(() => rmSync(dir, { recursive: true, force: true }));

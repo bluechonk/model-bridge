@@ -1,7 +1,7 @@
 /**
  * Loomy 模型目录：倍率归一化、远端目录缓存与档位注册。
  *
- * ## 本模块承载的渠道知识（见 docs/protocols/loomy/PROTOCOL.md §5）
+ * ## 本模块承载的渠道知识（见 channels/loomy/docs/PROTOCOL.md §5）
  *
  * 1. **倍率在 `name` 字符串里**（没有独立字段），且三种括号风格混用，必须规范化：
  *      `MiniMax M3 （x4.0）` / `Qwen 3.8 Max (x12.0)` / `GLM 5.3 Flash(x0.8)`
@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 
 import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /** 档位词表（展示名必须与官方 IDE 一致 —— Loomy 基于 opencode 构建）。 */
 export const EFFORT_VOCABULARY = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;

@@ -2,28 +2,30 @@
 /**
  * 文档归属检查（规则见根 `AGENTS.md` §2）。
  *
- * **所有 `.md` 必须落在 `docs/` 里**，只有三类按固定路径加载的文件例外：
- *   1. `channels/<cid>/README.md`     —— 包根指针（只许指向 docs/）
- *   2. `channels/<cid>/AGENTS.md`     —— 目录级工具指令
+ * **`.md` 只有四类落点**：
+ *   1. `docs/`                        —— 契约与规范（仓库级唯一文档层）
+ *   2. 仓库根 `README.md` / `AGENTS.md` —— 门面与规则文件（工具按固定路径读）
+ *   3. `channels/<cid>/docs/`         —— 渠道自己的文档（说明 + 协议规格，随包发布）
+ *   4. `channels/<cid>/AGENTS.md`     —— 目录级工具指令
  *
- * 这个检查把「docs 统一管理 md」从口头约定变成会失败的测试 —— 有 md 散落在
- * 别处时 `npm test` 直接红，而不是等人发现。
+ * 这个检查把「文档各归其位」从口头约定变成会失败的测试 —— 有 md 落在别处时
+ * `npm test` 直接红，而不是等人发现。
  *
  * 用法：node tools/verify-docs.mjs
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 
 const workspaceRoot = dirname(import.meta.dirname);
 
-/** 允许留在 docs/ 之外的 md（固定路径白名单）。 */
+/** md 允许的落点（固定路径白名单）。 */
 const ALLOWED = [
-  /^docs\//,
+  /^docs\//, // 契约与规范
   /^AGENTS\.md$/, // 规则文件本身：工具从仓库根读，不能搬
   /^README\.md$/, // 仓库门面：GitHub 只渲染根 README，必须留在原处
-  /^channels\/[a-z0-9-]+\/README\.md$/, // 包根指针 README
+  /^channels\/[a-z0-9-]+\/docs\//, // 渠道自己的文档（随包走）
   /^channels\/[a-z0-9-]+\/AGENTS\.md$/, // 目录级工具指令
 ];
 
@@ -93,21 +95,17 @@ for (const rel of candidates) {
   if (ignored.has(rel)) continue; // 被忽略的第三方材料：不归本仓库文档规则管
   checked += 1;
   if (ALLOWED.some((re) => re.test(rel))) continue;
-  problems.push(`${rel} —— md 必须放进 docs/（规则见 AGENTS.md §2）`);
+  problems.push(`${rel} —— md 落点不合法（规则见 AGENTS.md §2）`);
 }
 
-// 指针 README 必须真的指向 docs/（防止有人又把它当正文写回去）
+// 每个渠道包都必须自带渠道说明（防止文档又被抽回仓库级 docs/，包单独发布时就没文档了）
 const channelsDir = join(workspaceRoot, "channels");
 if (existsSync(channelsDir)) {
-  for (const name of readdirSync(channelsDir)) {
-    const pointer = join(channelsDir, name, "README.md");
-    if (!existsSync(pointer) || !statSync(pointer).isFile()) {
-      problems.push(`channels/${name}/README.md —— 缺包根指针 README（应指向 docs/bridges/${name}.md）`);
-      continue;
-    }
-    const body = readFileSync(pointer, "utf8");
-    if (!body.includes("../docs/")) {
-      problems.push(`channels/${name}/README.md —— 指针 README 必须链接到 docs/（正文应写在 docs/bridges/${name}.md）`);
+  for (const entry of readdirSync(channelsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const doc = join(channelsDir, entry.name, "docs", "README.md");
+    if (!existsSync(doc)) {
+      problems.push(`channels/${entry.name}/docs/README.md —— 缺渠道说明（渠道文档跟包走，规则见 AGENTS.md §2）`);
     }
   }
 }
@@ -118,4 +116,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`✓ 文档归属检查通过：${checked} 份 md，全部在 docs/ 或固定路径白名单内`);
+console.log(`✓ 文档归属检查通过：${checked} 份 md，落点全部合规`);

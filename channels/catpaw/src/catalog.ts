@@ -11,7 +11,7 @@
  * 4. **兜底表**：未登录或上游目录未拉取时，仍能暴露 flash 模型。
  */
 
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /** 一条模型目录条目。 */
 export interface CatalogEntry {
@@ -35,7 +35,7 @@ export interface CatalogEntry {
  * 兜底表：上游模型目录不可用时仍可暴露的模型。
  *
  * ⚠ **内容取自一次真实的上游 `/model-types` 返回**（2026-10-08 实测，见
- * `docs/protocols/catpaw/PROTOCOL.md`），只留池策略放行的那些
+ * `channels/catpaw/docs/PROTOCOL.md`），只留池策略放行的那些
  * （`(deepseek|glm) && flash`，判据在共享 `isAllowedFamily()`）。
  *
  * ⚠ 曾被写成占位名 `catpaw-flash` —— 那个 id 上游**根本不存在**，
@@ -125,7 +125,7 @@ export async function refresh(): Promise<void> {
 }
 
 /**
- * 归一化上游模型行（字段名有多种历史写法，见 docs/protocols/catpaw/PROTOCOL.md）。
+ * 归一化上游模型行（字段名有多种历史写法，见 channels/catpaw/docs/PROTOCOL.md）。
  * 供 upstream.fetchModels 调用。
  */
 export function toModelInfo(row: Record<string, unknown>): CatalogEntry | null {

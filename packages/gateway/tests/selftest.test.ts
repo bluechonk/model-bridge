@@ -1,11 +1,11 @@
 /**
- * `@model-bridge/gateway` 共享层自检（离线，不出网）。
+ * `@modelmux/gateway` 共享层自检（离线，不出网）。
  *
  * 覆盖登录原语（`login.ts`）与三类流程骨架（`login-flow.ts`）——
  * 这两模块是各渠道登录逻辑下沉后的公共地基，必须自己先站得住。
  *
- * ⚠ 不测 `openBrowser()`：它会真的拉起系统浏览器（副作用），
- * 由各渠道的端到端链路覆盖「调用它不阻塞流程」这一点。
+ * ⚠ 登录链接只打印、不自动打开浏览器（见 `headless.ts` 的 `StdoutLoginUi`），
+ * 故这里不存在「会拉起系统浏览器」的副作用需要回避。
  */
 
 import assert from "node:assert/strict";

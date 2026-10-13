@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 import * as paths from "../dist/paths.js";
 import {
   claimedTodayPerLedger,
@@ -27,16 +27,15 @@ const CID = "alpha";
 
 function withRoot(fn: (root: string) => void): () => void {
   return () => {
-    const root = mkdtempSync(join(tmpdir(), "mb-ledger-"));
+    const root = mkdtempSync(join(tmpdir(), "modelmux-ledger-"));
     const saved = process.env["MODELMUX_HOME"];
     process.env["MODELMUX_HOME"] = root;
-    const config: BridgeConfig = {
+    const config: ChannelConfig = {
       cid: CID,
       display: CID,
       version: "0.0.0",
       defaultAddr: "127.0.0.1:1",
       uiPort: 2,
-      legacyDirs: [`.${CID}`],
       debugDumpEnv: "ALPHA_DEBUG_DUMP",
     };
     clearChannels();

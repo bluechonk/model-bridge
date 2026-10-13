@@ -1,5 +1,5 @@
 /**
- * workbuddy-bridge（国内版 CodeBuddy）自检（离线，不出网）。
+ * @modelmux/workbuddy（国内版 CodeBuddy）自检（离线，不出网）。
  *
  * 覆盖：
  *  1. 路径与「无历史目录」边界
@@ -24,7 +24,7 @@ const HOME = mkdtempSync(join(tmpdir(), "wb-cn-selftest-"));
 process.env["MODELMUX_HOME"] = HOME;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
-const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
+const { paths, sseStream: sse, gateway } = await import("@modelmux/gateway");
 const channelModule = await import("../dist/channel.js");
 const catalog = await import("../dist/catalog.js");
 const cred = await import("../dist/cred.js");

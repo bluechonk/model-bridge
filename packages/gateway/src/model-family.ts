@@ -12,7 +12,7 @@
  *
  * 「池子里放哪些模型」是**网关策略**，不是某个渠道的协议事实 ——
  * 每个渠道的目录都由上游决定，而策略由使用方决定。放在共享层的好处：
- * 一次改动覆盖全部 `<渠道>-bridge`，且将来新增渠道自动遵守同一策略。
+ * 一次改动覆盖全部渠道，且将来新增渠道自动遵守同一策略。
  *
  * ## 判据为什么同时看 id 与展示名
  *
@@ -42,7 +42,7 @@
  * - 想放行全部模型：把 `FAMILY_ALLOWLIST` 置为 `[]`
  * - 想加家族：往 `FAMILY_ALLOWLIST` 里加正则（如 `/qwen/i`）—— 家族之间是**并集**
  * - 想放宽型号要求：把 `REQUIRED_ALLOWLIST` 置为 `[]`（不再强制 flash）
- * - 想临时排查：设 `BRIDGE_ALLOW_ALL_MODELS=1` 绕过白名单（不改代码）
+ * - 想临时排查：设 `MODELMUX_ALLOW_ALL_MODELS=1` 绕过白名单（不改代码）
  */
 
 /**
@@ -82,7 +82,7 @@ export type FamilyHint = string | undefined;
  */
 export function isAllowedFamily(...hints: FamilyHint[]): boolean {
   // 排查开关：设了就不做白名单过滤
-  if (process.env["BRIDGE_ALLOW_ALL_MODELS"] === "1") return true;
+  if (process.env["MODELMUX_ALLOW_ALL_MODELS"] === "1") return true;
   if (FAMILY_ALLOWLIST.length === 0) return true;
   const haystack = hints.filter((h): h is string => typeof h === "string" && h !== "").join(" ");
   if (!haystack) return false;
@@ -102,7 +102,7 @@ export function filterAllowedFamily<T>(
 
 /** 白名单的可读描述（供 `/v1/models` 的响应与状态页展示策略）。 */
 export function allowlistSummary(): string {
-  if (process.env["BRIDGE_ALLOW_ALL_MODELS"] === "1") return "all (BRIDGE_ALLOW_ALL_MODELS=1)";
+  if (process.env["MODELMUX_ALLOW_ALL_MODELS"] === "1") return "all (MODELMUX_ALLOW_ALL_MODELS=1)";
   if (FAMILY_ALLOWLIST.length === 0) return "all";
   const families = FAMILY_ALLOWLIST.map((re) => re.source).join(" | ");
   if (REQUIRED_ALLOWLIST.length === 0) return families;

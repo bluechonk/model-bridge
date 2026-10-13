@@ -147,15 +147,15 @@ describe("模型池策略：(deepseek | glm) && flash", () => {
     assert.deepEqual(kept, ["deepseek-v4-flash", "glm-5.3-flash"]);
   });
 
-  it("排查开关 BRIDGE_ALLOW_ALL_MODELS=1 绕过白名单（不改代码）", () => {
-    const saved = process.env["BRIDGE_ALLOW_ALL_MODELS"];
-    process.env["BRIDGE_ALLOW_ALL_MODELS"] = "1";
+  it("排查开关 MODELMUX_ALLOW_ALL_MODELS=1 绕过白名单（不改代码）", () => {
+    const saved = process.env["MODELMUX_ALLOW_ALL_MODELS"];
+    process.env["MODELMUX_ALLOW_ALL_MODELS"] = "1";
     try {
       assert.equal(isAllowedFamily("qwen3.8-flash"), true, "开关打开时别家模型也放行");
-      assert.equal(allowlistSummary(), "all (BRIDGE_ALLOW_ALL_MODELS=1)");
+      assert.equal(allowlistSummary(), "all (MODELMUX_ALLOW_ALL_MODELS=1)");
     } finally {
-      if (saved === undefined) delete process.env["BRIDGE_ALLOW_ALL_MODELS"];
-      else process.env["BRIDGE_ALLOW_ALL_MODELS"] = saved;
+      if (saved === undefined) delete process.env["MODELMUX_ALLOW_ALL_MODELS"];
+      else process.env["MODELMUX_ALLOW_ALL_MODELS"] = saved;
     }
   });
 

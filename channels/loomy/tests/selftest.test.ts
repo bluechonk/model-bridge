@@ -1,5 +1,5 @@
 /**
- * loomy-bridge 自检（**完全离线**，不出网、不需要真实凭据）。
+ * @modelmux/loomy 自检（**完全离线**，不出网、不需要真实凭据）。
  *
  * 覆盖协议的关键结论：
  *  1. HMAC-SHA1 账号签名（9 段、**恒以两个换行结尾**、空 body 的 MD5 为空、golden 值）
@@ -88,7 +88,7 @@ function json(res: import("node:http").ServerResponse, status: number, payload: 
 
 // 被测模块（设 env 后 import）
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
-const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
+const { paths, sseStream: sse, gateway } = await import("@modelmux/gateway");
 await import("../dist/channel.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");

@@ -23,7 +23,9 @@ const check = (ok, message) => {
 
 /** 渠道包 src/ 的 7 文件契约（CONTRACT-TS §1）。 */
 const REQUIRED_SRC = ["billing.ts", "catalog.ts", "channel.ts", "cli.ts", "cred.ts", "index.ts", "upstream.ts"];
-const DEP_ALLOW = ["@model-bridge/gateway"];
+const DEP_ALLOW = ["@modelmux/gateway"];
+/** 渠道包命名：`@modelmux/<cid>`（目录名与 cid 一致，见 CONTRACT-TS §1）。 */
+const CHANNEL_PKG_RE = /^@modelmux\/[a-z0-9-]+$/;
 const DEV_ALLOW = ["typescript", "@types/node"];
 
 const channelsDir = join(repo, "channels");
@@ -80,17 +82,59 @@ check(
 );
 const cliDeps = Object.keys(cliPkg.dependencies ?? {});
 check(
-  cliDeps.every((d) => DEP_ALLOW.includes(d) || d.endsWith("-bridge")),
-  `packages/cli: dependencies 含意外包 ${cliDeps.filter((d) => !DEP_ALLOW.includes(d) && !d.endsWith("-bridge")).join(", ")}`,
+  cliDeps.every((d) => DEP_ALLOW.includes(d) || CHANNEL_PKG_RE.test(d)),
+  `packages/cli: dependencies 含意外包 ${cliDeps.filter((d) => !DEP_ALLOW.includes(d) && !CHANNEL_PKG_RE.test(d)).join(", ")}`,
 );
-const registered = [...read("packages/cli/src/channels.ts").matchAll(/import\s+"([a-z0-9-]+)"/g)].map((m) => m[1]);
+const registered = [...read("packages/cli/src/channels.ts").matchAll(/import\s+"(@modelmux\/[a-z0-9-]+)"/g)].map((m) => m[1]);
 registeredImports = registered.length;
 for (const cid of channelDirs) {
-  check(registered.includes(`${cid}-bridge`), `channels/${cid}: 未在 packages/cli/src/channels.ts 注册`);
+  check(registered.includes(`@modelmux/${cid}`), `channels/${cid}: 未在 packages/cli/src/channels.ts 注册`);
 }
 check(
   registered.length === channelDirs.length,
   `注册清单（${registered.length}）与渠道目录数（${channelDirs.length}）不一致`,
+);
+
+// 工程引用对齐（AGENTS.md §4：根 tsconfig 是 solution 文件，references 列出全部包）。
+// 每个条目恰含一个 path —— 空条目与「单条目多 path」都是脚本化增删渠道留下的畸形残留：
+// TS 自己的解析器会保留重复键（编译照过），走标准 JSON.parse 的工具却只认最后一个。
+const referencesBlock = (text) => {
+  const at = text.indexOf('"references"');
+  if (at === -1) return "";
+  let depth = 0;
+  let start = 0;
+  for (let i = text.indexOf("[", at); i < text.length; i++) {
+    if (text[i] === "[") {
+      if (depth === 0) start = i + 1;
+      depth += 1;
+    } else if (text[i] === "]") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i);
+    }
+  }
+  return text.slice(start);
+};
+
+const tsconfigs = [
+  "tsconfig.json",
+  ...channelDirs.map((cid) => `channels/${cid}/tsconfig.json`),
+  "packages/cli/tsconfig.json",
+  "packages/gateway/tsconfig.json",
+];
+for (const where of tsconfigs) {
+  const block = referencesBlock(read(where));
+  const braces = (block.match(/\{/g) ?? []).length;
+  const wellFormed = (block.match(/\{\s*"path"\s*:\s*"[^"]+"\s*\}/g) ?? []).length;
+  check(braces === wellFormed, `${where}: references 含 ${braces - wellFormed} 个畸形条目（空条目或单条目多 path）`);
+}
+
+const solutionPaths = [...referencesBlock(read("tsconfig.json")).matchAll(/"path"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+const packagePaths = [...channelDirs.map((cid) => `channels/${cid}`), "packages/cli", "packages/gateway"];
+const missingRefs = packagePaths.filter((p) => !solutionPaths.includes(p));
+const strayRefs = solutionPaths.filter((p) => !packagePaths.includes(p));
+check(
+  missingRefs.length === 0 && strayRefs.length === 0,
+  `tsconfig.json: references 与仓库包不一致（缺 ${missingRefs.join(", ") || "无"}；多 ${strayRefs.join(", ") || "无"}）`,
 );
 
 // 共享包自身必须零第三方依赖（CONTRACT-TS §2）
@@ -121,5 +165,5 @@ if (failures.length > 0) {
 }
 console.log(
   `✓ 工程契约校验通过：${channelDirs.length} 个渠道（7 文件 + 依赖白名单 + cid 一致），` +
-    `bin 双名，POOL_MODELS 恒定，池白名单在共享层`,
+    `bin 双名，工程引用对齐，POOL_MODELS 恒定，池白名单在共享层`,
 );

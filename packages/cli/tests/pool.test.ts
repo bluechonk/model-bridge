@@ -11,11 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-const HOME = mkdtempSync(join(tmpdir(), "mb-all-selftest-"));
+const HOME = mkdtempSync(join(tmpdir(), "modelmux-all-selftest-"));
 process.env["MODELMUX_HOME"] = HOME;
-delete process.env["MODEL_BRIDGE_API_KEY"];
 
-const gw = await import("@model-bridge/gateway");
+const gw = await import("@modelmux/gateway");
 await import("../dist/channels.js");
 
 describe("仓库级模型池", () => {

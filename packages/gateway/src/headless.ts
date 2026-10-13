@@ -40,8 +40,9 @@ class StdoutLoginUi implements authFlow.LoginUi {
       if (url) event["auth_url"] = url;
       emit(event);
     } else {
-      const suffix = url ? ` (auth url: ${url})` : "";
-      console.log(`[login] ${tag}${state}: ${message}${suffix}`);
+      console.log(`[login] ${tag}${state}: ${message}`);
+      // 裸 URL 单独成行：终端里可 Ctrl+点击直接打开，也可整行复制（带前缀会被一起复制走）
+      if (url) console.log(url);
     }
   }
 }
@@ -176,11 +177,11 @@ export async function runLogin(options: {
     if (existing) {
       const uid = (existing as { uid?: string }).uid ?? "";
       if (json) {
-        emit({ event: "done", ok: true, already_logged_in: true, note: "use --force to re-authorize" });
+        emit({ event: "done", ok: true, already_logged_in: true, note: "use `relogin` to re-authorize" });
       } else {
         console.log(
           `[login] 已有凭据${uid ? `（uid ${uid}）` : ""}，未做任何操作；` +
-            `要重新授权（如 token 过期）加 --force：mx login -c ${cid ?? "<cid>"} --force`,
+            `要重新授权（如 token 过期）用：mx ${cid ?? "<cid>"} relogin`,
         );
       }
       return 0;
@@ -238,8 +239,8 @@ export interface ServeOptions {
 /**
  * 无窗口运行：控制台（可选）+ 登录检查 + 网关，直到进程被终止。
  *
- * 默认只**被动探测**登录状态（不弹浏览器）；`ensureLogin`/`forceLogin` 时
- * 未登录会打开浏览器走交互授权。
+ * 默认只**被动探测**登录状态；`ensureLogin`/`forceLogin` 时未登录会引导
+ * 交互授权 —— 授权链接打到 stdout（不自动打开浏览器，由用户自行打开）。
  *
  * 多渠道路由（未指定 `cid` 且注册了多个渠道）时：逐个渠道探测/引导登录，
  * **任一渠道登录成功即启动网关** —— 未登录的渠道在请求时由网关返回 503

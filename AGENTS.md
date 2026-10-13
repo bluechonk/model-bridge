@@ -4,7 +4,7 @@
 
 ## 1. 这是什么
 
-一个本地 OpenAI 兼容网关 CLI（`modelmux`，bin `mb`）+ 全部渠道：
+一个本地 OpenAI 兼容网关 CLI（`modelmux`，bin `modelmux` / `mx`）+ 全部渠道：
 专注一件事——多个渠道汇成一个 OpenAI 兼容端点，对外丢出两个池内模型。
 每个渠道在下游是一个**池子**：模型池（`catalog` + `(deepseek|glm) × flash` 白名单）+ 账号池（同渠道多账号）。
 **对外只有两个跨渠道模型**（`deepseek-v4.1-flash` / `glm-5.3-flash`），
@@ -12,44 +12,47 @@
 
 ```
 packages/gateway/    共享层（gateway / daemon / headless / paths / 渠道注册表；**不许出现渠道知识**）
-packages/cli/        CLI 入口（bin `mb` / `modelmux`，注册全部渠道后交给共享 CLI；
+packages/cli/        CLI 入口（bin `modelmux` / `mx`，注册全部渠道后交给共享 CLI；
                      发布名 modelmux，单文件 bundle 自包含，npx/npm -g 直装）
 channels/<cid>/      一个渠道 = 一个池子（每个只实现 4 个渠道特有模块）
-docs/                全部文档
+  docs/              该渠道自己的文档（说明 + 协议规格，随包走）
+docs/                契约与规范（唯一的仓库级文档层）
 ```
 
 ## 2. 文档规则（**强制**）
 
-**所有 `.md` 文档统一放在 `docs/`，按类别分层。**子文件夹里不再散落内容型文档。
+**契约与规范集中在 `docs/`；渠道文档跟着包走，放在 `channels/<cid>/docs/`。**
 
 | 类别 | 位置 | 内容 |
 | --- | --- | --- |
 | 契约与规范 | `docs/*.md` | 改代码前必读；索引见 `docs/README.md` |
-| 渠道协议规格 | `docs/protocols/<cid>/PROTOCOL.md` | 实测协议（实现的依据） |
-| 渠道说明 | `docs/bridges/<cid>.md` | 用法 / 存储 / 测试 |
-| 调研记录 | `docs/journals/<专题>/` | 仍有持续价值的调研（findings） |
+| 渠道说明 | `channels/<cid>/docs/README.md` | 用法 / 存储 / 测试 |
+| 渠道协议规格 | `channels/<cid>/docs/PROTOCOL.md` | 实测协议（实现的依据） |
 
 完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
 需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
 
-**唯一允许留在 `docs/` 之外的 `.md`**（工具或生态按固定路径加载，搬走即失效）：
+**`.md` 只允许落在以下位置**（`tools/verify-docs.mjs` 在 `npm test` 里强制）：
 
-0. `README.md`（**仓库根**）—— 仓库门面，GitHub 只渲染根 README
-1. `channels/<cid>/README.md` —— **包根指针 README**：只许写指向 `docs/` 的链接，不写正文
-2. `channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
+0. `docs/` —— 契约与规范 + 文档总入口 `docs/README.md`
+1. `README.md`（**仓库根**）—— 仓库门面，GitHub 只渲染根 README
+2. `channels/<cid>/docs/` —— 该渠道自己的文档（说明 + 协议规格 + 逆向结论层）
+3. `channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
 
 新增或修改文档时：
 
-- 渠道协议 → `docs/protocols/<cid>/PROTOCOL.md`；渠道说明 → `docs/bridges/<cid>.md`（**不要在渠道包里写正文**）
+- 渠道协议 → `channels/<cid>/docs/PROTOCOL.md`；渠道说明 → `channels/<cid>/docs/README.md`
+   （**渠道文档不要写进仓库级 `docs/`**，包要能单独打包发布）
 - 同步更新 `docs/README.md`（它是文档总入口）
-- 引用其他文档用**相对路径**，搬完文件要顺手检查链接
-- 跑 `npm test`：`tools/verify-docs.mjs` 会拦住散落的 md，`tools/verify-storage.mjs` 会校验落点规范
+- markdown 链接用**相对路径**；源码注释里的引用用**仓库根相对路径**
+  （如 `channels/catpaw/docs/PROTOCOL.md`）—— 搬完文件要顺手检查链接
+- 跑 `npm test`：`tools/verify-docs.mjs` 会拦住落错位置的 md，`tools/verify-storage.mjs` 会校验落点规范
 
 ## 3. 代码约定（摘要；详见 `docs/CONTRACT-TS.md`）
 
 - 渠道包 `src/` **只能有 7 个文件**（`channel` / `cli` / `index` + `cred` / `upstream` / `catalog` / `billing`）；
  多出来的共享模块副本一律删除。
-- 零第三方运行依赖：`dependencies` 只允许 `@model-bridge/gateway`。
+- 零第三方运行依赖：`dependencies` 只允许 `@modelmux/gateway`。
 - **落点由共享层按 `cid` 推导**：渠道不许自己拼路径（见 `docs/STORAGE-CONVENTION.md`）。
 - 调用渠道模块前必须包 `runInChannel(cid, …)`（`AsyncLocalStorage` 上下文；否则渠道内部的
  `paths.*` 在多渠道路由下不知道为谁解析）。
@@ -62,9 +65,8 @@ docs/                全部文档
 
 ```bash
 npm install                       # 装工作区依赖（含软链）
-npm run build                     # 全仓一次编译（tsc -b，按依赖图增量）
-npm test                          # 两个校验器 + 全部包的测试
-npm run test:all                  # build + test
+npm run build                     # 全仓编译（tsc -b 增量 + cli 单文件 bundle）
+npm test                          # build + 三个校验器 + 全部包的测试（链首编译，见 §5）
 npm run build --workspace=channels/<cid>    # 只编一个渠道（也走引用链）
 node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，**唯一网关端口 8787**（REPO_DEFAULT_ADDR）
 node packages/cli/dist/cli.js model list    # 池视图：两个模型 → 候选渠道 + 账单用量 + 冷却
@@ -74,7 +76,7 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 ```
 
 **端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，
-控制台 8788），10 个渠道从它后面供给那两个公共模型；`BridgeConfig.defaultAddr`/`uiPort`
+控制台 8788），10 个渠道从它后面供给那两个公共模型；`ChannelConfig.defaultAddr`/`uiPort`
 只在**单渠道独立运行**（`channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
 
 **构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出全部包），
@@ -82,9 +84,20 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 产物仍落在各包 `dist/`（包边界不破），增量状态在 `dist/tsconfig.tsbuildinfo`。
 实测：冷编译 ~5s、无改动 ~1.2s、改一个渠道 ~1.3s、改共享层公开 API ~4s（连带重编依赖者）。
 
+`npm run build` 末尾追加 `packages/cli` 的 bundle 步骤（esbuild 内联成 `dist/cli.bundle.js`，
+见 `docs/CONTRACT-TS.md` §2.1）。**这一步不能省**：全局 `mx` / `modelmux` 的 `bin` 指向该 bundle，
+只跑 `tsc -b` 会让它在下次调用时报 `Cannot find module … dist/cli.bundle.js`。
+
+`verify:contract` 兜底 `references` 形状：根 solution 文件的引用必须与 `channels/*` + `packages/*`
+逐一对应，且每个条目恰含一个 `path`。空条目与合并条目（一条目两个 `path`）都是脚本化增删渠道的
+残留 —— TS 自己的解析器会保留重复键，编译照过，只有该渠道的 `dist/` 悄悄缺席。
+
 ## 5. 提交前检查
 
-- `npm test` 全绿（含 `verify:storage` / `verify:docs`）。
+- `npm test` 全绿（自带 `build`，含 `verify:storage` / `verify:docs`）。
+  **测试链读的是各包 `dist/`（不是 `src/`）**，所以编译必须在链首：`npm test` 已内置
+  `npm run build`；单独跑 `npm run verify:storage` 或 `npm test --workspace=channels/<cid>`
+  前要先 `npm run build`，否则校验的是旧产物。
 - 文档与代码**同一个 commit** 更新。
 - 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。
 

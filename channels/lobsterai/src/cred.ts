@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 
-import { credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
+import { credentialsPath, ensureDir, login as sharedLogin } from "@modelmux/gateway";
 import * as upstream from "./upstream.js";
 
 /**
@@ -343,11 +343,6 @@ export function buildLoginUrl(port: number, state: string, portal = portalBase()
   return `${portal}/portal#/login?${query.toString()}`;
 }
 
-/** Windows 下用 `cmd /c start "" "{url}"` 打开浏览器（空标题防 `&` 截断 URL）。 */
-export function openBrowser(url: string): void {
-  sharedLogin.openBrowser(url);
-}
-
 /** 授权码换 token（回调收到 code 后立即在进程内发起）。 */
 export async function exchange(
   base: string,
@@ -494,16 +489,15 @@ export interface LoginOptions {
   onStatus?: (message: string) => void;
 }
 
-/** 完整登录流程：本地回调服务器 + 打开浏览器 + exchange + 落盘。 */
+/** 完整登录流程：本地回调服务器 + exchange + 落盘（授权链接由命令行打印，用户自行打开）。 */
 export async function login(baseUrl?: string, options: LoginOptions = {}): Promise<Credentials> {
   const base = (baseUrl ?? resolveBaseUrl()) || DEFAULT_BASE_URL;
   const session = newLoginSession();
   const callback = await startCallbackServer(session, base);
   const url = buildLoginUrl(callback.port, session.state);
-  // ⚠️ 拿到 URL 后**立刻**回调（界面据此弹窗），不等浏览器启动结果。
+  // ⚠️ 拿到 URL 后**立刻**回调（命令行据此展示链接，用户自行在浏览器打开）
   options.onUrl?.(url);
-  options.onStatus?.(`authorization page opened, waiting for authorization (up to ${LOGIN_TIMEOUT_MS / 60000} min)...`);
-  openBrowser(url);
+  options.onStatus?.(`waiting for authorization (open the URL above in a browser; up to ${LOGIN_TIMEOUT_MS / 60000} min)...`);
   try {
     const c = await callback.result;
     await save(c);
