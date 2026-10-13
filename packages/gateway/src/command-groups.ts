@@ -42,7 +42,7 @@ export const CHANNEL_VERBS: ReadonlyArray<readonly [string, string]> = [
   ["status", "该渠道的登录 / 凭证状态（默认动词）"],
   ["login", "浏览器授权登录该渠道"],
   ["models", "该渠道池内的模型 id（读本地缓存，不需要网关；`--refresh` 强制重拉）"],
-  ["billing", "剩余额度 / 账单（别名 credits；只读，不经网关）"],
+  ["billing", "剩余额度 / 账单（只读，不经网关）"],
   // checkin/signin 已移除（签到自动化接管，见 auto-signin.ts）；
   // channels/model show/model refresh 等别名也已移除，只保留最终写法。
   ["accounts", "账号池：`list` / `use <key>` / `add` / `remove <key>`"],
