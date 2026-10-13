@@ -1,19 +1,20 @@
-# AGENTS.md —— 工作区规则（`model-bridge`）
+# AGENTS.md —— 工作区规则（`model-bridge-cli`）
 
 本文件是**仓库级**规则（与 `~/.zcode/AGENTS.md` 的个人偏好同时生效；项目约定以本文件为准）。
 
 ## 1. 这是什么
 
-一个本地 OpenAI 兼容网关 + 10 个渠道，**仓库本身就是一个 ZCode 插件**。
+一个本地 OpenAI 兼容网关 CLI（`model-bridge-cli`，bin `mb`）+ 全部渠道：
+专注一件事——多个渠道汇成一个 OpenAI 兼容端点，对外丢出两个池内模型。
 每个渠道在下游是一个**池子**：模型池（`catalog` + `(deepseek|glm) × flash` 白名单）+ 账号池（同渠道多账号）。
 **对外只有两个跨渠道模型**（`deepseek-v4.1-flash` / `glm-5.3-flash`），
 请求落到哪家渠道由网关按各渠道**账单已用量**决定（`pool-targets.ts` / `pool-usage.ts`）。
 
 ```
 packages/gateway/    共享层（gateway / daemon / headless / paths / 渠道注册表；**不许出现渠道知识**）
-packages/cli/        仓库级入口（bin `mb` / `model-bridge`，注册全部渠道后交给共享 CLI）
+packages/cli/        CLI 入口（bin `mb` / `model-bridge`，注册全部渠道后交给共享 CLI；
+                     发布名 model-bridge-cli，单文件 bundle 自包含，npx/npm -g 直装）
 channels/<cid>/      一个渠道 = 一个池子（每个只实现 4 个渠道特有模块）
-plugins/model-bridge/  唯一的 ZCode 插件（命令 / 技能 / hook）
 docs/                全部文档
 ```
 
@@ -34,9 +35,8 @@ docs/                全部文档
 **唯一允许留在 `docs/` 之外的 `.md`**（工具或生态按固定路径加载，搬走即失效）：
 
 0. `README.md`（**仓库根**）—— 仓库门面，GitHub 只渲染根 README
-1. `plugins/model-bridge/**` —— 插件命令 / 技能 / 说明，ZCode 与技能加载器按固定路径读
-2. `channels/<cid>/README.md` —— **包根指针 README**：只许写指向 `docs/` 的链接，不写正文
-3. `channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
+1. `channels/<cid>/README.md` —— **包根指针 README**：只许写指向 `docs/` 的链接，不写正文
+2. `channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
 
 新增或修改文档时：
 
@@ -68,8 +68,8 @@ npm run test:all                  # build + test
 npm run build --workspace=channels/<cid>    # 只编一个渠道（也走引用链）
 node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，**唯一网关端口 8787**（REPO_DEFAULT_ADDR）
 node packages/cli/dist/cli.js model list    # 池视图：两个模型 → 候选渠道 + 账单用量 + 冷却
-node packages/cli/dist/cli.js channels      # 渠道视角：每个渠道贡献了池内哪些模型
-node packages/cli/dist/cli.js <cid> login   # 对某个渠道操作：login / status / models / billing / checkin / accounts / paths / logs
+node packages/cli/dist/cli.js model usage   # 池账本；--refresh 立刻重查
+node packages/cli/dist/cli.js <cid> login   # 对某个渠道操作：login / status / models / billing / accounts / paths / logs
 node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用；只有它才用该渠道的 defaultAddr）
 ```
 
@@ -77,7 +77,7 @@ node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用�
 控制台 8788），10 个渠道从它后面供给那两个公共模型；`BridgeConfig.defaultAddr`/`uiPort`
 只在**单渠道独立运行**（`channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
 
-**构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出 12 个包），
+**构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出全部包），
 公共编译选项在根 `tsconfig.base.json` 里（各包 `extends` 它）；`tsc -b` 一次调度整个依赖图，
 产物仍落在各包 `dist/`（包边界不破），增量状态在 `dist/tsconfig.tsbuildinfo`。
 实测：冷编译 ~5s、无改动 ~1.2s、改一个渠道 ~1.3s、改共享层公开 API ~4s（连带重编依赖者）。

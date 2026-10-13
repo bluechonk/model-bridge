@@ -1,8 +1,8 @@
 {
-  "name": "@model-bridge/cli",
+  "name": "model-bridge-cli",
   "version": "0.1.0",
   "type": "module",
-  "description": "仓库级入口：注册全部渠道，暴露统一的 model-bridge CLI（模型池路由 + 账号池）",
+  "description": "多渠道本地模型池网关 CLI：多个渠道汇成一个 OpenAI 兼容端点，只对外暴露两个池内模型",
   "engines": {
     "node": ">=22.6"
   },

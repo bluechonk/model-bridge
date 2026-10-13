@@ -1,7 +1,8 @@
-# model-bridge
+# model-bridge-cli
 
-本地多渠道路由网关：一个 OpenAI 兼容端点，对外只暴露两个模型，由 10 个渠道按账单用量自动供给；
-仓库本身就是一个 ZCode 插件市场。
+本地多渠道路由网关 CLI：把多个渠道汇成**一个 OpenAI 兼容端点**，对外只暴露两个模型，
+由全部渠道按账单用量自动供给。专注做一件事：`npx model-bridge-cli` 起网关，任何
+OpenAI 兼容客户端指过来就能用。
 
 ## 这是什么
 
@@ -9,16 +10,14 @@
 - **两个对外模型**：`deepseek-v4.1-flash` 与 `glm-5.3-flash`。客户端只写模型名，
   请求落到哪家渠道由网关按各渠道账单已用量决定（失败的渠道进冷却、当 0 处理）。
 - **10 个渠道**：每个渠道是一个池子（模型目录 + 凭据 + 上游协议），注册在 `channels/` 下。
-- **仓库即插件**：`plugins/model-bridge/` 是唯一的 ZCode 插件（命令 / 技能 / hook），
-  插件按固定路径加载，因此留在原位。
+- **自动化兜底**：签到、死凭据清理、账单/目录刷新、失败转移全部由网关自动完成。
 
 ## 目录
 
 ```
 packages/gateway/    共享层（网关 / 守护 / 路径 / 渠道注册表，不含任何渠道知识）
-packages/cli/        仓库级入口（bin mb / model-bridge，注册全部渠道后交给共享 CLI）
+packages/cli/        CLI 入口（bin mb / model-bridge，注册全部渠道后交给共享 CLI）
 channels/<cid>/      一个渠道 = 一个池子（只实现 cred / upstream / catalog / billing）
-plugins/model-bridge/  唯一的 ZCode 插件
 docs/                全部文档（索引见 docs/README.md）
 ```
 
@@ -31,23 +30,28 @@ npm test             # 校验器 + 全部包的测试
 
 node packages/cli/dist/cli.js start              # 启动网关（守护式，端口 8787）
 node packages/cli/dist/cli.js model list         # 池视图：两个模型分别会落到谁
-node packages/cli/dist/cli.js channels           # 渠道视角：每个渠道贡献了什么
 node packages/cli/dist/cli.js <cid> login        # 登录某个渠道（浏览器授权）
 ```
 
-### 全局安装 CLI
+### 全局安装 / npx
 
 `packages/cli` 构建后是自包含的单文件 bundle（`dist/cli.bundle.js`，内联 gateway
-与全部渠道），可脱离本仓库安装：
+与全部渠道），可脱离本仓库安装；发布到 npm 后支持 `npx model-bridge-cli`：
 
 ```bash
-cd packages/cli && npm pack      # 产出 tarball（仅 bundle + package.json）
-npm i -g ./model-bridge-cli-*.tgz   # 或 npm i -g <git 地址>/packages/cli
-mb model list          # 任意目录直接可用（全名 model-bridge 等价）
+npm i -g model-bridge-cli    # 或：cd packages/cli && npm pack && npm i -g ./model-bridge-cli-*.tgz
+mb start                     # 任意目录直接可用（全名 model-bridge 等价）
+mb model list
 ```
 
 注意：bundle 形态下陈旧构建检测（`status` 的 stale_build）找不到工作区根，会退化为
 不报告——这是已知限制，不影响网关功能。
+
+## 接入任意客户端
+
+网关不绑定任何宿主工具：任何 OpenAI 兼容客户端（CLI、IDE、桌面应用）把 base url
+指到 `http://127.0.0.1:8787/v1`，模型填 `deepseek-v4.1-flash` 或 `glm-5.3-flash`
+（API key 任意非空）即可。
 
 ## 文档
 

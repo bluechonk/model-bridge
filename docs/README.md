@@ -9,8 +9,8 @@
 | `docs/bridges/<cid>.md` | 各渠道包的**说明**（用法 / 存储 / 测试） |
 | `docs/journals/<专题>/` | 仍有持续价值的**调研记录**（不参与构建） |
 
-> 规则本身写在根 [`AGENTS.md`](../AGENTS.md) §2：**所有 `.md` 必须在 `docs/` 里**（只有插件固定路径、
-> 包根指针 README、目录级 AGENTS.md 三类例外）。由 `tools/verify-docs.mjs` 在 `npm test` 里强制检查。
+> 规则本身写在根 [`AGENTS.md`](../AGENTS.md) §2：**所有 `.md` 必须在 `docs/` 里**（只有包根指针 README、
+> 目录级 AGENTS.md 两类例外）。由 `tools/verify-docs.mjs` 在 `npm test` 里强制检查。
 
 > 各 `channels/<cid>/` 目录里只留一份**指针 README**（指向本目录），
 > 免得同一份说明散在 10 个子文件夹里各改一遍。
@@ -27,7 +27,7 @@
 | --- | --- |
 | [CONTRACT-TS.md](./CONTRACT-TS.md) | **工作区实现契约**：共享层 / 渠道层 7 文件 / 零运行依赖 / 发布构建 / 测试要求 / 交付清单 |
 | [STORAGE-CONVENTION.md](./STORAGE-CONVENTION.md) | **存储落点与文件命名规范**：统一根 `~/.model-bridge/` + 按 cid 分层、迁移规则 |
-| [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) | **池化架构**：公共模型池（两个跨渠道模型 + 账单额度排序，§2）+ 账号池；仓库即插件 |
+| [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) | **池化架构**：公共模型池（两个跨渠道模型 + 账单额度排序，§2）+ 账号池 |
 
 ## 2. 渠道协议规格 `docs/protocols/<cid>/PROTOCOL.md`
 
@@ -75,7 +75,6 @@
 
 | 位置 | 是什么 |
 | --- | --- |
-| `plugins/model-bridge/` | ZCode 插件的命令/技能/hook（**必须**待在插件目录里，工具按固定路径加载） |
 | `channels/catpaw/AGENTS.md` | 该目录的 agent 级指令（工具从目录读取，不能搬） |
 | `channels/<cid>/README.md` | 指针，指向本目录 |
 
@@ -87,11 +86,9 @@
 客户端不关心、也不能指定（旧的 `<cid>/<模型>` 形态已移除，见
 [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) §2）。
 
-**不需要**为每个客户端再做一层插件：以前给 Hermes 单独做过 `.hermes-plugin/`，已移除；
-主力是 ZCode，它启动的网关本来就是共享的，其它客户端直接请求即可（凭据与账号池都由网关统一管理）。
-
-ZCode 侧仍需要插件（`plugins/model-bridge/`）—— 只有插件能提供会话启动自动挂载、命令与技能；
-这一层对其它客户端不适用。
+**不需要**为任何客户端做适配层：网关就是标准 OpenAI 兼容端点，任何客户端把 base url
+指到 `http://127.0.0.1:8787/v1` 即可（凭据与账号池都由网关统一管理）。
+历史上的插件形态（per-channel 插件 → 单 ZCode 插件 → Hermes 适配）已于 2026-10-13 全部移除。
 
 ## 7. 新增一个渠道要动哪些地方
 
