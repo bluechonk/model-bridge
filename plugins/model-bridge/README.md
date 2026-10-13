@@ -22,11 +22,11 @@ npm i -g ./model-bridge-cli-*.tgz   # 全局安装 mb / model-bridge 命令
 命令都是**跨渠道**的（没有 per-channel 命令）；需要落到某个渠道而用户没指明时，
 先用只读命令拿渠道清单，再用提问工具（`ask_user_query`）让用户选。
 
-- `mb channels` —— 渠道与模型（配 provider 的清单）
+- `mb model list` —— 池视图：两个模型各自落到哪些渠道（配 provider 就填这两个 id）
 - `mb status` / `start` / `stop` / `restart` / `logs`
-- `mb login --channel <cid>` —— 浏览器授权（唯一需要人工的步骤）；先让用户选渠道
-- `mb models` / `credits` / `paths --all`（签到已自动化，无需手动触发）
-- `mb accounts` —— 账号池（`add` / `use <key>` / `remove <key>`，用 `--channel <cid>` 指定渠道）
+- `mb login -c <cid>` —— 浏览器授权（唯一需要人工的步骤）；先让用户选渠道
+- `mb models` / `credits` / `paths --all`（签到、死凭据清理均已自动化）
+- `mb accounts` —— 账号池（`add` / `use <key>` / `remove <key>`，用 `-c <cid>` 指定渠道）
 
 ZCode 里的 provider（**必须用户手配**）：类型 `openai-chat-completions`、
 baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型填池内 id

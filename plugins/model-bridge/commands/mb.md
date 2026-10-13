@@ -12,20 +12,22 @@ skills: model-bridge-gateway
 让 ZCode 用上它**必须由用户**在设置里加 provider（插件注册不了 provider）：类型 `openai-chat-completions`、
 baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型名填上面那两个。
 
-命令一览：`model list` / `model usage` / `model show <cid>` / `channels` / `status` / `start` / `stop` /
-`restart` / `models` / `login` / `logs` / `credits` / `accounts` / `paths`。
+命令一览（主入口，别名不列）：`model list` / `model usage` / `status` / `start` / `stop` /
+`restart` / `login` / `logs` / `credits` / `accounts` / `paths`；
+渠道动词写 `<cid> <动词>`（`status` / `login` / `models` / `billing` / `accounts` / `paths` / `logs`）。
 
-签到已**自动化**：网关运行期间逐渠道自动签到（未登录跳过、连败 3 次当日熔断），无需手动触发。
+签到与死凭据清理已**自动化**：网关运行期间逐渠道自动签到（未登录跳过、连败 3 次当日熔断）；
+token 被上游拒绝且刷新无救时自动登出（清掉死凭据），渠道回到未登录态。
 
 ## 选渠道的交互约定（**重要**）
 
 命令都是**跨渠道**的；**没有 per-channel 命令**了。凡是要落到某个渠道的动作
-（`login` / `credits` / `model show` / `logs` 的单渠道形态 / `accounts add|use|remove`）：
+（`login` / `credits` / `models` / `logs` 的单渠道形态 / `accounts add|use|remove`）：
 
-1. 先跑只读命令拿渠道清单与现状：`mb status --json` / `mb channels`；
+1. 先跑只读命令拿渠道清单与现状：`mb status --json` / `mb model list`；
 2. 用 `ask_user_query` 让用户选（列出渠道，标注已登录/未登录；给「全部」选项）；
 3. **不要替用户决定**；写操作（`accounts remove`）执行前必须确认。
 
 渠道清单：`catpaw` `codearts` `lobsterai` `loomy` `qoder` `qodercn` `raccoon`
-`traecn` `workbuddy` `workbuddyai`（以 `mb channels` 输出为准）。各渠道的登录方式见 `/mb-login`；
+`traecn` `workbuddy` `workbuddyai`（以 `mb model list` 输出为准）。各渠道的登录方式见 `/mb-login`；
 单渠道细节（存储落点、约束、排障）见仓库 `docs/bridges/<cid>.md`。
