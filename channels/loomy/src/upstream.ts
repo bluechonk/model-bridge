@@ -1,7 +1,7 @@
 /**
  * Loomy（讯飞）上游：端点、**两套认证头**、业务码判据与请求体改写。
  *
- * ## 本模块承载的渠道知识（每条都是实测结论，见 docs/protocols/loomy/PROTOCOL.md）
+ * ## 本模块承载的渠道知识（每条都是实测结论，见 channels/loomy/docs/PROTOCOL.md）
  *
  * 1. **两套认证头**：`/models` 与 `/points/*`、`/onboarding/*` **只认 `token` 头**；
  *    `/chat/completions` **只认 `Authorization: Bearer`**（chat 端点**两个都发**，
@@ -20,7 +20,7 @@
 import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 
-import { ensureDir, upstreamPath } from "@model-bridge/gateway";
+import { ensureDir, upstreamPath } from "@modelmux/gateway";
 
 /** 业务基址（推理与积分端点）。 */
 export const DEFAULT_BASE_URL = "https://loomyad.xunfei.cn";

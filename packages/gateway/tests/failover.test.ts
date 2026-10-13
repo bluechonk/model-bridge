@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { activateAccount, captureActive, listAccounts } from "../dist/account-pool.js";
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 import * as gateway from "../dist/gateway.js";
 import * as paths from "../dist/paths.js";
 
@@ -72,13 +72,12 @@ async function fakeUpstream(): Promise<{ server: Server; url: string; captured: 
 
 /** 合成渠道：凭证走真实文件；**没有刷新端点**（refresh 抛错）→ 只能靠换账号。 */
 function makeChannel(cid: string): Channel {
-  const config: BridgeConfig = {
+  const config: ChannelConfig = {
     cid,
     display: `Synth ${cid}`,
     version: "0.0.0",
     defaultAddr: "127.0.0.1:1",
     uiPort: 2,
-    legacyDirs: [`.${cid}-bridge`],
     debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
   };
   const load = (): Record<string, unknown> =>
@@ -153,7 +152,7 @@ describe("账号池失败转移", () => {
   let keyB = "";
 
   before(async () => {
-    root = mkdtempSync(join(tmpdir(), "mb-failover-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-failover-"));
     process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream();
     process.env["MB_TEST_UPSTREAM"] = upstream.url;

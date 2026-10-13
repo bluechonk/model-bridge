@@ -128,7 +128,7 @@ async function probe(addr: string): Promise<Record<string, unknown> | null> {
     if (resp.status !== 200) return null;
     const payload = (await resp.json()) as Record<string, unknown>;
     if (payload["ok"] !== true) return null;
-    // 接受本进程认得的**所有**身份：单渠道 `<cid>-bridge` 与仓库级 `modelmux`。
+    // 接受本进程认得的**所有**身份：单渠道的 `cid` 与仓库级 `modelmux`。
     // 仓库级网关同时服务各渠道，故单渠道的 status 也应把它认作「自己的网关」。
     const service = payload["service"];
     if (typeof service !== "string" || !gateway.knownServiceNames().includes(service)) return null;
@@ -234,7 +234,7 @@ export async function killTree(pid: number): Promise<boolean> {
  * 守护进程要重新执行的入口脚本。
  *
  * ⚠ 必须是**当前进程的入口**（`process.argv[1]`），不能是共享包内的 `cli.js`：
- * 仓库级 bin 与各 bridge 的 bin 都是「先注册渠道，再调 `main()`」，而共享包的
+ * 仓库级 bin 与各渠道包的 bin 都是「先注册渠道，再调 `main()`」，而共享包的
  * `cli.js` 只是一组导出、没有自带入口调用 —— 重跑它会立刻退出（守护进程永远起不来）。
  * 重跑自己才能带上与父进程一致的渠道集合。
  *
@@ -506,12 +506,18 @@ export async function status(
     : foreign
       ? `网关: ${baseUrlOf(addr)} [端口被 ${foreign} 占用]`
       : `网关: ${baseUrlOf(addr)} [不可达]`;
-  console.log(
-    `${head}  ` +
-      `状态: ${state}  守护PID: ${info.daemon_pid ?? "无"}  ` +
-      `凭证: ${credentialsPresent ? "有" : "无"}  ` +
-      `auto_start: ${info.auto_start ? "开" : "关"}`,
-  );
+  // 一行一个字段：挤成一行在窄终端里会被折断成难读的形状
+  console.log(head);
+  console.log(`状态: ${state}`);
+  console.log(`守护PID: ${info.daemon_pid ?? "无"}`);
+  console.log(`凭证: ${credentialsPresent ? "有" : "无"}`);
+  console.log(`auto_start: ${info.auto_start ? "开" : "关"}`);
+  // 仓库级时逐渠道报登录态（渠道级只有一行，且行首已有渠道名，不重复）
+  if (list.length > 1) {
+    console.log(
+      `渠道: ${perChannel.map((c) => `${c.cid}${c.present ? "✓" : "✗"}`).join(" ")}`,
+    );
+  }
   if (info.signin.tracked > 0) {
     console.log(
       `签到（本地记录）: 今天已签 ${info.signin.claimed_today}/${info.signin.tracked} 个渠道` +
@@ -524,8 +530,8 @@ export async function status(
     const first = notLoggedIn[0]!;
     console.log(
       list.length === 1
-        ? `建议: mx login -c ${first.cid}（未登录）`
-        : `建议: ${notLoggedIn.length} 个渠道未登录，逐个 mx login -c <cid>（如 mx login -c ${first.cid}）`,
+        ? `建议: mx ${first.cid} login（未登录）`
+        : `建议: ${notLoggedIn.length} 个渠道未登录，逐个 mx <cid> login（如 mx ${first.cid} login）`,
     );
   }
   if (stale.stale) console.log(staleBuildHint(stale));

@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { listAccounts } from "../dist/account-pool.js";
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 import * as gateway from "../dist/gateway.js";
 import * as paths from "../dist/paths.js";
 import * as poolUsage from "../dist/pool-usage.js";
@@ -52,13 +52,12 @@ async function fakeUpstream(): Promise<{ server: Server; url: string; captured: 
 
 /** 合成渠道：凭证走**真实文件**（自动登出要删的就是它）；refresh 无端点必然失败。 */
 function makeChannel(cid: string, upstreamUrl: string): Channel {
-  const config: BridgeConfig = {
+  const config: ChannelConfig = {
     cid,
     display: `Synth ${cid}`,
     version: "0.0.0",
     defaultAddr: "127.0.0.1:1",
     uiPort: 2,
-    legacyDirs: [`.${cid}-bridge`],
     debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
   };
   return {
@@ -120,7 +119,7 @@ describe("自动登出：死凭据被清理并退出路由", () => {
   const logs: string[] = [];
 
   before(async () => {
-    root = mkdtempSync(join(tmpdir(), "mb-autologout-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-autologout-"));
     process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream();
     clearChannels();
@@ -155,7 +154,7 @@ describe("自动登出：死凭据被清理并退出路由", () => {
     assert.equal(status, 503);
     const payload = JSON.parse(text) as { error: { code: string; message: string } };
     assert.equal(payload.error.code, "not_authenticated");
-    assert.ok(payload.error.message.includes("mx login -c"), "提示重新登录的出口");
+    assert.ok(payload.error.message.includes("mx <cid> login"), "提示重新登录的出口");
     assert.equal(upstream.captured.length, 0, "不应触达上游（渠道根本没凭据）");
   });
 });
@@ -166,7 +165,7 @@ describe("候选过滤：未登录渠道不被路由（高用量也不参与）"
   let gw: gateway.RunningGateway;
 
   before(async () => {
-    root = mkdtempSync(join(tmpdir(), "mb-ghostfilter-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-ghostfilter-"));
     process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream();
     clearChannels();

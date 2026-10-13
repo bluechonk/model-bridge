@@ -1,5 +1,5 @@
 /**
- * `@model-bridge/gateway`：各渠道 bridge 共享的 gateway 层。
+ * `@modelmux/gateway`：各渠道 bridge 共享的 gateway 层。
  *
  * 对外导出各模块，供 bridge 入口与测试按需引入。渠道差异通过 `setChannel()`
  * 注册的 `Channel` 注入 —— 本包不 import 任何渠道模块。
@@ -29,7 +29,7 @@ export {
   channelFor,
   channelCount,
   clearChannels,
-  type BridgeConfig,
+  type ChannelConfig,
   type Channel,
   type Credential,
   type CredModule,

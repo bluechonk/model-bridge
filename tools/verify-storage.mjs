@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 存储落点规范的校验器（见 docs/STORAGE-CONVENTION.md §5.3）。
+ * 存储落点规范的校验器（见 docs/STORAGE-CONVENTION.md §3）。
  *
  * 加载工作区内全部渠道包的 `config`，逐条断言「位置 + 命名」规范：
- * 单根分层、cid 命名、调试变量命名、迁移链不跨渠道、端口唯一。
+ * 单根分层、cid 命名、调试变量命名、端口唯一。
  *
  * 这是把「统一统计」固化成回归测试的那一步 —— 任何渠道的落点跑偏都会在这里失败。
  *
@@ -13,7 +13,7 @@
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 // ── 安全网：把存储根指向临时目录 ──────────────────────────────────────────────
@@ -33,7 +33,7 @@ function packageDirs() {
     if (typeof pattern !== "string") continue;
     const candidates = [];
     if (pattern.includes("*")) {
-      // 目录名不做要求：是不是渠道包由「包名不在 @model-bridge/ 作用域 + 有 src/channel.ts」判定
+      // 目录名不做要求：是不是渠道包由「有 src/channel.ts」判定（见下方过滤）
       const base = join(workspaceRoot, dirname(pattern));
       if (!existsSync(base)) continue;
       for (const name of readdirSync(base)) candidates.push(join(base, name));
@@ -41,14 +41,9 @@ function packageDirs() {
       candidates.push(join(workspaceRoot, pattern));
     }
     for (const dir of candidates) {
-      // 本仓库自己的基础设施包（@model-bridge/gateway、@model-bridge/cli）不是渠道包 ——
-      // 注意 packages/gateway/src/channel.ts 是共享层的**注册表模块**，不能按文件名判据放行。
-      try {
-        const name = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).name;
-        if (typeof name === "string" && name.startsWith("@")) continue;
-      } catch {
-        continue;
-      }
+      // 只认 `channels/` 树下的包：`packages/*` 是基础设施
+      //（注意 packages/gateway/src/channel.ts 是共享层的**注册表模块**，不能按文件名判据放行）。
+      if (!relative(workspaceRoot, dir).split(sep).join("/").startsWith("channels/")) continue;
       out.push(dir);
     }
   }

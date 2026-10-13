@@ -16,9 +16,9 @@ OpenAI 兼容客户端指过来就能用。
 
 ```
 packages/gateway/    共享层（网关 / 守护 / 路径 / 渠道注册表，不含任何渠道知识）
-packages/cli/        CLI 入口（bin mb / modelmux，注册全部渠道后交给共享 CLI）
+packages/cli/        CLI 入口（bin modelmux / mx，注册全部渠道后交给共享 CLI）
 channels/<cid>/      一个渠道 = 一个池子（只实现 cred / upstream / catalog / billing）
-docs/                全部文档（索引见 docs/README.md）
+docs/                契约与规范（渠道文档在各包 channels/<cid>/docs/）
 ```
 
 ## 快速开始
@@ -26,7 +26,7 @@ docs/                全部文档（索引见 docs/README.md）
 ```bash
 npm install          # 装工作区依赖
 npm run build        # 全仓编译（tsc -b + cli 单文件 bundle）
-npm test             # 校验器 + 全部包的测试
+npm test             # build + 校验器 + 全部包的测试
 
 node packages/cli/dist/cli.js start              # 启动网关（守护式，端口 8787）
 node packages/cli/dist/cli.js model list         # 池视图：两个模型分别会落到谁
@@ -55,15 +55,15 @@ mx model list
 
 ## 文档
 
-全部文档在 `docs/`，入口是 [docs/README.md](docs/README.md)：
+契约与规范在 `docs/`（入口 [docs/README.md](docs/README.md)），**渠道文档跟包走**，在各包 `channels/<cid>/docs/`：
 
 | 想看什么 | 去哪 |
 | --- | --- |
 | 契约与规范（改代码前必读） | [docs/CONTRACT-TS.md](docs/CONTRACT-TS.md) |
 | 公共模型池怎么选渠道 | [docs/POOL-ARCHITECTURE.md](docs/POOL-ARCHITECTURE.md) |
 | 存储落点规范 | [docs/STORAGE-CONVENTION.md](docs/STORAGE-CONVENTION.md) |
-| 某个渠道怎么用 | [docs/bridges/&lt;cid&gt;.md](docs/bridges/)（如 `docs/bridges/qodercn.md`） |
-| 某个上游的协议细节 | `docs/protocols/<cid>/PROTOCOL.md` |
+| 某个渠道怎么用 | `channels/<cid>/docs/README.md`（如 [channels/qodercn/docs/README.md](channels/qodercn/docs/README.md)） |
+| 某个上游的协议细节 | `channels/<cid>/docs/PROTOCOL.md` |
 
 ## 约定
 

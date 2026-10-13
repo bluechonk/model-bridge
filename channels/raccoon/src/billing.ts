@@ -357,7 +357,7 @@ export async function claimLoginReward(c?: cred.Credentials): Promise<RewardResu
 
 // ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
 
-import type { SigninModule } from "@model-bridge/gateway";
+import type { SigninModule } from "@modelmux/gateway";
 
 /**
  * 每日签到（`<cid> checkin`）。

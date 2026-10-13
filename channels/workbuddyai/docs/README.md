@@ -1,13 +1,13 @@
-# workbuddyai-bridge
+# @modelmux/workbuddyai
 
 WorkBuddyAI 的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mx` CLI（仓库级 modelmux）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 WorkBuddyAI 后端。
 
 > **国际版 / 国内版是两条渠道**：本文件是**国际版**（`workbuddy.ai`，cid `workbuddyai`）。
 > 国内版（腾讯 CodeBuddy，`codebuddy.ai`）是**独立渠道** `workbuddy`，见
-> [`workbuddy.md`](workbuddy.md)。两者共用同一套网关，但账号、
+> [`workbuddy/docs/README.md`](../../workbuddy/docs/README.md)。两者共用同一套网关，但账号、
 > 凭证落点、模型池各自独立 —— 账号在哪个域就用哪个渠道登录。
 > 早期版本用一个 `--realm intl|cn` 参数在两者间切换，现已**移除**：域是渠道身份的一部分。
 
@@ -50,15 +50,9 @@ node channels/workbuddyai/dist/cli.js --help    # 单渠道 CLI（调试 / 回�
 | --- | --- |
 | `GET /api/state` | 状态快照：`ui_state`（probing/login/error/running）、`message`、`auth_url`、`models`、`gateway_error` |
 | `POST /api/retry-login` | 投递「重试登录」意图 |
-| `POST /api/theme` | 空操作（保留端点兼容） |
 
-日常操作走 `mb` 命令（`mx status` / `mx start|stop|restart` / `mx login -c workbuddyai` /
-`mx model list` / `mx workbuddyai billing`），控制台 API 只是给程序化调用留的口子：
-
-| 端点 | 说明 |
-| --- | --- |
-| `GET /api/state` | 状态快照：`ui_state`、`message`、`auth_url`、`models`、`gateway_error` |
-| `POST /api/retry-login` | 投递「重试登录」意图 |
+日常操作走 `mx` 命令（`mx status` / `mx start|stop|restart` / `mx workbuddyai login` /
+`mx model list` / `mx workbuddyai billing`），控制台 API 只是给程序化调用留的口子。
 
 **接入**：任意 OpenAI 兼容客户端，类型 `openai-chat-completions`、
 baseUrl `http://127.0.0.1:8787/v1`、API key 任意非空、模型 `deepseek-v4.1-flash` /
@@ -91,15 +85,14 @@ tests/
 
 全部落点在统一存储根 `~/.modelmux/` 下按渠道分层：凭证在
 `~/.modelmux/workbuddyai/credentials.json`（权限 0600），不要提交到 git。
-历史顶层目录（`~/.workbuddyai2api/`、`~/.workbuddyai-gateway/` 等）首次访问时自动收拢进该层，
-无需重新登录。`MODELMUX_HOME` 可把整个存储根指到别处（旧的 `ZCB_HOME` / `WBAI2API_HOME`
-仍被识别但已弃用），便携/测试用。
+`MODELMUX_HOME` 可把整个存储根指到别处，便携/测试用。历史顶层目录（`~/.workbuddyai2api/`、
+`~/.workbuddyai-gateway/` 等）与旧环境变量（`ZCB_HOME` / `WBAI2API_HOME`）**已不再识别**
+（更名 modelmux 时整体移除旧兼容），仍在使用的话需手工把数据搬进 `~/.modelmux/workbuddyai/`。
 `mx paths --all` 可只读列出全部落点。
 
 拆分成两条渠道后，**裸 `workbuddy` 名字**（`~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
-`WORKBUDDY_DEBUG_DUMP`）**两条渠道都不再认领**：那个目录里是国际版旧凭证，而 `workbuddy`
-这个 cid 现在属于国内版 —— 认领会把国际数据迁进国内渠道（跨产品串号）。旧数据早已迁入
-`~/.modelmux/workbuddyai/`，无需再迁。
+`WORKBUDDY_DEBUG_DUMP`）两条渠道都不读：那个目录里是国际版旧凭证，而 `workbuddy`
+这个 cid 现在属于国内版 —— 混用会跨产品串号。迁完的旧数据在 `~/.modelmux/workbuddyai/`。
 
 ## 模型短名映射
 

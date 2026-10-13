@@ -1,9 +1,9 @@
 {
-  "name": "@model-bridge/gateway",
+  "name": "@modelmux/gateway",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "各渠道 bridge 共享的 gateway 层（网关/守护/无窗口运行/控制台/SSE/路径），渠道差异通过 Channel 注册表注入",
+  "description": "各渠道共享的 gateway 层（网关/守护/无窗口运行/控制台/SSE/路径），渠道差异通过 Channel 注册表注入",
   "engines": {
     "node": ">=22.6"
   },

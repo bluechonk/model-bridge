@@ -1,4 +1,4 @@
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /**
  * LobsterAI 模型目录：远端 `/api/models/available` 的解析、缓存与兜底表。

@@ -7,11 +7,11 @@
  * - **以渠道为第一参数**：`<cid> login` / `<cid> billing` / `<cid> models` …
  *   这是「对某个渠道做点什么」的自然读法。
  * - **分组**：`model list`（池视图）、`model usage`（池账本）。
- * - 原来的扁平形式（`status --channel <cid>`、`credits`、`channels`…）**全部保留**，
- *   所以既有脚本与插件命令不用改。
+ * - 不带渠道的扁平形式（`status` / `credits` / `paths`…）保留，便于脚本化；
+ *   渠道一律写成第一参数（旧的 `--channel` / `-c` 选项已移除）。
  */
 
-import { channels, getChannel, type Channel } from "./channel.js";
+import { channels, getChannel, hasChannel, type Channel } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
 import { catalogCacheFetchedAt } from "./catalog-cache.js";
 import { asPoolModel, canonicalModelId, POOL_MODELS, poolCandidates } from "./pool-targets.js";
@@ -34,20 +34,23 @@ export interface CommandContext {
   /** `login --wechat`：微信扫码登录（渠道声明 loginWechat 才支持）。 */
   wechat: boolean;
   lines: number;
+  /** `paths`：统计工作区内全部渠道。 */
+  all: boolean;
+  /** `logs`：持续输出新增日志。 */
+  follow: boolean;
   workspace?: string;
 }
 
-/** 渠道级动词（供帮助文本与未知动词提示；别名在括号里）。 */
+/** 渠道动词（供帮助文本与未知动词提示）。语法一律 `mx <动词> [<cid>] [参数]`。 */
 export const CHANNEL_VERBS: ReadonlyArray<readonly [string, string]> = [
-  ["status", "该渠道的登录 / 凭证状态（默认动词）"],
-  ["login", "浏览器授权登录该渠道"],
-  ["models", "该渠道池内的模型 id（读本地缓存，不需要网关；`--refresh` 强制重拉）"],
-  ["billing", "剩余额度 / 账单（只读，不经网关）"],
-  // checkin/signin 已移除（签到自动化接管，见 auto-signin.ts）；
-  // channels/model show/model refresh 等别名也已移除，只保留最终写法。
-  ["accounts", "账号池：`list` / `use <key>` / `add` / `remove <key>`"],
-  ["paths", "该渠道的存储落点与文件（只读）"],
-  ["logs", "该渠道的网关日志尾部"],
+  ["status", "状态：带 <cid> = 该渠道；不带 = 仓库级聚合（全部渠道）"],
+  ["login", "登录渠道：`login <cid>`；`login list` 列出可登录渠道与状态"],
+  ["relogin", "重新授权：清掉现有凭据后重走登录流程（`relogin <cid>`）"],
+  ["models", "模型：带 <cid> = 该渠道池内模型（读本地缓存）；不带 = 网关注册的模型"],
+  ["billing", "额度 / 账单：带 <cid> = 该渠道；不带 = 全部渠道（只读，不经网关）"],
+  ["accounts", "账号池：`accounts [<cid>] list|use <key>|add|remove <key>`"],
+  ["paths", "存储落点与文件：`paths [<cid>]`（只读）"],
+  ["logs", "日志尾部：`logs [<cid>]`（带 -f 持续输出）"],
 ];
 
 /** 目录的来源，决定 CLI 怎么向用户交代这次列的是哪份数据。 */
@@ -307,11 +310,11 @@ export async function listLogins(json: boolean): Promise<number> {
     const status = row.logged_in ? `已登录${row.uid ? `  uid=${row.uid}` : ""}` : "未登录";
     console.log(`  ${row.cid.padEnd(12)} ${row.display.padEnd(18)} ${status}`);
   }
-  console.log("登录某个渠道：`mx <cid> login`（详见 `mx login --help`）。");
+  console.log("登录某个渠道：`mx login <cid>`（重新授权用 `mx relogin <cid>`）。");
   return 0;
 }
 
-/** `model <list|show <cid>|usage|refresh [cid]>`。 */
+/** `model <list|usage> [--refresh]`。 */
 export async function runModelGroup(args: string[], ctx: CommandContext): Promise<number> {
   const sub = args[0] ?? "list";
   switch (sub) {
@@ -347,49 +350,92 @@ export async function showPoolUsage(json: boolean, force = false): Promise<numbe
   return listPoolModels(json);
 }
 
-/** `mx <cid> <动词> [参数]`。 */
-export async function runChannelCommand(
-  cid: string,
-  args: string[],
-  ctx: CommandContext,
-): Promise<number> {
-  const verb = args[0] ?? "status";
-  const rest = args.slice(1);
-  const channel = getChannel(cid); // 未注册会抛错，调用方已确认
+/** 渠道动词名集合（`mx <动词> [<cid>]` 的第一参数）。 */
+export function isChannelVerb(verb: string): boolean {
+  return CHANNEL_VERBS.some(([v]) => v === verb);
+}
+
+/**
+ * `mx <动词> [<cid>] [参数]`。
+ *
+ * cid 是动词后**第一个位置参数**（且必须是已注册渠道名）：给了就是「对某渠道」，
+ * 不给则各动词回落到仓库级语义（status→聚合、billing→全部、paths→全部、
+ * logs→网关日志、models→网关注册的模型）。`login` / `relogin` 不给 cid 只对
+ * 单渠道入口有意义（多渠道路由下报错指路）。
+ */
+export async function runVerb(verb: string, args: string[], ctx: CommandContext): Promise<number> {
+  const first = args[0];
+  const cid = first !== undefined && hasChannel(first) ? first : undefined;
+  const rest = cid !== undefined ? args.slice(1) : args;
 
   switch (verb) {
     case "status":
-      return daemon.status({ cid, json: ctx.json, addr: ctx.addr, uiPort: ctx.uiPort });
-    case "login":
-      return headless.runLogin({ cid, json: ctx.json, realm: ctx.realm, force: ctx.force, wechat: ctx.wechat });
+      return daemon.status({
+        json: ctx.json,
+        addr: ctx.addr,
+        uiPort: ctx.uiPort,
+        ...(cid !== undefined ? { cid } : {}),
+      });
     case "models":
-      return listLocalModels(channel, ctx.json, ctx.refresh);
+      return cid === undefined
+        ? daemon.models({ json: ctx.json, addr: ctx.addr })
+        : listLocalModels(getChannel(cid), ctx.json, ctx.refresh);
     case "billing":
-      return daemon.credits({ cid, json: ctx.json });
+      return daemon.credits({ json: ctx.json, ...(cid !== undefined ? { cid } : {}) });
+    case "paths":
+      return report.runPaths({
+        json: ctx.json,
+        all: ctx.all,
+        ...(cid !== undefined ? { cid } : {}),
+        ...(ctx.workspace !== undefined ? { workspace: ctx.workspace } : {}),
+      });
+    case "logs":
+      return ctx.follow
+        ? daemon.followLogs(ctx.lines, ctx.json, cid)
+        : daemon.logs(ctx.lines, ctx.json, cid);
     case "accounts":
       return accountCli.runAccounts({
-        cid,
         json: ctx.json,
+        realm: ctx.realm,
+        force: ctx.force,
         verb: rest[0] ?? "list",
+        ...(cid !== undefined ? { cid } : {}),
         ...(rest[1] !== undefined ? { target: rest[1] } : {}),
       });
-    case "paths":
-      return report.runPaths({ cid, json: ctx.json });
-    case "logs":
-      return daemon.logs(ctx.lines, ctx.json, cid);
-    case "start":
-    case "stop":
-    case "restart":
-      console.error(
-        `网关是**仓库级**的：\`mx ${verb}\` 管的是服务全部渠道的那个网关。\n` +
-          `只想跑 ${cid} 一个渠道调试，用 \`node channels/${cid}/dist/cli.js ${verb}\`（独立端口）。`,
-      );
-      return 2;
+    case "login":
+      // `login list`：列出可登录渠道与状态（只读）
+      if (cid === undefined && rest[0] === "list") return listLogins(ctx.json);
+      return runLoginVerb(cid, ctx, false);
+    case "relogin":
+      return runLoginVerb(cid, ctx, true);
     default:
       console.error(
         `未知动词: ${verb}\n` +
-          `用法: mx <cid> <动词>；可用动词: ${CHANNEL_VERBS.map(([v]) => v).join(" / ")}`,
+          `用法: mx <动词> [<cid>]；可用动词: ${CHANNEL_VERBS.map(([v]) => v).join(" / ")}`,
       );
       return 2;
   }
+}
+
+/** `login` / `relogin`：多渠道路由下必须给出 cid（单渠道入口可省）。 */
+function runLoginVerb(cid: string | undefined, ctx: CommandContext, force: boolean): Promise<number> {
+  const verb = force ? "relogin" : "login";
+  if (cid === undefined && channelCountSafe() > 1) {
+    console.error(
+      `多渠道路由需要指定目标：\`mx ${verb} <cid>\`（可登录渠道用 \`mx login list\` 查看）。`,
+    );
+    return Promise.resolve(2);
+  }
+  return headless.runLogin({
+    force,
+    json: ctx.json,
+    realm: ctx.realm,
+    wechat: ctx.wechat,
+    ...(cid !== undefined ? { cid } : {}),
+  });
+}
+
+/** 已注册渠道数（用于多渠道路由判断）。 */
+function channelCountSafe(): number {
+  return channels().length;
 }

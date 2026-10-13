@@ -19,7 +19,7 @@ import {
   credentialsPath,
   ensureDir,
   login as sharedLogin,
-} from "@model-bridge/gateway";
+} from "@modelmux/gateway";
 
 /** 登录基址（国际版 workbuddy.ai）。 */
 export const DEFAULT_BASE_URL = "https://www.workbuddy.ai";
@@ -75,7 +75,7 @@ export const EMPTY_CREDENTIALS: Credentials = {
   source: "",
 };
 
-/** 取值收窄（转发共享层原语，见 `@model-bridge/gateway` 的 `login.ts`）。 */
+/** 取值收窄（转发共享层原语，见 `@modelmux/gateway` 的 `login.ts`）。 */
 const str = sharedLogin.str;
 
 /**
@@ -259,15 +259,6 @@ async function pollToken(baseUrl: string, state: string): Promise<Record<string,
   return null;
 }
 
-/**
- * Windows 下用 `cmd /c start "" "{url}"` 打开浏览器（转发共享层原语）。
- *
- * ⚠ 空标题 `""` 不可省：否则 URL 里的 `&` 会被 cmd 当命令分隔符截断。
- */
-export function openBrowser(url: string): void {
-  sharedLogin.openBrowser(url);
-}
-
 export interface LoginOptions {
   onUrl?: (url: string) => void;
   onStatus?: (message: string) => void;
@@ -286,10 +277,9 @@ export async function login(baseUrl: string, options: LoginOptions = {}): Promis
     }
     onUrl?.(authUrl);
     onStatus?.(
-      `Round ${round}/${MAX_LOGIN_ROUNDS}: opened the browser authorization page, ` +
-        `waiting for authorization (up to ${LOGIN_WINDOW_MS / 60000} min)…`,
+      `Round ${round}/${MAX_LOGIN_ROUNDS}: waiting for authorization ` +
+        `(open the URL above in a browser; up to ${LOGIN_WINDOW_MS / 60000} min)…`,
     );
-    openBrowser(authUrl);
     const token = await pollToken(base, str(state["state"]));
     if (!token) {
       onStatus?.(`Round ${round} timed out, retrying…`);

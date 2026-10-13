@@ -14,7 +14,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAllowedFamily } from "@model-bridge/gateway";
+import { isAllowedFamily } from "@modelmux/gateway";
 
 /**
  * 历史短名 → 上游 slug（**仅输入兼容**，不作为对外名）。

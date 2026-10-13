@@ -1,5 +1,5 @@
 /**
- * qoder-bridge 自检（**完全离线**，不出网）。
+ * @modelmux/qoder 自检（**完全离线**，不出网）。
  *
  * 覆盖四块实现里最容易悄悄写错、又最难在真机上定位的部分：
  *
@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { clearChannels, getChannel, paths, setChannel } from "@model-bridge/gateway";
+import { clearChannels, getChannel, paths, setChannel } from "@modelmux/gateway";
 
 import * as catalog from "../dist/catalog.js";
 import * as channelModule from "../dist/channel.js";
@@ -29,7 +29,7 @@ let root = "";
 let savedRoot: string | undefined;
 
 before(() => {
-  root = mkdtempSync(join(tmpdir(), "mb-qoder-"));
+  root = mkdtempSync(join(tmpdir(), "modelmux-qoder-"));
   savedRoot = process.env["MODELMUX_HOME"];
   process.env["MODELMUX_HOME"] = root;
 });

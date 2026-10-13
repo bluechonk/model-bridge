@@ -1,5 +1,5 @@
 /**
- * raccoon-bridge 自检（**完全离线**，不出网、不需要真实凭据）。
+ * @modelmux/raccoon 自检（**完全离线**，不出网、不需要真实凭据）。
  *
  * 覆盖协议的关键结论：
  *  1. 手机号 **AES-128-CFB** 加密（密钥 16 字节 ⇒ aes-128-cfb；输出 base64(iv‖密文)）
@@ -29,7 +29,6 @@ import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "raccoon-selftest-"));
 process.env["MODELMUX_HOME"] = HOME;
-process.env["RACCOON_NO_BROWSER"] = "1"; // 测试里绝不真开浏览器
 
 const PHONE = "13800138000";
 
@@ -97,7 +96,7 @@ function json(res: import("node:http").ServerResponse, status: number, payload: 
 
 // 被测模块
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
-const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
+const { paths, sseStream: sse, gateway } = await import("@modelmux/gateway");
 await import("../dist/channel.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");

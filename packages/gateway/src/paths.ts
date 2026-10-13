@@ -5,7 +5,7 @@
  *
  *   ~/.modelmux/                 ← 唯一存储根（`MODELMUX_HOME` 可覆盖）
  *       prefs.json               （可选）跨渠道共享偏好
- *       <cid>/                   ← 渠道层，cid 取自 BridgeConfig
+ *       <cid>/                   ← 渠道层，cid 取自 ChannelConfig
  *           credentials.json     登录凭证
  *           upstream.json        上游端点与鉴权头名称
  *           prefs.json           渠道内偏好（auto_start 等）
@@ -22,7 +22,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { channelFor, getChannel, type BridgeConfig } from "./channel.js";
+import { channelFor, getChannel, type ChannelConfig } from "./channel.js";
 import { activeCid } from "./channel-context.js";
 import { enforcePermissions } from "./permissions.js";
 
@@ -63,17 +63,17 @@ function resolveRoot(): string {
 }
 
 /** 存储根（纯函数）。 */
-export function rootDirFor(_config: BridgeConfig): string {
+export function rootDirFor(_config: ChannelConfig): string {
   return resolveRoot();
 }
 
 /** 渠道层目录（纯函数，**不触发迁移**，供巡检/统计用）。 */
-export function channelDirFor(config: BridgeConfig): string {
+export function channelDirFor(config: ChannelConfig): string {
   return join(rootDirFor(config), config.cid);
 }
 
 /** 取渠道配置：显式 `cid` > 渠道上下文（`runInChannel`）> 单渠道模式。 */
-function configOf(cid?: string): BridgeConfig {
+function configOf(cid?: string): ChannelConfig {
   const resolved = cid ?? activeCid();
   if (resolved !== undefined) return channelFor(resolved).config;
   return getChannel().config;

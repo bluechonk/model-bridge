@@ -1,13 +1,13 @@
-# traecn-bridge
+# @modelmux/traecn
 
 TRAE（字节跳动）的本地 OpenAI Chat Completion 透明代理网关（**TypeScript** 版）。
-**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
+**纯无窗口（headless）设计**：没有桌面界面，状态与操作全部走 `mx` CLI（仓库级 modelmux）。
 
 将任何兼容 OpenAI Chat Completion API 的客户端请求，透明转发到 TRAE 后端。
 
 ## 协议规格
 
-实现依据见 [`docs/protocols/traecn/PROTOCOL.md`](../protocols/trae/PROTOCOL.md) —— 从上游实现提取的完整协议规格，
+实现依据见 [`docs/PROTOCOL.md`](./PROTOCOL.md) —— 从上游实现提取的完整协议规格，
 含端点、认证、请求/响应形状与实测踩坑记录。
 
 ## 快速开始

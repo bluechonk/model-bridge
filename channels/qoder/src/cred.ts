@@ -31,7 +31,7 @@ import {
   loginFlow,
   writeJsonSecret,
   type Credential,
-} from "@model-bridge/gateway";
+} from "@modelmux/gateway";
 
 /** 区域：国际版 / 国内版。 */
 export type Realm = "intl" | "cn";
@@ -389,9 +389,8 @@ export async function login(baseUrl?: string, options: LoginOptions = {}): Promi
   const authUrl = buildAuthUrl(product, challenge, nonce, machineId);
   options.onUrl?.(authUrl);
   options.onStatus?.(
-    `${product.label}: complete authorization in the browser that just opened (machine_id ${machineId.slice(0, 8)}…)`,
+    `${product.label}: open the URL above in your browser to authorize (machine_id ${machineId.slice(0, 8)}…)`,
   );
-  shared.openBrowser(authUrl);
 
   const pollQuery = new URLSearchParams({ nonce, verifier, challenge_method: "S256" });
   const pollUrl = `${product.openapi}/api/v1/deviceToken/poll?${pollQuery.toString()}`;
@@ -515,7 +514,3 @@ export async function refresh(credential: Credentials): Promise<Credentials> {
   return next;
 }
 
-/** 打开浏览器（复用共享实现；打不开不影响流程，用户可以手动复制 URL）。 */
-export function openBrowser(url: string): void {
-  shared.openBrowser(url);
-}

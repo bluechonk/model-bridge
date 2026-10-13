@@ -1,7 +1,7 @@
 /**
  * 单文件发布构建：把 cli + gateway + 全部渠道打成自包含的 ESM bundle。
  *
- * 为什么需要它：`packages/cli` 的运行时依赖是 workspace 软链（`catpaw-bridge` →
+ * 为什么需要它：`packages/cli` 的运行时依赖是 workspace 软链（`@modelmux/catpaw` →
  * `channels/catpaw`），全局安装 / 发 registry 时软链断裂、包名在 registry 上不存在。
  * esbuild 从唯一聚合点 `src/cli.ts` 沿静态 import 收编整条依赖图，产物里不再有任何
  * 外部包引用 —— tarball 自包含，`npm i -g` 直接可用。

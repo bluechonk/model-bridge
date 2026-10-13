@@ -27,7 +27,7 @@ let root = "";
 let savedRoot: string | undefined;
 
 before(() => {
-  root = mkdtempSync(join(tmpdir(), "mb-pool-"));
+  root = mkdtempSync(join(tmpdir(), "modelmux-pool-"));
   savedRoot = process.env["MODELMUX_HOME"];
   process.env["MODELMUX_HOME"] = root;
 });
@@ -112,7 +112,6 @@ function makeChannel(cid: string, upstreamUrl: string, models: Array<[string, st
       version: "0.0.0",
       defaultAddr: "127.0.0.1:1",
       uiPort: 2,
-      legacyDirs: [`.${cid}-bridge`],
       debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
     },
     cred: {
@@ -440,7 +439,7 @@ describe("4. 单渠道模式也走池（不再暴露裸短名）", () => {
     clearChannels();
   });
 
-  it("/v1/models 仍是两个池模型；service 身份是 solo-bridge", async () => {
+  it("/v1/models 仍是两个池模型；service 身份是 cid（solo）", async () => {
     const models = (await (await fetch(`http://${gw.addr}/v1/models`)).json()) as {
       data: Array<{ id: string; owned_by: string }>;
     };
@@ -448,13 +447,13 @@ describe("4. 单渠道模式也走池（不再暴露裸短名）", () => {
       models.data.map((m) => m.id),
       ["deepseek-v4.1-flash", "glm-5.3-flash"],
     );
-    assert.equal(models.data[0]!.owned_by, "solo-bridge");
+    assert.equal(models.data[0]!.owned_by, "solo");
 
     const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<
       string,
       unknown
     >;
-    assert.equal(health["service"], "solo-bridge");
+    assert.equal(health["service"], "solo");
     assert.equal(health["logged_in"], true);
   });
 

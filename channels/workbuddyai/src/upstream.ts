@@ -20,7 +20,7 @@
 import { readFileSync } from "node:fs";
 import { writeFile, rename, chmod } from "node:fs/promises";
 
-import { upstreamPath, ensureDir } from "@model-bridge/gateway";
+import { upstreamPath, ensureDir } from "@modelmux/gateway";
 
 export const DEFAULT_BASE_URL = "https://www.workbuddy.ai";
 

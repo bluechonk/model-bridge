@@ -4,53 +4,46 @@
  * 管理类子命令不依赖网关进程，直接操作守护进程与本地文件；
  * 运行类子命令（serve/login）走 headless。
  *
- * 本文件是共享层：调用方（各 bridge 的 `src/cli.ts`）必须**先注册渠道**，
+ * 本文件是共享层：调用方（各渠道包的 `src/cli.ts`）必须**先注册渠道**，
  * 再调用 `main()`。故这里不再自带「直接运行本文件」的入口判断。
  */
 
 import { parseArgs } from "node:util";
 
 import { channelCount, getChannel, hasChannel } from "./channel.js";
-import { CHANNEL_VERBS } from "./command-groups.js";
+import { CHANNEL_VERBS, isChannelVerb } from "./command-groups.js";
 import * as groups from "./command-groups.js";
 import { defaultAddr, defaultUiPort, version } from "./cli-consts.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
-import * as accountCli from "./account-cli.js";
-import * as report from "./report.js";
 
 /** 生成当前渠道的帮助文本。 */
 export function usage(): string {
   const single = channelCount() === 1;
   // 仓库级入口的 bin 有 `modelmux` / `mx` 两个名字，帮助里统一用短名 `mx`。
-  const cid = single ? getChannel().config.cid : "mx";
+  const bin = single ? getChannel().config.cid : "mx";
   const display = single ? getChannel().config.display : "多渠道路由（模型池）";
-  const verbLines = CHANNEL_VERBS.map(([v, d]) => `  ${("<cid> " + v).padEnd(24)} ${d}`);
-  return `${cid} — ${display} OpenAI Chat Completion 网关（本地多渠道）
+  const verbLines = CHANNEL_VERBS.map(([v, d]) => `  ${v.padEnd(10)} ${d}`);
+  const cid = single ? bin : "traecn";
+  return `${bin} — ${display} OpenAI Chat Completion 网关（本地多渠道）
 
-用法: ${cid} <命令> [选项]
-      ${cid} <cid2> <动词> [参数]     # 对某个渠道操作，如 ${single ? cid : "traecn"} login
+用法: ${bin} <动词> [<cid>] [参数]
+      <cid> 一律写在动词之后，如 ${bin} login ${cid}
 
-网关（仓库级，服务全部渠道）:
+网关（仓库级，不带 <cid>）:
   start                     守护式启动网关（幂等：已在跑直接返回）
   stop                      停止守护式网关（读 PID 文件杀进程树，不碰第三方进程）
   restart                   重启守护式网关（stop + start）
-  status                    聚合状态：网关健康、逐渠道登录状态、守护 PID、凭证
-  logs [-f]                 查看网关日志尾部；-f 持续输出新日志（Ctrl+C 退出）
+  serve                     前台运行网关（内部命令，供调试）
 
 模型池（对外只有 2 个模型，请求落到哪家渠道由网关按账单已用量决定）:
   model list                池视图：2 个模型 → 候选渠道 + 已用量 + 冷却/暂不可用
   model usage [--refresh]   池账本；--refresh 立刻重查各渠道账单额度
 
-按渠道操作（<cid> 是已注册的渠道，如 workbuddyai）:
+按渠道操作（<cid> 是动词后的第一个位置参数，必须是已注册渠道名）:
 ${verbLines.join("\n")}
 
 其它:
-  paths [--all]             存储落点与文件（仓库级 = 全部渠道；只读）
-  accounts [...]            账号池（不加 <cid> 时跨渠道）
-  credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
-  login [list]              登录（-c/--channel <cid>，等价 <cid> login）；
-                            login list = 列出可登录的渠道与登录状态（只读，不需要网关）
   help                      显示本帮助（等价 -h / --help）
   version                   显示版本（等价 -v / --version）
 
@@ -62,17 +55,16 @@ ${verbLines.join("\n")}
   -f, --follow              logs：持续输出新增日志（等价 tail -f / docker logs -f）
   --realm <名>              login 的登录域（渠道自定义；单域渠道忽略）
   --wechat                  login：微信扫码登录（仅声明该方式的渠道，如 loomy）
-  --channel <cid>           只操作该渠道（等价把 <cid> 写成第一个参数）
-  --refresh                 <cid> models / model usage：强制重拉上游目录 / 重查账单
+  --refresh                 models <cid> / model usage：强制重拉上游目录 / 重查账单
                             （失败即报错退出）
   --all                     paths：统计工作区内全部渠道
   --workspace <dir>         paths：工作区根（默认从当前目录向上查找）
   --json                    输出 JSON（事件行 / 结构化结果）
   --quiet                   不输出过程信息
   --auto                    hook 场景：受 prefs 的 auto_start 开关约束
-  --force                   start 时已在跑也重启；login 时忽略已有凭证强制重登
+  --force                   start 时已在跑也重启
   --strict                  启动失败以非零码退出（默认始终返回 0）
-  --ensure-login            serve：未登录时打开浏览器授权
+  --ensure-login            serve：未登录时引导登录（授权链接打到日志）
   --force-login             serve：忽略已有凭证重新登录
   --verbose                 serve：打印每个上游请求
   --no-console              serve：不启动控制台 API 服务
@@ -80,20 +72,21 @@ ${verbLines.join("\n")}
   -v, --version             显示版本
 
 示例:
-  ${cid} start                          # 起网关（守护式，幂等）
-  ${cid} model list                     # 池视图：2 个模型分别会先落到哪家
-  ${cid} model usage --refresh          # 立刻重查各渠道账单额度并写进账本
-  ${cid} traecn models --refresh        # 强制重拉 traecn 的模型目录
-  ${cid} traecn login                   # 登录 traecn（浏览器授权）
-  ${cid} traecn billing                 # 看 traecn 的剩余额度 / 账单
-  ${cid} workbuddyai status --json       # 结构化状态（脚本用）
+  ${bin} start                          # 起网关（守护式，幂等）
+  ${bin} model list                     # 池视图：2 个模型分别会先落到哪家
+  ${bin} model usage --refresh          # 立刻重查各渠道账单额度并写进账本
+  ${bin} models ${cid} --refresh        # 强制重拉 ${cid} 的模型目录
+  ${bin} login ${cid}                   # 登录 ${cid}（把授权 URL 输出到终端，自行打开）
+  ${bin} relogin ${cid}                 # 重新授权 ${cid}（清掉旧凭据后重登）
+  ${bin} billing ${cid}                 # 看 ${cid} 的剩余额度 / 账单
+  ${bin} status ${cid} --json           # 结构化状态（脚本用）
 `;
 }
 
 /** 打印版本：`<入口名> <版本>（N 个渠道；node vX）`。 */
-function printVersion(cid?: string): void {
-  const label = cid ?? (channelCount() === 1 ? getChannel().config.cid : "mx");
-  console.log(`${label} ${version(cid)}（${channelCount()} 个渠道；node ${process.version}）`);
+function printVersion(): void {
+  const label = channelCount() === 1 ? getChannel().config.cid : "mx";
+  console.log(`${label} ${version()}（${channelCount()} 个渠道；node ${process.version}）`);
 }
 
 type RawValues = Record<string, string | boolean | undefined>;
@@ -133,7 +126,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     parsed = parseArgs({
       args: argv,
       allowPositionals: true,
-      strict: false,
+      // 严格模式：未知选项（含已移除的 `--cname` / `--channel` / `-c`）直接报错。
+      // 否则 parseArgs 会把未知长选项当布尔吃下、把它的值丢成位置参数 —— 用户以为
+      // 指定了渠道，实际拿到的是「全部渠道」，静默做错事。
+      strict: true,
       options: {
         addr: { type: "string" },
         "ui-port": { type: "string" },
@@ -141,7 +137,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         lines: { type: "string" },
         realm: { type: "string" },
         workspace: { type: "string" },
-        channel: { type: "string", short: "c" },
         json: { type: "boolean" },
         quiet: { type: "boolean" },
         auto: { type: "boolean" },
@@ -166,20 +161,19 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   }
 
   const o = parsed.values;
-  const cid = strOpt(o, "channel");
   if (boolOpt(o, "help")) {
     console.log(usage());
     return 0;
   }
   if (boolOpt(o, "version")) {
-    printVersion(cid);
+    printVersion();
     return 0;
   }
 
   const positionals = parsed.positionals;
   const command = positionals[0] ?? "serve";
-  const addr = strOpt(o, "addr") ?? defaultAddr(cid);
-  const uiPort = numOpt(o, "ui-port") ?? defaultUiPort(cid);
+  const addr = strOpt(o, "addr") ?? defaultAddr();
+  const uiPort = numOpt(o, "ui-port") ?? defaultUiPort();
 
   const ctx: groups.CommandContext = {
     json: boolOpt(o, "json"),
@@ -200,7 +194,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
   if (command === "version") {
-    printVersion(cid);
+    printVersion();
     return 0;
   }
 
@@ -218,7 +212,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return headless.runServe({
         addr,
         uiPort,
-        ...(cid !== undefined ? { cid } : {}),
         verbose: boolOpt(o, "verbose"),
         ensureLogin: boolOpt(o, "ensure-login"),
         forceLogin: boolOpt(o, "force-login"),
@@ -231,8 +224,15 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       // `login list`：列出可登录的渠道与登录状态（只读）
       if (positionals[1] === "list") return groups.listLogins(boolOpt(o, "json"));
       return headless.runLogin({
-        ...(cid !== undefined ? { cid } : {}),
-        force: boolOpt(o, "force"),
+        json: boolOpt(o, "json"),
+        realm: strOpt(o, "realm") ?? "auto",
+        wechat: boolOpt(o, "wechat"),
+      });
+
+    case "relogin":
+      // 重新授权（= 清掉现有凭据后走登录流程）；与 start/restart 的对称命名
+      return headless.runLogin({
+        force: true,
         json: boolOpt(o, "json"),
         realm: strOpt(o, "realm") ?? "auto",
         wechat: boolOpt(o, "wechat"),
@@ -242,7 +242,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return daemon.start({
         addr,
         uiPort,
-        ...(cid !== undefined ? { cid } : {}),
         waitMs: numOpt(o, "wait") !== undefined ? numOpt(o, "wait")! * 1000 : undefined,
         quiet: boolOpt(o, "quiet"),
         auto: boolOpt(o, "auto"),
@@ -253,14 +252,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     case "stop":
       return daemon.stop({
         quiet: boolOpt(o, "quiet"),
-        ...(cid !== undefined ? { cid } : {}),
       });
 
     case "restart":
       return daemon.restart({
         addr,
         uiPort,
-        ...(cid !== undefined ? { cid } : {}),
         waitMs: numOpt(o, "wait") !== undefined ? numOpt(o, "wait")! * 1000 : undefined,
         quiet: boolOpt(o, "quiet"),
         strict: boolOpt(o, "strict"),
@@ -271,29 +268,26 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         json: boolOpt(o, "json"),
         addr,
         uiPort,
-        ...(cid !== undefined ? { cid } : {}),
       });
 
     case "models":
       return daemon.models({
         json: boolOpt(o, "json"),
         addr,
-        ...(cid !== undefined ? { cid } : {}),
       });
 
     case "credits":
-      return daemon.credits({ json: boolOpt(o, "json"), ...(cid !== undefined ? { cid } : {}) });
+      return daemon.credits({ json: boolOpt(o, "json") });
 
     case "logs":
       return boolOpt(o, "follow")
-        ? daemon.followLogs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"), cid)
-        : daemon.logs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"), cid);
+        ? daemon.followLogs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"))
+        : daemon.logs(numOpt(o, "lines") ?? 40, boolOpt(o, "json"));
 
     case "paths":
       return report.runPaths({
         json: boolOpt(o, "json"),
         all: boolOpt(o, "all"),
-        ...(cid !== undefined ? { cid } : {}),
         ...(strOpt(o, "workspace") !== undefined ? { workspace: strOpt(o, "workspace")! } : {}),
       });
 
@@ -301,7 +295,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return accountCli.runAccounts({
         verb: parsed.positionals[1] ?? "list",
         ...(parsed.positionals[2] !== undefined ? { target: parsed.positionals[2] } : {}),
-        ...(cid !== undefined ? { cid } : {}),
         json: boolOpt(o, "json"),
         realm: strOpt(o, "realm") ?? "auto",
         force: boolOpt(o, "force"),

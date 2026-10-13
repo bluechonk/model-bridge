@@ -1,7 +1,7 @@
 /**
  * TRAE 模型目录：通道白名单过滤 + 硬过滤 + 合并优先级 + 兜底表。
  *
- * ## 通道白名单机制（docs/protocols/traecn/PROTOCOL.md §5.2，重点）
+ * ## 通道白名单机制（channels/traecn/docs/PROTOCOL.md §5.2，重点）
  *
  * 15 个通道的**顺序即优先级**，它同时是白名单与排序表：
  * 不在表内的通道**整组丢弃**（连同其独有模型）。
@@ -22,7 +22,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@model-bridge/gateway";
+import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /** 缺省通道（`function` 字段）。 */
 export const DEFAULT_FUNCTION = "solo_work_lite";

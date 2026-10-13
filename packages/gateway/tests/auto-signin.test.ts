@@ -19,12 +19,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { autoSignin, setChannel, signinLedger, type Channel } from "@model-bridge/gateway";
+import { autoSignin, setChannel, signinLedger, type Channel } from "@modelmux/gateway";
 
 const { claimedTodayPerLedger, readLedger } = signinLedger;
 
 async function withIsolatedRoot<T>(fn: () => Promise<T>): Promise<T> {
-  const root = mkdtempSync(join(tmpdir(), "mb-autosignin-"));
+  const root = mkdtempSync(join(tmpdir(), "modelmux-autosignin-"));
   const saved = process.env["MODELMUX_HOME"];
   process.env["MODELMUX_HOME"] = root;
   try {
@@ -58,7 +58,7 @@ function makeChannel(cid: string, behavior: Behavior): Channel {
       }
     : () => ({ accessToken: "t", uid: "u", domain: "example.test" });
   return {
-    config: { cid, display: cid, version: "0.0.0", legacyDirs: [] },
+    config: { cid, display: cid, version: "0.0.0" },
     cred: {
       DEFAULT_BASE_URL: "https://example.test",
       NotLoggedInError: class extends Error {},

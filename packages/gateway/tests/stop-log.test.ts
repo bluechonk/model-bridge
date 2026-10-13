@@ -20,7 +20,7 @@ describe("stop：终止记录写入日志", () => {
   let savedRoot: string | undefined;
 
   before(() => {
-    root = mkdtempSync(join(tmpdir(), "mb-stoplog-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-stoplog-"));
     savedRoot = process.env["MODELMUX_HOME"];
     process.env["MODELMUX_HOME"] = root;
   });

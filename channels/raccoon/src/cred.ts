@@ -2,7 +2,7 @@
  * Raccoon（商汤小浣熊）认证：手机号 AES-128-CFB 加密、网页登录（授权码）/短信登录、
  * 续期与凭据持久化。
  *
- * ## 本模块承载的渠道知识（每条都是实测结论，见 docs/protocols/raccoon/PROTOCOL.md）
+ * ## 本模块承载的渠道知识（每条都是实测结论，见 channels/raccoon/docs/PROTOCOL.md）
  *
  * 1. **手机号必须 AES-128-CFB 加密**（密钥 `senseraccoon2023`，16 字节 ⇒ AES-128，
  *    输出 `base64(iv ‖ ciphertext)`）。**不加密的后果**：`send_sms` 回
@@ -32,7 +32,7 @@ import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 
-import { credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
+import { credentialsPath, ensureDir, login as sharedLogin } from "@modelmux/gateway";
 
 /** 接口基址。 */
 export const DEFAULT_BASE_URL = "https://xiaohuanxiong.com";
@@ -306,7 +306,7 @@ export function newLoginState(): string {
  * 授权页 URL（官方桌面端「网页登录」入口，实测自 `electron/main/desktopLogin.js`）。
  *
  * ⚠ 不要用 `/login/mp?code=…`：那条只给**官方手机 App 扫码**用，网页端没有该路由，
- * 浏览器打开是死链（真机踩过，见 docs/protocols/raccoon/PROTOCOL.md §2.4）。
+ * 浏览器打开是死链（真机踩过，见 channels/raccoon/docs/PROTOCOL.md §2.4）。
  * 我们额外带 `state`（官方不带）；参考实现（agent2api / xiaohuanxiong2api）同样带。
  */
 export function authorizeUrl(state: string, baseOverride?: string): string {
@@ -451,19 +451,18 @@ export async function login(baseUrlOverride?: string, options: LoginOptions = {}
 
   const state = newLoginState();
   const url = authorizeUrl(state, baseUrlOverride);
-  // ⚠ onUrl 里带上**渠道特有**指引：共享层的 onUrl 文案写的是「浏览器弄完自动继续」，
+  // ⚠ onUrl 里带上**渠道特有**指引：共享层的 onUrl 文案写的是「授权后自动继续」，
   //   那对能轮询的渠道成立，对 raccoon 不成立 —— 它要求用户把回调 URL 粘贴回来。
   //   不覆盖这句，用户会等一个永远不会发生的「自动继续」（真机踩过）。
   onUrl?.(
     `${url}\n` +
       "  ── Raccoon-specific: this channel does NOT continue automatically. ──\n" +
-      "  1) Log in with WeChat / SMS / password in the opened browser page.\n" +
+      "  1) Open the URL above in your browser and log in with WeChat / SMS / password.\n" +
       "  2) After login the browser jumps to an `office-raccoon://auth/callback?code=…` URL\n" +
       "     (or shows an error page — that is EXPECTED, the protocol is not registered).\n" +
       "  3) Copy that ENTIRE url from the address bar and paste it back into this terminal,\n" +
       "     then press Enter.",
   );
-  if (process.env["RACCOON_NO_BROWSER"] !== "1") sharedLogin.openBrowser(url);
   onStatus?.(
     "Waiting for the pasted callback url (office-raccoon://auth/callback?code=…); press Enter after pasting",
   );

@@ -5,7 +5,7 @@
  * ## 为什么不直接 import
  *
  * 共享层（gateway / daemon / headless / auth-flow）不含渠道知识，但运行期要调用
- * 渠道独有的实现。现在共享模块只认这里的 `Channel` 接口；每个 bridge 在入口处
+ * 渠道独有的实现。现在共享模块只认这里的 `Channel` 接口；每个渠道包在入口处
  * 把自己的模块组装成一个 `Channel` 并用 `setChannel()` 注册，共享包不 import
  * 任何渠道模块。
  *
@@ -14,7 +14,7 @@
  *
  * ## 生命周期
  *
- * bridge 的入口（`src/channel.ts`）在模块加载时调用 `setChannel()`；
+ * 渠道包的入口（`src/channel.ts`）在模块加载时调用 `setChannel()`；
  * 共享模块在**函数被调用时**（不是模块加载时）通过 `getChannel()` 取用，
  * 所以注册顺序只需早于第一次网络/路径操作即可。
  */
@@ -236,12 +236,12 @@ export interface BillingModule {
 }
 
 /**
- * 渠道的静态配置：cid / 展示名 / 版本 / 端口与历史名清单集中在一个对象里。
+ * 渠道的静态配置：cid / 展示名 / 版本 / 端口集中在一个对象里。
  */
-export interface BridgeConfig {
-  /** 渠道 id，如 `zcode`。用于日志前缀、服务名、CLI 名，以及统一存储根下的**分层名**。 */
+export interface ChannelConfig {
+  /** 渠道 id，如 `catpaw`。用于日志前缀、服务名、CLI 名，以及统一存储根下的**分层名**。 */
   readonly cid: string;
-  /** 展示名，如 `ZCode`。 */
+  /** 展示名，如 `CatPaw`。 */
   readonly display: string;
   /** CLI 版本号。 */
   readonly version: string;
@@ -255,13 +255,13 @@ export interface BridgeConfig {
   readonly defaultAddr: string;
   /** 单渠道独立运行时的控制台 API 默认端口（仓库级固定用 `REPO_DEFAULT_UI_PORT`）。 */
   readonly uiPort: number;
-  /** 抓包落盘目录的环境变量名，如 `ZCODE_DEBUG_DUMP`（值 `1` 表示用渠道内 `debug/`）。 */
+  /** 抓包落盘目录的环境变量名，如 `CATPAW_DEBUG_DUMP`（值 `1` 表示用渠道内 `debug/`）。 */
   readonly debugDumpEnv: string;
 }
 
 /** 一个渠道的完整装配：配置 + 四个渠道独有模块。 */
 export interface Channel {
-  readonly config: BridgeConfig;
+  readonly config: ChannelConfig;
   readonly cred: CredModule;
   readonly upstream: UpstreamModule;
   readonly catalog: CatalogModule;
@@ -270,7 +270,7 @@ export interface Channel {
 
 const registry = new Map<string, Channel>();
 
-/** 注册（或替换）一个渠道。bridge 入口加载时调用；同 cid 重复注册即替换。 */
+/** 注册（或替换）一个渠道。渠道包的 `channel.ts` 加载时调用；同 cid 重复注册即替换。 */
 export function setChannel(channel: Channel): void {
   registry.set(channel.config.cid, channel);
 }
@@ -294,14 +294,14 @@ export function channelFor(cid: string): Channel {
  * 取渠道。
  *
  * - 传 `cid`：取该渠道（未注册抛错）。
- * - 不传：**仅在恰好注册了一个渠道时**返回它（单渠道模式，各 bridge 的 CLI 就是这样）。
+ * - 不传：**仅在恰好注册了一个渠道时**返回它（单渠道模式，各渠道包的 CLI 就是这样）。
  *   注册了多个渠道时必须显式传 `cid` —— 否则无法判断请求该发给谁。
  */
 export function getChannel(cid?: string): Channel {
   if (cid !== undefined) return channelFor(cid);
   if (registry.size === 0) {
     throw new Error(
-      "channel not registered: import the bridge's channel.ts (setChannel) before using the gateway runtime",
+      "channel not registered: import the channel package (its channel.ts calls setChannel) before using the gateway runtime",
     );
   }
   if (registry.size > 1) {

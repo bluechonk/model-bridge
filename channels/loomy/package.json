@@ -1,9 +1,9 @@
 {
-  "name": "loomy-bridge",
+  "name": "@modelmux/loomy",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Loomy 的本地 OpenAI Chat Completion 透明代理网关（TypeScript，无窗口，model-bridge 渠道）",
+  "description": "Loomy 的本地 OpenAI Chat Completion 透明代理网关（TypeScript，无窗口，modelmux 渠道）",
   "engines": {
     "node": ">=22.6"
   },
@@ -38,6 +38,6 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@model-bridge/gateway": "*"
+    "@modelmux/gateway": "*"
   }
 }

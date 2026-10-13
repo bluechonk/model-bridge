@@ -19,19 +19,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 import * as paths from "../dist/paths.js";
 
 /** 造一个只关心落点的假渠道（不注册 4 个模块 —— 本测试不走它们）。 */
-function useChannel(cid: string, extra: Partial<BridgeConfig> = {}): BridgeConfig {
-  const config: BridgeConfig = {
+function useChannel(cid: string, extra: Partial<ChannelConfig> = {}): ChannelConfig {
+  const config: ChannelConfig = {
     cid,
     display: cid,
     version: "0.0.0",
     defaultAddr: "127.0.0.1:1",
     uiPort: 2,
-    legacyDirs: [`.${cid}-bridge`, `.${cid}2api`],
-    legacyEnvVars: [`${cid.toUpperCase()}_HOME`],
     debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
     ...extra,
   };
@@ -43,7 +41,7 @@ function useChannel(cid: string, extra: Partial<BridgeConfig> = {}): BridgeConfi
 
 /** 每个用例一个独立存储根（paths 按 (root,cid) 缓存收拢结果）。 */
 function withRoot(fn: (root: string) => void): void {
-  const root = mkdtempSync(join(tmpdir(), "mb-storage-"));
+  const root = mkdtempSync(join(tmpdir(), "modelmux-storage-"));
   const saved = process.env["MODELMUX_HOME"];
   process.env["MODELMUX_HOME"] = root;
   try {

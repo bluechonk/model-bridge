@@ -21,19 +21,18 @@ import {
   removeAccount,
   syncPool,
 } from "../dist/account-pool.js";
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 import { runLogin } from "../dist/headless.js";
 import * as paths from "../dist/paths.js";
 
 /** 合成渠道：cred 只认 uid/domain/accessToken（契约字段），落盘在 credentials.json。 */
 function makeChannel(cid: string): Channel {
-  const config: BridgeConfig = {
+  const config: ChannelConfig = {
     cid,
     display: `Synth ${cid}`,
     version: "0.0.0",
     defaultAddr: "127.0.0.1:1",
     uiPort: 2,
-    legacyDirs: [`.${cid}-bridge`],
     debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
   };
   const load = (): Record<string, unknown> => {
@@ -88,7 +87,7 @@ const CID = "alpha";
 /** 在独立临时根里跑一段用例（池子按路径缓存，故每例一个新根）。 */
 function withRoot(fn: (root: string) => void | Promise<void>): () => Promise<void> {
   return async () => {
-    const root = mkdtempSync(join(tmpdir(), "mb-accounts-"));
+    const root = mkdtempSync(join(tmpdir(), "modelmux-accounts-"));
     const saved = process.env["MODELMUX_HOME"];
     process.env["MODELMUX_HOME"] = root;
     clearChannels();
@@ -265,8 +264,8 @@ describe("5. login 幂等提示", () => {
       console.log = original;
     }
     assert.ok(
-      lines.some((l) => l.includes("--force")),
-      `应提示重登用 --force（实际输出: ${lines.join(" | ")}）`,
+      lines.some((l) => l.includes("relogin")),
+      `应提示重登用 relogin（实际输出: ${lines.join(" | ")}）`,
     );
   }));
 });

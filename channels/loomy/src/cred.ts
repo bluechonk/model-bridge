@@ -1,7 +1,7 @@
 /**
  * Loomy（讯飞）认证：HMAC-SHA1 账号签名、短信/微信登录、凭据持久化与「续期=探测」。
  *
- * ## 本模块承载的渠道知识（每条都是实测结论，见 docs/protocols/loomy/PROTOCOL.md）
+ * ## 本模块承载的渠道知识（每条都是实测结论，见 channels/loomy/docs/PROTOCOL.md）
  *
  * 1. **签名是 9 段 `\n` 连接**，后两段（SignedHeaders / CanonicalizedHeaders）
  *    恒为空串 ⇒ 最终字符串**以两个换行结尾**。这是 `join("\n")` 在 9 个元素上的
@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 
-import { credentialsPath, ensureDir, login as sharedLogin } from "@model-bridge/gateway";
+import { credentialsPath, ensureDir, login as sharedLogin } from "@modelmux/gateway";
 import * as upstream from "./upstream.js";
 
 /** 账号端点基址（短信登录走这里）。 */

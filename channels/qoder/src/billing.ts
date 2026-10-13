@@ -20,7 +20,7 @@
  * 不能就此报「今天已领」。
  */
 
-import type { SigninModule, SigninOutcome, SigninStatus } from "@model-bridge/gateway";
+import type { SigninModule, SigninOutcome, SigninStatus } from "@modelmux/gateway";
 
 import * as cred from "./cred.js";
 

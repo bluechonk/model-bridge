@@ -472,5 +472,5 @@ deepseek-v4-flash, deepseek-v4-pro, deepseek-v4.1-flash
    `unknown tool ""`
 11. **`usage` 的缓存字段**：`prompt_tokens_details.cached_tokens` 或 `prompt_cache_hit_tokens`；
    `inputTokens` 只计未命中部分
-12. **`openBrowser` 在 Windows 下必须用 `cmd /c start "" "{url}"` + `windowsVerbatimArguments: true`**
-   （否则 `&` 被当命令分隔符截断 URL）
+12. **授权页由用户自行打开**：CLI 只打印授权 URL（终端里 Ctrl+点击 / 复制），
+   不自动拉起浏览器（`openBrowser` 已于 2026-10-13 移除）

@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 import * as gateway from "../dist/gateway.js";
 import * as paths from "../dist/paths.js";
 
@@ -77,7 +77,7 @@ async function fakeUpstream(queuedTimes: number): Promise<{ server: Server; url:
 
 /** 合成渠道：custom 线型 + 翻译器解信封 + isQueueError（模拟 qoder）。 */
 function makeChannel(): Channel {
-  const config: BridgeConfig = {
+  const config: ChannelConfig = {
     cid: CID,
     display: "Queue Chan",
     version: "0.0.0",
@@ -208,7 +208,7 @@ describe("排队重试（10605）", () => {
   const logs: string[] = [];
 
   before(async () => {
-    root = mkdtempSync(join(tmpdir(), "mb-queue-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-queue-"));
     process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream(2); // 前 2 次排队，第 3 次成功
     process.env["MB_TEST_UPSTREAM"] = upstream.url;
@@ -261,7 +261,7 @@ describe("上游 HTTP 200 + 流内业务错误帧（非排队）", () => {
   const logs: string[] = [];
 
   before(async () => {
-    root = mkdtempSync(join(tmpdir(), "mb-instream-err-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-instream-err-"));
     process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstreamError();
     process.env["MB_TEST_UPSTREAM"] = upstream.url;
@@ -314,7 +314,7 @@ describe("排队探测消费掉的帧一个都不能丢（回归）", () => {
   const logs: string[] = [];
 
   before(async () => {
-    root = mkdtempSync(join(tmpdir(), "mb-frame-split-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-frame-split-"));
     process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstreamFrameSplit();
     process.env["MB_TEST_UPSTREAM"] = upstream.url;

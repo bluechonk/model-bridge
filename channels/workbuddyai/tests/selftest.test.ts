@@ -1,5 +1,5 @@
 /**
- * workbuddyai-bridge 自检（离线，不出网）。
+ * @modelmux/workbuddyai 自检（离线，不出网）。
  *
  * 覆盖：
  *  1. 路径与目录迁移
@@ -24,7 +24,7 @@ const HOME = mkdtempSync(join(tmpdir(), "wb-selftest-"));
 process.env["MODELMUX_HOME"] = HOME;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
-const { paths, sseStream: sse, gateway } = await import("@model-bridge/gateway");
+const { paths, sseStream: sse, gateway } = await import("@modelmux/gateway");
 await import("../dist/channel.js");
 const catalog = await import("../dist/catalog.js");
 const cred = await import("../dist/cred.js");

@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { clearChannels, setChannel, type BridgeConfig, type Channel } from "../dist/channel.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
 import * as gateway from "../dist/gateway.js";
 import * as poolUsage from "../dist/pool-usage.js";
 
@@ -53,13 +53,12 @@ async function fakeUpstream(): Promise<{ server: Server; url: string; captured: 
 
 /** 合成渠道：凭证走文件，chatUrl 指向假上游（token 决定该渠道的命运）。 */
 function makeChannel(cid: string, token: string, upstreamUrl: string): Channel {
-  const config: BridgeConfig = {
+  const config: ChannelConfig = {
     cid,
     display: `Synth ${cid}`,
     version: "0.0.0",
     defaultAddr: "127.0.0.1:1",
     uiPort: 2,
-    legacyDirs: [`.${cid}-bridge`],
     debugDumpEnv: `${cid.toUpperCase()}_DEBUG_DUMP`,
   };
   return {
@@ -117,7 +116,7 @@ describe("渠道级冷却：失败的渠道下一次请求被跳过", () => {
   const logs: string[] = [];
 
   before(async () => {
-    root = mkdtempSync(join(tmpdir(), "mb-cooldown-"));
+    root = mkdtempSync(join(tmpdir(), "modelmux-cooldown-"));
     process.env["MODELMUX_HOME"] = root;
     upstream = await fakeUpstream();
 

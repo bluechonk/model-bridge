@@ -13,7 +13,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { channelCount, channelFor, getChannel, type BridgeConfig } from "./channel.js";
+import { channelCount, channelFor, getChannel, type ChannelConfig } from "./channel.js";
 import { FILES, SUBDIRS, channelDirFor, rootDirFor } from "./paths.js";
 import { findWorkspaceRoot } from "./stale-build.js";
 
@@ -52,7 +52,7 @@ function describe(base: string, name: string): EntryReport {
 }
 
 /** 逐渠道落点报告（只读）。 */
-export function inspect(config: BridgeConfig): ChannelReport {
+export function inspect(config: ChannelConfig): ChannelReport {
   const root = rootDirFor(config);
   const dir = channelDirFor(config);
   const dirExists = existsSync(dir);
@@ -87,13 +87,13 @@ export function expandWorkspaces(root: string, start: string): string[] {
 
   const out: string[] = [];
   for (const pattern of patterns) {
-    if (!pattern.endsWith("-bridge") && !pattern.includes("*")) continue; // 只关心渠道包
     if (pattern.includes("*")) {
       const base = join(root, dirname(pattern));
       if (!existsSync(base)) continue;
       for (const name of readdirSync(base)) {
         const dir = join(base, name);
-        if (name.endsWith("-bridge") && existsSync(join(dir, "package.json"))) out.push(dir);
+        // 是不是渠道包由 loadConfig 判定（能否导出 config），不按包名前缀猜
+        if (existsSync(join(dir, "package.json"))) out.push(dir);
       }
     } else {
       const dir = join(root, pattern);
@@ -105,12 +105,12 @@ export function expandWorkspaces(root: string, start: string): string[] {
 }
 
 /** 载入渠道包的 config（优先已构建的 dist，其次源码 TS）。 */
-async function loadConfig(pkgDir: string): Promise<BridgeConfig | null> {
+async function loadConfig(pkgDir: string): Promise<ChannelConfig | null> {
   for (const rel of ["dist/channel.js", "src/channel.ts"]) {
     const file = join(pkgDir, rel);
     if (!existsSync(file)) continue;
     try {
-      const mod = (await import(pathToFileURL(file).href)) as { config?: BridgeConfig };
+      const mod = (await import(pathToFileURL(file).href)) as { config?: ChannelConfig };
       if (mod.config) return mod.config;
     } catch {
       /* 试下一个 */

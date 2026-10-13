@@ -1,7 +1,7 @@
 /**
  * TRAE 额度与签到：签到三端点（status / claim / usage），全部走 `api.trae.cn`。
  *
- * ## 实测要点（docs/protocols/traecn/PROTOCOL.md §6）
+ * ## 实测要点（channels/traecn/docs/PROTOCOL.md §6）
  *
  * - **claim 的 body 是 `{}`**（不是 `{"req_source":2}`），且成功响应只有
  *   `{"code":0,"message":"success"}` —— **不含积分数**，必须补查一次 `status`
@@ -324,7 +324,7 @@ export async function fetchCredits(
 
 // ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；见 SigninModule 契约）─────────
 
-import type { SigninModule } from "@model-bridge/gateway";
+import type { SigninModule } from "@modelmux/gateway";
 /**
  * 签到 / 领取能力（`<cid> checkin`）。
  *

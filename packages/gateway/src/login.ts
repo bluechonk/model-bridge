@@ -3,10 +3,13 @@
  *
  * ## 边界
  *
- * 本模块**只放渠道无关的原语**：打开浏览器、URL 主机名、JWT 解析、时间归一化、
+ * 本模块**只放渠道无关的原语**：URL 主机名、JWT 解析、时间归一化、
  * 带超时的 fetch、编码工具、令牌前缀。
  * **不含**任何渠道的 URL 构建 / 请求头 / 响应解析 —— 那些是渠道知识，留在各渠道
  * 的 `cred.ts`。
+ *
+ * 登录链接一律由调用方打印给用户（终端里可 Ctrl+点击 / 复制），
+ * **不自动打开浏览器**（不代用户做决定，也避免例行命令弹窗）。
  *
  * ⚠ 各渠道的 `cred.ts` 保持自己的导出签名不变（薄包装转发到这里），
  * 以免破坏已有的 import 站点与测试引用。
@@ -17,72 +20,7 @@
  * `login-flow.ts`；本模块是它们与各渠道共同依赖的地基。
  */
 
-import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-
-// ── 浏览器 ────────────────────────────────────────────────────────────────────
-
-/**
- * 用系统默认浏览器打开 URL。
- *
- * Windows 下用 **`rundll32 url.dll,FileProtocolHandler <url>`**，不用 `cmd /c start`。
- *
- * ## 为什么不用 `start`（实测 2026-10-08，本机逐一验证）
- *
- * `start` 有两个叠加的坑，且**修不完**：
- *
- * 1. URL 里的 `&` 是 **cmd 的命令分隔符**。Node 默认按 C 运行时规则转义参数，
- *    而那套规则对 cmd.exe **无效** —— cmd 在第一个 `&` 处截断命令行。
- *    实测 `spawn("cmd", ["/c","start","",url])` 时浏览器只拿到 `...?sid=xxx`，
- *    `state`/`redirect` 全丢，登录页报「未获取到登录票据」。
- * 2. 补上 `windowsVerbatimArguments` + 自己加引号后，**参数拼接是对的**
- *    （`echo` 验证：URL 完整、无 stderr），但**浏览器根本不再被启动**
- *    （本地服务器 0 次请求）。三种 `start` 变体（含不加空标题的）都是 0 次。
- *
- * 而 `rundll32 url.dll,FileProtocolHandler <url>` 实测**成功打开且 URL 完整**
- * （本地服务器收到 `?a=1&b=2&c=3`）。它不经 cmd，也就没有分隔符问题 ——
- * 参考实现（`catpaw2api` 的 `openBrowser`）用的正是这条路。
- *
- * 打不开浏览器不影响登录：调用方继续轮询/等回调，用户可手动复制链接。
- */
-export function openBrowser(url: string): void {
-  try {
-    const spec = browserCommand(url);
-    const child = spawn(spec.cmd, spec.args, {
-      detached: true,
-      stdio: "ignore",
-      ...(spec.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
-      ...(spec.windowsHide ? { windowsHide: true } : {}),
-    });
-    child.unref();
-  } catch {
-    /* 打不开浏览器不影响登录流程 */
-  }
-}
-
-/** 打开浏览器的命令描述（纯函数，便于断言「URL 没被截断」）。 */
-export interface BrowserCommand {
-  cmd: string;
-  args: string[];
-  /** Windows 下为 true 时按字面拼命令行（不经 Node 的转义规则）。 */
-  windowsVerbatimArguments?: boolean;
-  windowsHide?: boolean;
-}
-
-/**
- * 构造「用默认浏览器打开 url」的命令行。
- *
- * 单独抽成纯函数是为了**可断言**：Windows 上「URL 被截断 / 浏览器没启动」
- * 这两类 bug 只有真实执行才暴露，纯函数至少能锁住「URL 原样传参」这一半。
- */
-export function browserCommand(url: string, platform: NodeJS.Platform = process.platform): BrowserCommand {
-  if (platform === "win32") {
-    // 不经 cmd：`&` 不是分隔符，URL 原样作为单个 argv 传入。
-    return { cmd: "rundll32", args: ["url.dll,FileProtocolHandler", url], windowsHide: true };
-  }
-  if (platform === "darwin") return { cmd: "open", args: [url] };
-  return { cmd: "xdg-open", args: [url] };
-}
 
 // ── URL ───────────────────────────────────────────────────────────────────────
 

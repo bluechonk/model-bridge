@@ -1,5 +1,5 @@
 /**
- * codearts-bridge 自检（**完全离线**，不出网）。
+ * @modelmux/codearts 自检（**完全离线**，不出网）。
  *
  * 覆盖：
  *  1. 路径与目录迁移
@@ -31,7 +31,7 @@ process.env["MODELMUX_HOME"] = HOME;
 process.env["DSH_CODEARTS_CACHE_DIR"] = CACHE;
 
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
-const { paths, sseStream: sse, gateway, accounts } = await import("@model-bridge/gateway");
+const { paths, sseStream: sse, gateway, accounts } = await import("@modelmux/gateway");
 await import("../dist/channel.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");

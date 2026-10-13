@@ -1,9 +1,9 @@
-# workbuddy-bridge（国内版 CodeBuddy）
+# @modelmux/workbuddy（国内版 CodeBuddy）
 
 WorkBuddy **国内版**（腾讯 CodeBuddy，`codebuddy.ai`）的本地 OpenAI Chat Completion
-透明代理网关。**无窗口（headless）**：状态与操作全部走 `mb` CLI（仓库级 `modelmux`）。
+透明代理网关。**无窗口（headless）**：状态与操作全部走 `mx` CLI（仓库级 modelmux）。
 
-> **国际版是另一条渠道**：`workbuddyai`（`workbuddy.ai`），见 [`workbuddyai.md`](workbuddyai.md)。
+> **国际版是另一条渠道**：`workbuddyai`（`workbuddy.ai`），见 [`workbuddyai/docs/README.md`](../../workbuddyai/docs/README.md)。
 > 两者的登录协议、上游约束、SSE 处理**完全一致**（代码有意重复，见下），差别只有域名、
 > 模型目录与凭证落点。
 
@@ -44,11 +44,10 @@ node channels/workbuddy/dist/cli.js --help    # 单渠道 CLI（调试 / 回归�
 `credentials.json`（0600）、`upstream.json`、`prefs.json`、`gateway.pid`、`gateway.log`，
 外加 `cache/`、`state/`、`debug/`。
 
-本渠道是拆分后**新建**的，**没有历史目录**：`legacyDirs` / `legacyEnvVars` /
-`legacyDebugDumpEnv` 全为空。特别地**不认领** `~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
-`WORKBUDDY_DEBUG_DUMP` —— 那些是国际版（`workbuddyai`）的旧名字，认领会把国际凭证
-迁进国内渠道。详见 [`workbuddyai.md`](workbuddyai.md) 与
-[`../STORAGE-CONVENTION.md`](../STORAGE-CONVENTION.md)。
+本渠道是拆分后**新建**的，没有历史目录：`~/.workbuddy-bridge/`、`WORKBUDDY_HOME`、
+`WORKBUDDY_DEBUG_DUMP` 这些「裸 workbuddy」旧名字属于国际版（`workbuddyai`），
+本渠道不读它们。详见 [`workbuddyai/docs/README.md`](../../workbuddyai/docs/README.md) 与
+[`docs/STORAGE-CONVENTION.md`](../../../docs/STORAGE-CONVENTION.md)。
 
 ## 模型 id
 
