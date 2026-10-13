@@ -290,6 +290,32 @@ export function removeAccount(
   return { removed: true, wasActive, loggedOut };
 }
 
+/**
+ * 清掉某渠道的**全部**凭据（自动登出）：`credentials.json` + 池内全部账号。
+ *
+ * 调用场景：网关确认该渠道凭据已被上游拒绝且刷新不可用（`auth_exhausted`）——
+ * 死凭据继续留在盘上只会让「看起来已登录」的渠道反复空转（每次请求白试一次
+ * 鉴权）。清成干净的未登录态后：池路由不再把它当候选、`login list` 如实显示
+ * 未登录、自动签到跳过它；用户重新登录即恢复。
+ *
+ * 返回实际清掉的账号数与凭证文件是否被移除，供日志如实汇报。
+ */
+export function purgeCredentials(cid?: string): { accounts: number; credential: boolean } {
+  const index = readIndex(cid);
+  let accounts = 0;
+  for (const account of index.accounts) {
+    if (removeAccount(account.key, cid).removed) accounts += 1;
+  }
+  let credential = false;
+  try {
+    credential = existsSync(credentialsPath(cid));
+    rmSync(credentialsPath(cid), { force: true });
+  } catch {
+    /* 删不掉：如实报告（credential 保持探测值） */
+  }
+  return { accounts, credential };
+}
+
 /** 进程内的健康度缓存：稳态下每个请求不读盘（仅状态变化时写索引）。 */
 const healthCache = new Map<string, AccountHealth>();
 

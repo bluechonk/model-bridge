@@ -180,7 +180,7 @@ export async function runLogin(options: {
       } else {
         console.log(
           `[login] 已有凭据${uid ? `（uid ${uid}）` : ""}，未做任何操作；` +
-            `要重新授权（如 token 过期）加 --force：mb ${cid ?? "<cid>"} login --force`,
+            `要重新授权（如 token 过期）加 --force：mb login -c ${cid ?? "<cid>"} --force`,
         );
       }
       return 0;
