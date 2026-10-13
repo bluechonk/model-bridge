@@ -163,6 +163,30 @@ export async function runLogin(options: {
   const ui = new StdoutLoginUi(json, cid);
   if (json) emit({ event: "start", mode: "login", force, realm, ...(cid ? { cid } : {}) });
 
+  // 已有凭据且未 force：login 是幂等的，不会重新授权 —— 必须明确说清，
+  // 否则用户看到 "done" 以为重登成功，实际用的还是旧凭据（实测踩过：
+  // codearts token 过期后 `login` 秒回 done，浏览器根本没开）。
+  if (!force) {
+    let existing: ReturnType<typeof cred.load> | null = null;
+    try {
+      existing = runInChannel(target.config.cid, () => cred.load());
+    } catch {
+      /* 未登录：走正常登录流程 */
+    }
+    if (existing) {
+      const uid = (existing as { uid?: string }).uid ?? "";
+      if (json) {
+        emit({ event: "done", ok: true, already_logged_in: true, note: "use --force to re-authorize" });
+      } else {
+        console.log(
+          `[login] 已有凭据${uid ? `（uid ${uid}）` : ""}，未做任何操作；` +
+            `要重新授权（如 token 过期）加 --force：mb ${cid ?? "<cid>"} login --force`,
+        );
+      }
+      return 0;
+    }
+  }
+
   const ok = await runInChannel(target.config.cid, () =>
     authFlow.ensureLogin(ui, {
       interactive: true,

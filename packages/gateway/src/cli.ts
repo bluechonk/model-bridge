@@ -56,6 +56,7 @@ ${verbLines.join("\n")}
   credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
   login [list]              登录（可加 --channel <cid>，等价 <cid> login）；
                             login list = 列出可登录的渠道与登录状态（只读，不需要网关）
+  logout [--channel <cid>]  登出：移除凭证与账号池条目（过期/失效凭证的出口）
   help                      显示本帮助（等价 -h / --help）
   version                   显示版本（等价 -v / --version）
 
@@ -249,6 +250,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         json: boolOpt(o, "json"),
         realm: strOpt(o, "realm") ?? "auto",
         wechat: boolOpt(o, "wechat"),
+      });
+
+    case "logout":
+      return groups.runLogout({
+        ...(cid !== undefined ? { cid } : {}),
+        json: boolOpt(o, "json"),
       });
 
     case "start":
