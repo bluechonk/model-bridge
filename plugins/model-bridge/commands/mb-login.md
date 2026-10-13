@@ -31,8 +31,9 @@ skills: model-bridge-gateway
 | traecn | 浏览器授权页 + 本地回调（端口 **18080**，被占用则回退随机端口） | 回调**直接回传 token**（不是 `?code=`）；仅 CN 域 |
 
 - `--force` 强制重登；`--wechat` 仅 loomy 支持。
-- **登录是幂等的**：已有凭据时 `mb <cid> login` 不会重新授权（会明确提示），
-  token 过期/失效时加 `--force` 重登；或先 `mb <cid> logout` 清掉坏凭据再登。
+- **登录是幂等的**：已有凭据时 `mb login -c <cid>` 不会重新授权（会明确提示），
+  token 过期/失效时加 `--force` 重登。token 被上游拒绝且刷新无救时，网关会**自动登出**
+  （清掉死凭据，渠道回到未登录态，不再空转请求），重新登录即恢复。
 - 登录是**唯一需要用户动手**的步骤；登录成功后账号自动入池（`mb accounts` 可见，
   切换账号用 `mb accounts use <key> --channel <cid>`，不需要再授权）。
 - 单渠道的存储落点 / 特有约束 / 排障：`docs/bridges/<cid>.md`。

@@ -54,9 +54,8 @@ ${verbLines.join("\n")}
   paths [--all]             存储落点与文件（仓库级 = 全部渠道；只读）
   accounts [...]            账号池（不加 <cid> 时跨渠道）
   credits                   额度查询（等价 <cid> billing；可加 --channel <cid>）
-  login [list]              登录（可加 --channel <cid>，等价 <cid> login）；
+  login [list]              登录（-c/--channel <cid>，等价 <cid> login）；
                             login list = 列出可登录的渠道与登录状态（只读，不需要网关）
-  logout [--channel <cid>]  登出：移除凭证与账号池条目（过期/失效凭证的出口）
   help                      显示本帮助（等价 -h / --help）
   version                   显示版本（等价 -v / --version）
 
@@ -149,7 +148,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         lines: { type: "string" },
         realm: { type: "string" },
         workspace: { type: "string" },
-        channel: { type: "string" },
+        channel: { type: "string", short: "c" },
         status: { type: "boolean" },
         "daily-only": { type: "boolean" },
         "fail-if-unclaimed": { type: "boolean" },
@@ -250,12 +249,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         json: boolOpt(o, "json"),
         realm: strOpt(o, "realm") ?? "auto",
         wechat: boolOpt(o, "wechat"),
-      });
-
-    case "logout":
-      return groups.runLogout({
-        ...(cid !== undefined ? { cid } : {}),
-        json: boolOpt(o, "json"),
       });
 
     case "start":

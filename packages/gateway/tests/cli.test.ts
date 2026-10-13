@@ -248,6 +248,18 @@ describe("1. 常见命令与帮助", () => {
     assert.ok(r.err.includes("未知命令"));
   });
 
+  it("-c 是 --channel 的短参（同一渠道作用域）", async () => {
+    const short = await run(["status", "-c", "alpha", "--json"]);
+    assert.equal(short.code, 0, short.err);
+    const long = await run(["status", "--channel", "alpha", "--json"]);
+    assert.equal(long.code, 0, long.err);
+    // 两种写法作用于同一渠道作用域：daemon 段报告同一组 channels
+    const a = JSON.parse(short.out) as { gateway: { channels: string[] } };
+    const b = JSON.parse(long.out) as { gateway: { channels: string[] } };
+    assert.deepEqual(a.gateway.channels, b.gateway.channels);
+    assert.deepEqual(a.gateway.channels, ["alpha"], "作用域应是单个渠道");
+  });
+
   it("logs --lines 0 不打印历史行（回归：slice(-0) 曾把整个日志打出来）", async () => {
     writeFileSync(join(root, "gateway.log"), "老日志甲\n老日志乙\n", "utf8");
     const zero = await run(["logs", "--lines", "0"]);

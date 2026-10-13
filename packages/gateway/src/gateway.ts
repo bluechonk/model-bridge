@@ -46,7 +46,7 @@ import {
   type UpstreamConfig,
 } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
-import { activateAccount, markActiveHealth, pickAccount, readIndex } from "./account-pool.js";
+import { activateAccount, markActiveHealth, pickAccount, purgeCredentials, readIndex } from "./account-pool.js";
 import { resolvePoolModel } from "./model-pool.js";
 import { asPoolModel, poolCandidates, POOL_MODELS, POOL_MODEL_META } from "./pool-targets.js";
 import { isCooling, maybeRefreshBilling, noteFailure, noteSuccess, scoreOf } from "./pool-usage.js";
@@ -502,6 +502,17 @@ async function callUpstream(
     if (activeKey) tried.push(activeKey);
     const next = pickAccount(cid, tried);
     if (!next) {
+      // 所有账号都被拒且无后备 → 凭据已死。**自动登出**（清 credentials.json + 池），
+      // 否则死凭据会让渠道每次请求都白试一轮鉴权、还「看起来已登录」。
+      // 清成未登录态后：池路由按凭据过滤跳过它（用户重新登录即恢复）。
+      // ⚠ 只在「池内已无可试账号」这条确定性路径做；撞 MAX_ACCOUNT_ATTEMPTS
+      // 上限退出时池里可能还有未试账号，不能误清。
+      const purged = purgeCredentials(cid);
+      logger(
+        `auto logout (${cid}): token rejected by upstream and refresh unusable; ` +
+          `removed ${purged.accounts} pool account(s)${purged.credential ? " + stored credential" : ""}; ` +
+          `run \`mb login -c ${cid}\` to re-authorize`,
+      );
       return {
         kind: "auth_exhausted",
         error: `${upstream.DISPLAY_NAME} rejected the token and no other account in the pool is available; please log in again`,
@@ -581,16 +592,28 @@ async function handleChat(
     return;
   }
 
-  // 选候选：**冷却中的渠道硬排除**（失败后暂不可用，下一次请求不走它），
-  // 按账本排序（账单已用量降序）后最多试 maxPoolAttempts() 个。
-  // 全池都在冷却时回退到完整候选——冷却只是短暂状态，服务不能因此不可用。
+  // 选候选：**未登录的渠道直接退出路由**（凭据读不出 ⇒ 不可能成功，只会白耗一次
+  // 尝试预算；自动登出清掉死凭据后的渠道即走这条）；其余按账本排序
+  // （账单已用量降序），冷却中的渠道硬排除（失败后暂不可用，下一次请求不走它），
+  // 最多试 maxPoolAttempts() 个。全池都在冷却时回退到完整候选——冷却只是短暂
+  // 状态，服务不能因此不可用。
   const ranked = rankCandidates(candidates);
-  const available = ranked.filter((c) => !isCooling(c.cid));
-  const attempts = (available.length > 0 ? available : ranked).slice(0, maxPoolAttempts());
+  const authed = ranked.filter((c) => loadCredentialSafe(c.channel) !== null);
+  if (authed.length === 0) {
+    writeJsonError(
+      res,
+      503,
+      "not_authenticated",
+      `no logged-in channel provides ${target}; run \`mb login -c <cid>\` for one of: ${candidates.map((c) => c.cid).join(", ")}`,
+    );
+    return;
+  }
+  const available = authed.filter((c) => !isCooling(c.cid));
+  const attempts = (available.length > 0 ? available : authed).slice(0, maxPoolAttempts());
   if (available.length === 0) {
     // 只记异常路径：部分过滤是设计内行为，逐请求打日志会在冷却窗口内刷屏
     opts.logger(
-      `pool: all ${ranked.length} candidate(s) cooling down (${target}); falling back to retry`,
+      `pool: all ${authed.length} logged-in candidate(s) cooling down (${target}); falling back to retry`,
     );
   }
   const wantStream = Boolean(payload["stream"]);
