@@ -2,7 +2,7 @@
  * 单文件发布构建：把 cli + gateway + 全部渠道打成自包含的 ESM bundle。
  *
  * 为什么需要它：`packages/cli` 的运行时依赖是 workspace 软链（`@modelmux/catpaw` →
- * `channels/catpaw`），全局安装 / 发 registry 时软链断裂、包名在 registry 上不存在。
+ * `packages/channels/catpaw`），全局安装 / 发 registry 时软链断裂、包名在 registry 上不存在。
  * esbuild 从唯一聚合点 `src/cli.ts` 沿静态 import 收编整条依赖图，产物里不再有任何
  * 外部包引用 —— tarball 自包含，`npm i -g` 直接可用。
  *
@@ -29,7 +29,7 @@ const SNAPSHOT_CHANNELS = ["loomy", "traecn", "workbuddy", "workbuddyai"];
 function snapshotModules() {
   const mods = new Map();
   for (const cid of SNAPSHOT_CHANNELS) {
-    const pkgDir = join(repoRoot, "channels", cid);
+    const pkgDir = join(repoRoot, "packages", "channels", cid);
     const content = readFileSync(join(pkgDir, "models.json"), "utf8");
     mods.set(resolve(pkgDir, "models.json"), `export default ${JSON.stringify(JSON.parse(content))};`);
   }
@@ -52,7 +52,7 @@ await build({
         const mods = snapshotModules();
         b.onResolve({ filter: /\.json$/ }, (args) => {
           if (args.importer.includes("node_modules")) return null;
-          // importer 形如 …/channels/traecn/src/catalog.ts → 包根 = 上两级
+          // importer 形如 …/packages/channels/traecn/src/catalog.ts → 包根 = 上两级
           const pkgDir = resolve(dirname(args.importer), "..", "..");
           const target = resolve(args.path);
           if (!mods.has(target)) return null; // 非快照 json（如 package.json 探测）不拦截
