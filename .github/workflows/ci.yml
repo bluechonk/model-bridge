@@ -1,0 +1,31 @@
+# CI：与本地门禁同一条命令（npm test = build + 四校验器 + 全部测试）。
+# 推送前须先在本地 WSL 跑通同一命令（见 .githooks/pre-push 与 AGENTS.md 门禁规则）。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+        # verify:commits 校验全部提交历史，浅克隆会漏 —— 与本地行为对齐
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: 安装依赖
+        run: npm ci
+      - name: 测试（build + 校验器 + 全部测试）
+        run: npm test
