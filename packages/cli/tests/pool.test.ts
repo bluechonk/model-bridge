@@ -6,13 +6,27 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "modelmux-all-selftest-"));
 process.env["MODELMUX_HOME"] = HOME;
+
+/**
+ * 渠道清单的**来源真相**：`channels/<cid>/package.json` 存在即算一个渠道
+ * （与 `tools/verify-contract.mjs` 同口径）。
+ *
+ * 刻意**不写死数量** —— 写死就要求「每加一个渠道都回来改测试」，而这里真正要
+ * 断言的是「目录里的渠道都注册上了」，数量本身不是被测对象。
+ */
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const CHANNELS_DIR = join(REPO_ROOT, "channels");
+const EXPECTED_CIDS = readdirSync(CHANNELS_DIR)
+  .filter((name) => existsSync(join(CHANNELS_DIR, name, "package.json")))
+  .sort();
 
 const gw = await import("@modelmux/gateway");
 await import("../dist/channels.js");
@@ -29,14 +43,11 @@ describe("仓库级模型池", () => {
     rmSync(HOME, { recursive: true, force: true });
   });
 
-  it("注册了全部 10 个渠道", () => {
+  it("注册了 channels/ 下的全部渠道（数量由目录推导）", () => {
     const cids = gw.channels().map((c) => c.config.cid).sort();
-    assert.equal(cids.length, 10, `实际: ${cids.join(", ")}`);
+    assert.deepEqual(cids, EXPECTED_CIDS, "注册清单与 channels/ 目录不一致");
     assert.ok(!cids.includes("cline"), "cline 渠道已移除");
     assert.ok(!cids.includes("zcode"), "zcode 渠道已移除");
-    for (const cid of ["workbuddy", "workbuddyai", "catpaw", "traecn", "codearts", "loomy", "qoder", "qodercn"]) {
-      assert.ok(cids.includes(cid), `缺少渠道 ${cid}`);
-    }
   });
 
   it("服务身份是仓库级 modelmux（不是某个渠道）", async () => {
@@ -44,7 +55,7 @@ describe("仓库级模型池", () => {
     assert.equal(health["ok"], true);
     assert.equal(health["service"], "modelmux");
     const per = health["channels"] as Array<{ cid: string }>;
-    assert.equal(per.length, 10, "逐渠道报告");
+    assert.equal(per.length, EXPECTED_CIDS.length, "逐渠道报告");
   });
 
   it("/v1/models 恒返回两个池模型，不带渠道前缀", async () => {
@@ -95,7 +106,7 @@ describe("仓库级模型池", () => {
 
   it("渠道一览：桩渠道不贡献模型，也不拖垮整表", () => {
     const rows = gw.channels().map((c) => {
-      // 与 CLI 同样的容错：桩渠道（qoder）抛错 → 视为空
+      // 与 CLI 同样的容错：桩渠道（orcaterm）抛错 → 视为空
       let exposed: string[] = [];
       try {
         exposed = gw.runInChannel(c.config.cid, () => c.catalog.exposedIds());
@@ -104,7 +115,7 @@ describe("仓库级模型池", () => {
       }
       return { cid: c.config.cid, exposed };
     });
-    assert.equal(rows.length, 10);
+    assert.equal(rows.length, EXPECTED_CIDS.length);
 
     const contributed = (cid: string) =>
       gw.POOL_MODELS.filter((model) => gw.poolCandidates(model).some((c) => c.cid === cid));

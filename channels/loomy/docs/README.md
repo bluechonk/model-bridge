@@ -13,18 +13,15 @@ Loomy（讯飞）的本地 OpenAI Chat Completion 透明代理网关（**TypeScr
 ## 快速开始
 
 ```bash
-node channels/loomy/dist/cli.js login   # 交互式登录：菜单选 1) SMS code / 2) WeChat QR code
+node channels/loomy/dist/cli.js login   # 登录：微信扫码（唯一登录方式）
 mx login loomy                          # 仓库级入口等价写法
 node channels/loomy/dist/cli.js serve   # 前台无窗口运行（单渠道）
 mx start                                # 守护式启动（幂等，仓库级网关）
 mx status / mx model list / mx billing loomy
 ```
 
-> **登录菜单**（交互终端里弹出，英文）：`1) SMS code` —— 手机号与验证码都**当场输入**；
-> `2) WeChat QR code` —— 扫码授权（未绑手机号时绑定环节需手机号 + 验证码）。
-> 环境变量 `LOOMY_PHONE` / `LOOMY_SMS_CODE` **可选**：给了就作为预填 / 自动化路径
-> （非交互场景不弹菜单，按环境变量自动选；都没设则走扫码）。
-> `mx login loomy --wechat` 可直接指定扫码。
+> **登录方式**：只有微信扫码一条路；未绑手机号时绑定环节需要 `LOOMY_PHONE` /
+> `LOOMY_SMS_CODE`（短信验证码登录作为独立方式**已移除**，见 PROTOCOL.md §2.3 说明）。
 
 ## 状态 API
 
