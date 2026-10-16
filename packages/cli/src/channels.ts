@@ -13,6 +13,7 @@ import "@modelmux/catpaw";
 import "@modelmux/codearts";
 import "@modelmux/lobsterai";
 import "@modelmux/loomy";
+import "@modelmux/orcaterm";
 import "@modelmux/qoder";
 import "@modelmux/qodercn";
 import "@modelmux/raccoon";
