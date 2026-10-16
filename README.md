@@ -9,7 +9,7 @@ OpenAI 兼容客户端指过来就能用。
 - **一个网关**：监听 `127.0.0.1:8787`，提供 `/v1/chat/completions`、`/v1/models`、`/health`。
 - **两个对外模型**：`deepseek-v4.1-flash` 与 `glm-5.3-flash`。客户端只写模型名，
   请求落到哪家渠道由网关按各渠道账单已用量决定（失败的渠道进冷却、当 0 处理）。
-- **10 个渠道**：每个渠道是一个池子（模型目录 + 凭据 + 上游协议），注册在 `channels/` 下。
+- **10 个渠道**：每个渠道是一个池子（模型目录 + 凭据 + 上游协议），注册在 `packages/channels/` 下。
 - **自动化兜底**：签到、死凭据清理、账单/目录刷新、失败转移全部由网关自动完成。
 
 ## 目录
@@ -17,8 +17,8 @@ OpenAI 兼容客户端指过来就能用。
 ```
 packages/gateway/    共享层（网关 / 守护 / 路径 / 渠道注册表，不含任何渠道知识）
 packages/cli/        CLI 入口（bin modelmux / mx，注册全部渠道后交给共享 CLI）
-channels/<cid>/      一个渠道 = 一个池子（只实现 cred / upstream / catalog / billing）
-docs/                契约与规范（渠道文档在各包 channels/<cid>/docs/）
+packages/channels/<cid>/      一个渠道 = 一个池子（只实现 cred / upstream / catalog / billing）
+docs/                契约与规范（渠道文档在各包 packages/channels/<cid>/docs/）
 ```
 
 ## 快速开始
@@ -55,15 +55,15 @@ mx model list
 
 ## 文档
 
-契约与规范在 `docs/`（入口 [docs/README.md](docs/README.md)），**渠道文档跟包走**，在各包 `channels/<cid>/docs/`：
+契约与规范在 `docs/`（入口 [docs/README.md](docs/README.md)），**渠道文档跟包走**，在各包 `packages/channels/<cid>/docs/`：
 
 | 想看什么 | 去哪 |
 | --- | --- |
 | 契约与规范（改代码前必读） | [docs/CONTRACT-TS.md](docs/CONTRACT-TS.md) |
 | 公共模型池怎么选渠道 | [docs/POOL-ARCHITECTURE.md](docs/POOL-ARCHITECTURE.md) |
 | 存储落点规范 | [docs/STORAGE-CONVENTION.md](docs/STORAGE-CONVENTION.md) |
-| 某个渠道怎么用 | `channels/<cid>/docs/README.md`（如 [channels/qodercn/docs/README.md](channels/qodercn/docs/README.md)） |
-| 某个上游的协议细节 | `channels/<cid>/docs/PROTOCOL.md` |
+| 某个渠道怎么用 | `packages/channels/<cid>/docs/README.md`（如 [packages/channels/qodercn/docs/README.md](packages/channels/qodercn/docs/README.md)） |
+| 某个上游的协议细节 | `packages/channels/<cid>/docs/PROTOCOL.md` |
 
 ## 约定
 

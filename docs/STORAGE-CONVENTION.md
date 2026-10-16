@@ -1,7 +1,7 @@
 # 存储落点与文件命名规范（工作区 `modelmux`）
 
 本文件只规定**放在哪里、叫什么名字**：存储根、cid 分层、覆盖用环境变量、目录内的文件命名。
-**凭证/配置的字段内容不在此列** —— 各 `channels/<cid>/` 自己决定（见 `CONTRACT-TS.md` §5）。
+**凭证/配置的字段内容不在此列** —— 各 `packages/channels/<cid>/` 自己决定（见 `CONTRACT-TS.md` §5）。
 
 适用范围：工作区内全部渠道包 + 共享包 `packages/gateway`（清单以 `mx model list` 为准）。
 历史布局兼容（`legacyDirs` / `fileMigrations` / 旧环境变量）已随 modelmux 更名整体移除：

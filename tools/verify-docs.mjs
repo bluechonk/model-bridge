@@ -5,8 +5,8 @@
  * **`.md` 只有四类落点**：
  *   1. `docs/`                        —— 契约与规范（仓库级唯一文档层）
  *   2. 仓库根 `README.md` / `AGENTS.md` —— 门面与规则文件（工具按固定路径读）
- *   3. `channels/<cid>/docs/`         —— 渠道自己的文档（说明 + 协议规格，随包发布）
- *   4. `channels/<cid>/AGENTS.md`     —— 目录级工具指令
+ *   3. `packages/channels/<cid>/docs/`         —— 渠道自己的文档（说明 + 协议规格，随包发布）
+ *   4. `packages/channels/<cid>/AGENTS.md`     —— 目录级工具指令
  *
  * 这个检查把「文档各归其位」从口头约定变成会失败的测试 —— 有 md 落在别处时
  * `npm test` 直接红，而不是等人发现。
@@ -32,7 +32,7 @@ const ALLOWED = [
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".tmp", ".box-agent", ".box-agent-scratch", ".planning"]);
 
 /**
- * 被 git 忽略的路径（如 `channels/<cid>/reference/` 里 clone 的第三方实现）
+ * 被 git 忽略的路径（如 `packages/channels/<cid>/reference/` 里 clone 的第三方实现）
  * **不算本仓库的文档**，不参与检查。
  *
  * 为什么需要：那些目录是「clone 下来读源码」的学习材料（各渠道 `.gitignore` 里
@@ -99,13 +99,13 @@ for (const rel of candidates) {
 }
 
 // 每个渠道包都必须自带渠道说明（防止文档又被抽回仓库级 docs/，包单独发布时就没文档了）
-const channelsDir = join(workspaceRoot, "channels");
+const channelsDir = join(workspaceRoot, "packages", "channels");
 if (existsSync(channelsDir)) {
   for (const entry of readdirSync(channelsDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const doc = join(channelsDir, entry.name, "docs", "README.md");
     if (!existsSync(doc)) {
-      problems.push(`channels/${entry.name}/docs/README.md —— 缺渠道说明（渠道文档跟包走，规则见 AGENTS.md §2）`);
+      problems.push(`packages/channels/${entry.name}/docs/README.md —— 缺渠道说明（渠道文档跟包走，规则见 AGENTS.md §2）`);
     }
   }
 }
