@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { request } from "node:http";
 import { after, before, describe, it } from "node:test";
 
 import { start, emptySnapshot, type ControlBridge } from "../../gateway/dist/console.js";
@@ -18,7 +19,6 @@ import { listAccounts, syncPool } from "../../gateway/dist/account-pool.js";
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const HOME = mkdtempSync(join(tmpdir(), "modelmux-web-e2e-"));
 process.env["MODELMUX_HOME"] = HOME;
-process.env["MODELMUX_WEB_UI_ROOT"] = join(REPO_ROOT, "packages", "gateway", "dist", "ui");
 
 /** 合成渠道：credentials.json 即视为已登录，不碰网络。 */
 function makeChannel(cid: string): Channel {
@@ -114,8 +114,16 @@ describe("console 静态托管与命令 API", () => {
   });
 
   it("静态路径穿越拒绝 403", async () => {
-    const res = await fetch(`${server.url}assets/../web.test.ts`);
-    assert.equal(res.status, 403);
+    const status = await new Promise<number>((resolveRequest, rejectRequest) => {
+      // fetch 会把 .. 规范化掉，这里用原生请求保住原始路径，真正打到服务端守卫。
+      const req = request(server.url, { path: "/assets/%2e%2e%2fsecret" }, (res) => {
+        res.resume();
+        res.on("end", () => resolveRequest(res.statusCode ?? 0));
+      });
+      req.on("error", rejectRequest);
+      req.end();
+    });
+    assert.equal(status, 403);
   });
 
   it("跨源写命令拒绝 403", async () => {
