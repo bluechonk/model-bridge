@@ -16,7 +16,7 @@
   ],
   "references": [
     {
-      "path": "../../packages/gateway"
+      "path": "../../gateway"
     }
   ]
 }
