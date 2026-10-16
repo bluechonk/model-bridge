@@ -14,20 +14,20 @@
 packages/gateway/    共享层（gateway / daemon / headless / paths / 渠道注册表；**不许出现渠道知识**）
 packages/cli/        CLI 入口（bin `modelmux` / `mx`，注册全部渠道后交给共享 CLI；
                      发布名 modelmux，单文件 bundle 自包含，npx/npm -g 直装）
-channels/<cid>/      一个渠道 = 一个池子（每个只实现 4 个渠道特有模块）
+packages/channels/<cid>/      一个渠道 = 一个池子（每个只实现 4 个渠道特有模块）
   docs/              该渠道自己的文档（说明 + 协议规格，随包走）
 docs/                契约与规范（唯一的仓库级文档层）
 ```
 
 ## 2. 文档规则（**强制**）
 
-**契约与规范集中在 `docs/`；渠道文档跟着包走，放在 `channels/<cid>/docs/`。**
+**契约与规范集中在 `docs/`；渠道文档跟着包走，放在 `packages/channels/<cid>/docs/`。**
 
 | 类别 | 位置 | 内容 |
 | --- | --- | --- |
 | 契约与规范 | `docs/*.md` | 改代码前必读；索引见 `docs/README.md` |
-| 渠道说明 | `channels/<cid>/docs/README.md` | 用法 / 存储 / 测试 |
-| 渠道协议规格 | `channels/<cid>/docs/PROTOCOL.md` | 实测协议（实现的依据） |
+| 渠道说明 | `packages/channels/<cid>/docs/README.md` | 用法 / 存储 / 测试 |
+| 渠道协议规格 | `packages/channels/<cid>/docs/PROTOCOL.md` | 实测协议（实现的依据） |
 
 完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
 需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
@@ -36,16 +36,16 @@ docs/                契约与规范（唯一的仓库级文档层）
 
 0. `docs/` —— 契约与规范 + 文档总入口 `docs/README.md`
 1. `README.md`（**仓库根**）—— 仓库门面，GitHub 只渲染根 README
-2. `channels/<cid>/docs/` —— 该渠道自己的文档（说明 + 协议规格 + 逆向结论层）
-3. `channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
+2. `packages/channels/<cid>/docs/` —— 该渠道自己的文档（说明 + 协议规格 + 逆向结论层）
+3. `packages/channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
 
 新增或修改文档时：
 
-- 渠道协议 → `channels/<cid>/docs/PROTOCOL.md`；渠道说明 → `channels/<cid>/docs/README.md`
+- 渠道协议 → `packages/channels/<cid>/docs/PROTOCOL.md`；渠道说明 → `packages/channels/<cid>/docs/README.md`
    （**渠道文档不要写进仓库级 `docs/`**，包要能单独打包发布）
 - 同步更新 `docs/README.md`（它是文档总入口）
 - markdown 链接用**相对路径**；源码注释里的引用用**仓库根相对路径**
-  （如 `channels/catpaw/docs/PROTOCOL.md`）—— 搬完文件要顺手检查链接
+  （如 `packages/channels/catpaw/docs/PROTOCOL.md`）—— 搬完文件要顺手检查链接
 - 跑 `npm test`：`tools/verify-docs.mjs` 会拦住落错位置的 md，`tools/verify-storage.mjs` 会校验落点规范
 
 ## 3. 代码约定（摘要；详见 `docs/CONTRACT-TS.md`）
@@ -68,12 +68,12 @@ docs/                契约与规范（唯一的仓库级文档层）
 npm install                       # 装工作区依赖（含软链）
 npm run build                     # 全仓编译（tsc -b 增量 + cli 单文件 bundle）
 npm test                          # build + 三个校验器 + 全部包的测试（链首编译，见 §5）
-npm run build --workspace=channels/<cid>    # 只编一个渠道（也走引用链）
+npm run build --workspace=packages/channels/<cid>    # 只编一个渠道（也走引用链）
 node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，**唯一网关端口 8787**（REPO_DEFAULT_ADDR）
 node packages/cli/dist/cli.js model list    # 池视图：两个模型 → 候选渠道 + 账单用量 + 冷却
 node packages/cli/dist/cli.js model usage   # 池账本；--refresh 立刻重查
 node packages/cli/dist/cli.js login <cid>   # 对某个渠道操作：login / relogin / status / models / billing / accounts / paths / logs
-node channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用；只有它才用该渠道的 defaultAddr）
+node packages/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用；只有它才用该渠道的 defaultAddr）
 ```
 
 **命令形态（动词优先）**：`mx` 的**动词永远在第一个位置**，渠道 id 是**第二个位置的操作对象**：
@@ -92,7 +92,7 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 
 **端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，
 控制台 8788），10 个渠道从它后面供给那两个公共模型；`ChannelConfig.defaultAddr`/`uiPort`
-只在**单渠道独立运行**（`channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
+只在**单渠道独立运行**（`packages/channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
 
 **构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出全部包），
 公共编译选项在根 `tsconfig.base.json` 里（各包 `extends` 它）；`tsc -b` 一次调度整个依赖图，
@@ -103,7 +103,7 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 见 `docs/CONTRACT-TS.md` §2.1）。**这一步不能省**：全局 `mx` / `modelmux` 的 `bin` 指向该 bundle，
 只跑 `tsc -b` 会让它在下次调用时报 `Cannot find module … dist/cli.bundle.js`。
 
-`verify:contract` 兜底 `references` 形状：根 solution 文件的引用必须与 `channels/*` + `packages/*`
+`verify:contract` 兜底 `references` 形状：根 solution 文件的引用必须与 `packages/channels/*` + `packages/*`
 逐一对应，且每个条目恰含一个 `path`。空条目与合并条目（一条目两个 `path`）都是脚本化增删渠道的
 残留 —— TS 自己的解析器会保留重复键，编译照过，只有该渠道的 `dist/` 悄悄缺席。
 
@@ -111,7 +111,7 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 
 - `npm test` 全绿（自带 `build`，含 `verify:storage` / `verify:docs`）。
   **测试链读的是各包 `dist/`（不是 `src/`）**，所以编译必须在链首：`npm test` 已内置
-  `npm run build`；单独跑 `npm run verify:storage` 或 `npm test --workspace=channels/<cid>`
+  `npm run build`；单独跑 `npm run verify:storage` 或 `npm test --workspace=packages/channels/<cid>`
   前要先 `npm run build`，否则校验的是旧产物。
 - 文档与代码**同一个 commit** 更新。
 - 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。

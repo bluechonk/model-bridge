@@ -16,6 +16,7 @@ import * as groups from "./command-groups.js";
 import { defaultAddr, defaultUiPort, version } from "./cli-consts.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
+import { runWeb } from "./web.js";
 import * as supervisor from "./supervisor.js";
 
 /** 生成当前渠道的帮助文本。 */
@@ -36,6 +37,7 @@ export function usage(): string {
   stop                      停止守护式网关（读 PID 文件杀进程树，不碰第三方进程）
   restart                   重启守护式网关（stop + start）
   serve                     前台运行网关（内部命令，供调试）
+  web                       启动 Web 管理看板（默认 http://127.0.0.1:8788）
 
 模型池（对外只有 2 个模型，请求落到哪家渠道由网关按账单已用量决定）:
   model list                池视图：2 个模型 → 候选渠道 + 已用量 + 冷却/暂不可用
@@ -150,6 +152,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         "force-login": { type: "boolean" },
         verbose: { type: "boolean" },
         "no-console": { type: "boolean" },
+        host: { type: "string" },
+        port: { type: "string" },
+        open: { type: "boolean" },
+        "no-open": { type: "boolean" },
         // supervise（内部命令）的落点参数 —— 由 `start` 以显式路径下发
         "worker-pid": { type: "string" },
         log: { type: "string" },
@@ -216,6 +222,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 
   // ③ 仓库级动词（不带 <cid>）
   switch (command) {
+    case "web":
+      return runWeb({
+        host: strOpt(o, "host") || undefined,
+        port: numOpt(o, "port") ?? undefined,
+        open: boolOpt(o, "open") && !boolOpt(o, "no-open"),
+      });
+
     case "serve":
       return headless.runServe({
         addr,

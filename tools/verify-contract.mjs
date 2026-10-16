@@ -28,13 +28,13 @@ const DEP_ALLOW = ["@modelmux/gateway"];
 const CHANNEL_PKG_RE = /^@modelmux\/[a-z0-9-]+$/;
 const DEV_ALLOW = ["typescript", "@types/node"];
 
-const channelsDir = join(repo, "channels");
+const channelsDir = join(repo, "packages", "channels");
 const channelDirs = readdirSync(channelsDir).filter((n) => existsSync(join(channelsDir, n, "package.json")));
 
 let registeredImports = 0;
 
 for (const cid of channelDirs) {
-  const where = `channels/${cid}`;
+  const where = `packages/channels/${cid}`;
 
   // src/ 恰 7 文件：多出来的都是共享层旧副本残留
   const srcDir = join(channelsDir, cid, "src");
@@ -88,7 +88,7 @@ check(
 const registered = [...read("packages/cli/src/channels.ts").matchAll(/import\s+"(@modelmux\/[a-z0-9-]+)"/g)].map((m) => m[1]);
 registeredImports = registered.length;
 for (const cid of channelDirs) {
-  check(registered.includes(`@modelmux/${cid}`), `channels/${cid}: 未在 packages/cli/src/channels.ts 注册`);
+  check(registered.includes(`@modelmux/${cid}`), `packages/channels/${cid}: 未在 packages/cli/src/channels.ts 注册`);
 }
 check(
   registered.length === channelDirs.length,
@@ -117,7 +117,7 @@ const referencesBlock = (text) => {
 
 const tsconfigs = [
   "tsconfig.json",
-  ...channelDirs.map((cid) => `channels/${cid}/tsconfig.json`),
+  ...channelDirs.map((cid) => `packages/channels/${cid}/tsconfig.json`),
   "packages/cli/tsconfig.json",
   "packages/gateway/tsconfig.json",
 ];
@@ -129,7 +129,7 @@ for (const where of tsconfigs) {
 }
 
 const solutionPaths = [...referencesBlock(read("tsconfig.json")).matchAll(/"path"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
-const packagePaths = [...channelDirs.map((cid) => `channels/${cid}`), "packages/cli", "packages/gateway"];
+const packagePaths = [...channelDirs.map((cid) => `packages/channels/${cid}`), "packages/cli", "packages/gateway"];
 const missingRefs = packagePaths.filter((p) => !solutionPaths.includes(p));
 const strayRefs = solutionPaths.filter((p) => !packagePaths.includes(p));
 check(

@@ -45,8 +45,8 @@ const NOT_STALE: StaleBuildReport = { stale: false, buildMs: null, pidMs: null }
 /**
  * 从 `start` 向上找**工作区根**：带 `workspaces` 清单的 `package.json`。
  *
- * 早期判据要求 workspaces 里含 `-bridge` 结尾的条目（旧布局 `channels/*-bridge`），
- * 但本仓库早已改成 `packages/*` + `channels/*` —— 判据失配会让查找**永远失败**
+ * 早期判据要求 workspaces 里含 `-bridge` 结尾的条目（旧布局 `packages/channels/*-bridge`），
+ * 但本仓库早已改成 `packages/*` + `packages/channels/*` —— 判据失配会让查找**永远失败**
  * （`paths <cid>` 因此一直报「未找到工作区根」）。现在只认 `workspaces` 字段本身，
  * 与具体布局解耦。
  *
@@ -95,7 +95,7 @@ function packageRoot(): string {
 function newestBuildMs(root: string | null): number | null {
   const dirs: string[] = [];
   if (root) {
-    for (const group of ["packages", "channels"]) {
+    for (const group of ["packages", "packages/channels"]) {
       let names: string[];
       try {
         names = readdirSync(join(root, group));

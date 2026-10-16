@@ -161,7 +161,7 @@
 | `mx models <cid>` | **渠道视角**：该渠道贡献了池内哪些模型（`--refresh` 重拉上游目录） |
 | `mx model usage [--refresh]` | 看账本；`--refresh` 立刻重查各渠道账单额度 |
 
-> 单渠道独立运行（`channels/<cid>/dist/cli.js start`）**也走池**：`/v1/models` 同样是那两条，
+> 单渠道独立运行（`packages/channels/<cid>/dist/cli.js start`）**也走池**：`/v1/models` 同样是那两条，
 > 只是候选渠道只有一个（提供不了的模型请求时回 503）。
 
 ---

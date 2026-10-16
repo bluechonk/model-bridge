@@ -6,10 +6,10 @@
   "description": "多渠道本地模型池网关：把多个渠道汇成一个 OpenAI 兼容端点，只暴露两个池内模型（modelmux CLI）",
   "workspaces": [
     "packages/*",
-    "channels/*"
+    "packages/channels/*"
   ],
   "scripts": {
-    "build": "tsc -b && npm run build --workspace=packages/cli",
+    "build": "tsc -b && npm run build --workspace=packages/ui && npm run build --workspace=packages/cli && node tools/copy-ui.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "verify:contract": "node tools/verify-contract.mjs",
     "verify:storage": "node tools/verify-storage.mjs",
@@ -20,5 +20,9 @@
   "engines": {
     "node": ">=22.6"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
 }
