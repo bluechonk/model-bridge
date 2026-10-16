@@ -25,8 +25,8 @@ const ALLOWED = [
   /^docs\//, // 契约与规范
   /^AGENTS\.md$/, // 规则文件本身：工具从仓库根读，不能搬
   /^README\.md$/, // 仓库门面：GitHub 只渲染根 README，必须留在原处
-  /^channels\/[a-z0-9-]+\/docs\//, // 渠道自己的文档（随包走）
-  /^channels\/[a-z0-9-]+\/AGENTS\.md$/, // 目录级工具指令
+  /^packages\/channels\/[a-z0-9-]+\/docs\//, // 渠道自己的文档（随包走）
+  /^packages\/channels\/[a-z0-9-]+\/AGENTS\.md$/, // 目录级工具指令
 ];
 
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".tmp", ".box-agent", ".box-agent-scratch", ".planning"]);
