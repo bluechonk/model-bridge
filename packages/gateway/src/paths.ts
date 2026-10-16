@@ -38,6 +38,7 @@ export const FILES = {
   upstream: "upstream.json",
   prefs: "prefs.json",
   pid: "gateway.pid",
+  workerPid: "gateway-worker.pid",
   log: "gateway.log",
 } as const;
 
@@ -138,9 +139,19 @@ export function ensureStateDir(cid?: string): string {
   return dir;
 }
 
-/** 守护式网关的 PID 文件路径。 */
+/** 守护式网关的 PID 文件路径（记**监督进程** pid，见 docs/DAEMON-SUPERVISOR.md §5）。 */
 export function pidPath(cid?: string): string {
   return channelFile(FILES.pid, cid);
+}
+
+/** 网关 worker 的 PID 文件路径（由监督进程维护，重生时更新）。 */
+export function workerPidPath(cid?: string): string {
+  return channelFile(FILES.workerPid, cid);
+}
+
+/** 仓库级网关的 worker PID 文件路径。 */
+export function rootWorkerPidPath(): string {
+  return rootFile(FILES.workerPid);
 }
 
 /** 守护式网关的日志路径。 */

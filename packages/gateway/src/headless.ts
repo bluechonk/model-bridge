@@ -285,6 +285,42 @@ export async function runServe(options: ServeOptions): Promise<number> {
     await consoleServer?.close().catch(() => {});
   };
 
+  // 终止源统一化：SIGINT/SIGTERM/SIGHUP 与「监督者消失（IPC 断开）」都汇入 stopped，
+  // 走同一条优雅停机。监督者场景：spawn 带 IPC fd（stdio 第 4 项），监督者被杀即触发
+  // disconnect —— worker 干净离场、无人重生（见 docs/DAEMON-SUPERVISOR.md §4）。
+  // 裸 `mx serve` 无 IPC，不挂此钩子，保持纯信号语义。
+  let stopSignalled = (): void => {};
+  const stopped = new Promise<void>((resolve) => {
+    stopSignalled = resolve;
+  });
+  let stopReason: string | undefined;
+  process.on("SIGINT", stopSignalled);
+  process.on("SIGTERM", stopSignalled);
+  process.on("SIGHUP", stopSignalled);
+  if (typeof process.send === "function") {
+    // IPC 场景 = 有监督进程：① 父端主动断开（disconnect）可瞬时感知；
+    // ② 但 Windows 下父进程被杀/自退不保证触发 disconnect（实测），故叠加
+    //    应用层心跳超时 —— 收不到监督者的 supervisor-ping 即判父死，保证收敛。
+    let lastPing = Date.now();
+    process.on("message", (m: unknown) => {
+      if (m && typeof m === "object" && (m as { type?: string }).type === "supervisor-ping") {
+        lastPing = Date.now();
+      }
+    });
+    process.once("disconnect", () => {
+      stopReason = "supervisor-gone";
+      stopSignalled();
+    });
+    const WATCHDOG_MS = 8_000;
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastPing > WATCHDOG_MS) {
+        stopReason = "supervisor-gone";
+        stopSignalled();
+      }
+    }, 2_000);
+    watchdog.unref(); // 不阻碍 shutdown 后的事件循环清空退出
+  }
+
   // 登录 + 网关：成功前按 retry 循环（未登录时控制台仍可用）
   const worker = async (): Promise<void> => {
     for (;;) {
@@ -374,15 +410,10 @@ export async function runServe(options: ServeOptions): Promise<number> {
     console.error(`${prefix} worker error: ${String(err)}`);
   });
 
-  // 主线程阻塞直到信号
-  await new Promise<void>((resolve) => {
-    const onSignal = (): void => resolve();
-    process.on("SIGINT", onSignal);
-    process.on("SIGTERM", onSignal);
-    process.on("SIGHUP", onSignal);
-  });
+  // 主线程阻塞直到终止源（信号 / 监督者消失）
+  await stopped;
 
   await shutdown();
-  if (json) emit({ event: "stopped" });
+  if (json) emit({ event: "stopped", ...(stopReason ? { reason: stopReason } : {}) });
   return 0;
 }
