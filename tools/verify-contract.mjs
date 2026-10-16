@@ -141,16 +141,18 @@ check(
 const gwDeps = Object.keys(JSON.parse(read("packages/gateway/package.json")).dependencies ?? {});
 check(gwDeps.length === 0, `packages/gateway: 共享包必须零运行依赖，当前 ${gwDeps.join(", ")}`);
 
-// 公共池模型恒定两个（CONTRACT-TS §4）：从源码文本提取，不依赖构建产物
+// 公共池模型动态化（全模型池）：不再断言固定 2 个 flash，改为检查动态收集函数存在
 const poolTargets = read("packages/gateway/src/pool-targets.ts");
-const poolDecl = poolTargets.match(/POOL_MODELS[^=]*=\s*\[([^\]]*)\]/);
-check(poolDecl !== null, "pool-targets.ts: 未找到 POOL_MODELS 声明");
-const poolModels = (poolDecl?.[1] ?? "").match(/"(deepseek-v4\.1-flash|glm-5\.3-flash)"/g) ?? [];
+check(/export function poolModels\(\)/.test(poolTargets), "pool-targets.ts: 缺 poolModels()（全模型池动态收集）");
+check(/function asPoolModel\(/.test(poolTargets), "pool-targets.ts: 缺 asPoolModel()（动态匹配）");
+// 共享层代码不得硬编码厂商模型名（AGENTS.md §1：packages/gateway 不许出现渠道知识）。
+// 剥离注释后再查 —— JSDoc 里的示例 id 是文档，不是共享层持有的模型知识。
+const poolCode = poolTargets
+  .replace(/\/\*[\s\S]*?\*\//g, "") // 块注释
+  .replace(/^\s*\/\/.*$/gm, ""); // 行注释
 check(
-  poolModels.length === 2 &&
-    poolModels[0] === '"deepseek-v4.1-flash"' &&
-    poolModels[1] === '"glm-5.3-flash"',
-  `POOL_MODELS 必须恒为 ["deepseek-v4.1-flash", "glm-5.3-flash"]，当前 ${poolDecl?.[1]?.trim() ?? "(无)"}`,
+  !/"(deepseek|glm|qwen|kimi|doubao)-[a-z0-9.-]+"/i.test(poolCode),
+  "pool-targets.ts: 共享层不得硬编码厂商模型名（模型只由各渠道 exposedIds() 提供）",
 );
 
 // 池白名单判据定义在共享层（渠道不得自行实现家族过滤，CONTRACT-TS §4）
@@ -165,5 +167,5 @@ if (failures.length > 0) {
 }
 console.log(
   `✓ 工程契约校验通过：${channelDirs.length} 个渠道（7 文件 + 依赖白名单 + cid 一致），` +
-    `bin 双名，工程引用对齐，POOL_MODELS 恒定，池白名单在共享层`,
+    `bin 双名，工程引用对齐，POOL_MODELS 动态化，池白名单在共享层`,
 );

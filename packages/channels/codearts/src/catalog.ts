@@ -30,7 +30,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { cacheDir as sharedCacheDir, isAllowedFamily } from "@modelmux/gateway";
+import { cacheDir as sharedCacheDir } from "@modelmux/gateway";
 
 /** 一条目录条目。 */
 export interface ModelEntry {
@@ -273,10 +273,8 @@ export function entryFor(id: string): ModelEntry | null {
 
 /** 对外暴露的模型 id。 */
 export function exposedIds(): string[] {
-  // 模型池策略：只放行白名单内的家族（见 model-family.ts）
-  return entries()
-    .filter((entry) => isAllowedFamily(entry.id, entry.name))
-    .map((entry) => entry.id);
+  // 全模型池：放行全部模型（不再限制 (deepseek|glm)×flash）
+  return entries().map((entry) => entry.id);
 }
 
 /**

@@ -270,25 +270,21 @@ describe("1. 常见命令与帮助", () => {
 });
 
 describe("2. 模型池（model 分组）", () => {
-  it("model list 是池视图：两个模型，各自挂候选渠道", async () => {
+  it("model list 是池视图：全模型池，各自挂候选渠道", async () => {
     const r = await run(["model", "list", "--json"]);
     assert.equal(r.code, 0);
     const parsed = JSON.parse(r.out) as Array<{
       model: string;
       candidates: Array<{ cid: string; exposed_id: string }>;
     }>;
-    assert.deepEqual(
-      parsed.map((x) => x.model),
-      ["deepseek-v4.1-flash", "glm-5.3-flash"],
-    );
-    assert.deepEqual(
-      parsed.find((x) => x.model === "deepseek-v4.1-flash")!.candidates.map((c) => c.cid),
-      ["alpha", "beta"],
-    );
-    assert.deepEqual(
-      parsed.find((x) => x.model === "glm-5.3-flash")!.candidates.map((c) => c.cid),
-      ["alpha"],
-    );
+    // 全模型池：alpha 提供 2 个 + beta 提供 1 个，去重后 2 个（deepseek-v4.1-flash / glm-5.3-flash）
+    assert.equal(parsed.length, 2, `应 2 个模型，实际 ${parsed.length}`);
+    const four1 = parsed.find((x) => x.model === "deepseek-v4.1-flash");
+    const glm = parsed.find((x) => x.model === "glm-5.3-flash");
+    assert.ok(four1, "应包含 deepseek-v4.1-flash");
+    assert.ok(glm, "应包含 glm-5.3-flash");
+    assert.deepEqual(four1!.candidates.map((c) => c.cid), ["alpha", "beta"]);
+    assert.deepEqual(glm!.candidates.map((c) => c.cid), ["alpha"]);
   });
 
   it("未知 model 子命令 → 2", async () => {

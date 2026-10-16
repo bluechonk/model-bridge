@@ -3,15 +3,12 @@
  *
  * ## 对外名 ≠ 上游 key
  *
- * Qoder 的模型 id 是**短 key**（`gfmodel` 等），不是模型名；公共模型池认归一化后的名字，
- * 所以本模块做一层映射：
+ * Qoder 的模型 id 是**短 key**（`gfmodel` 等），不是模型名，所以本模块做一层映射：
+ * 已知 key 走显式映射（`gfmodel` → `glm-5.3-flash`），其余用上游展示名归一化。
  *
- * | 上游 key | 上游展示名 | 对外 id（池内名） |
- * |---|---|---|
- * | `gfmodel` | GLM-5.3-Flash | `glm-5.3-flash` |
+ * ## 全模型池
  *
- * `dfmodel`（DeepSeek-Flash）已随 `deepseek-v4-flash` 一起移出池，`dmodel` / `gmodel` /
- * `qmodel*` / `kmodel*` 等其余条目同样不进池 —— 上游目录里它们仍在，只是不对外。
+ * 上游目录里的模型**全部**对外暴露（不再按 flash 家族过滤）。
  *
  * ## 三源优先级（参考实现同款）
  *
@@ -41,9 +38,12 @@ export interface ModelEntry {
 }
 
 /**
- * 上游 key → 池内 id。
+ * 上游 key → 池内 id 的**已知映射**。
  *
- * 只列**确定能进池**的条目；`dmodel`（DeepSeek-V4-Pro）等非 flash 型号按池策略挡在池外。
+ * 只列「上游 key 与展示名对不上」的条目（如 `gfmodel` → `glm-5.3-flash`）；
+ * 未列出的 key 用上游展示名归一化后作为对外 id（见 `toEntry`）。
+ *
+ * 全模型池：不再把非映射条目标在池外 —— 上游目录里的模型都会暴露。
  */
 const POOL_KEY_MAP: Record<string, string> = {
   gfmodel: "glm-5.3-flash",
@@ -69,20 +69,27 @@ function str(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+/** 展示名 → 对外 id（小写、空格与下划线转连字符）。 */
+function toPublicId(displayName: string, key: string): string {
+  const base = displayName.trim() || key;
+  return base.toLowerCase().replace(/[\s_]+/g, "-");
+}
+
 /**
  * 官方目录条目 → 内部条目。
  *
- * 只保留 `POOL_KEY_MAP` 里列出的 key：其余模型不进池，留着它们只会让
- * 「池子为什么是空的」更难解释。
+ * 全模型池：**所有**目录条目都保留 —— 已知 key 走 `POOL_KEY_MAP` 的显式映射，
+ * 其余用展示名归一化作为对外 id（无展示名时退回 key 本身）。
  */
 function toEntry(raw: Record<string, unknown>): ModelEntry | null {
   const key = str(raw["key"]) || str(raw["id"]);
-  const id = POOL_KEY_MAP[key];
-  if (!id) return null;
+  if (!key) return null;
+  const displayName = str(raw["display_name"]) || str(raw["name"]) || key;
+  const id = POOL_KEY_MAP[key] ?? toPublicId(displayName, key);
   return {
     key,
     id,
-    displayName: str(raw["display_name"]) || str(raw["name"]) || key,
+    displayName,
     isReasoning: raw["is_reasoning"] === true,
     isVl: raw["is_vl"] === true,
     maxInputTokens: num(raw["max_input_tokens"], 180_000),

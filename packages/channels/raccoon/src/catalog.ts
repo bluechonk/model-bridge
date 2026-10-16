@@ -21,7 +21,7 @@
 
 import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
+import { readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /** 实测确认能读图、但远端未声明 vision 的个案（显式白名单，不是「恒 true」）。 */
 export const IMAGE_CAPABILITY_OVERRIDES: ReadonlySet<string> = new Set([
@@ -357,11 +357,8 @@ function currentEntries(): ModelEntry[] {
 
 /** 对外暴露的模型 id。 */
 export function exposedIds(): string[] {
-  // 模型池策略：只放行白名单内的家族（见 model-family.ts）。
-  // Raccoon 的 id 带渠道前缀（`sn-glm-5-3`），但家族名仍在 id 里。
-  return currentEntries()
-    .filter((e) => isAllowedFamily(e.id, e.name))
-    .map((e) => e.id);
+  // 全模型池：catalog 内全部模型都对外暴露（Raccoon 的 id 带渠道前缀 `sn-`）。
+  return currentEntries().map((e) => e.id);
 }
 
 /** 模型 id → 上游 slug：Raccoon 的 id 就是 slug，**未知原样返回**。 */

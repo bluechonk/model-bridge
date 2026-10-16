@@ -4,14 +4,13 @@
  * ## 策略
  *
  * 1. **短名映射**：直接用上游 `id` 字段，不做短名映射（避免多层维护）。
- * 2. **池过滤**：只调用共享 `isAllowedFamily()`（flash-only），不自研判据。
- * 3. **同步接口**：`exposedIds()` / `resolveModel()` 必须同步返回 ——
+  * 3. **同步接口**：`exposedIds()` / `resolveModel()` 必须同步返回 ——
  *    上游目录通过 `upstream.fetchModels()` 成功时经 `setCatalog()` 回填缓存；
  *    未回填前走兜底表。
  * 4. **兜底表**：未登录或上游目录未拉取时，仍能暴露 flash 模型。
  */
 
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
+import { readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /** 一条模型目录条目。 */
 export interface CatalogEntry {
@@ -35,11 +34,10 @@ export interface CatalogEntry {
  * 兜底表：上游模型目录不可用时仍可暴露的模型。
  *
  * ⚠ **内容取自一次真实的上游 `/model-types` 返回**（2026-10-08 实测，见
- * `channels/catpaw/docs/PROTOCOL.md`），只留池策略放行的那些
- * （`(deepseek|glm) && flash`，判据在共享 `isAllowedFamily()`）。
+ * `channels/catpaw/docs/PROTOCOL.md`）。
  *
  * ⚠ 曾被写成占位名 `catpaw-flash` —— 那个 id 上游**根本不存在**，
- * 池策略改成「家族 + flash」后它必然被过滤，于是「未回填前」池子是空的。
+ * 这条兜底项在旧的「家族 + flash」白名单下会被过滤，全模型池下正常出现在池视图中。
  * 兜底表要能真的兜住，就得用真实 id。
  */
 const FALLBACK_MODELS: CatalogEntry[] = [
@@ -162,15 +160,10 @@ export function toModelInfo(row: Record<string, unknown>): CatalogEntry | null {
 }
 
 /**
- * 对外暴露的模型 ID 列表（短名，已过 flash 白名单）。
- *
- * ⚠ 白名单是网关级策略：只调用共享 `isAllowedFamily()`，不自行实现家族判据。
- * 过滤只发生在呈现层 —— 被挡在池外的模型仍在 `details()` 里可见。
+ * 对外暴露的模型 ID 列表（全模型池：`catalog` 内全部模型）。
  */
 export function exposedIds(): string[] {
-  return loadCatalog()
-    .filter((e) => isAllowedFamily(e.id, e.name))
-    .map((e) => e.id);
+  return loadCatalog().map((e) => e.id);
 }
 
 /**

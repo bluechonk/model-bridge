@@ -630,16 +630,18 @@ describe("6. 模型目录", () => {
     assert.equal(byId.get("kimi-k3")!.name, "Kimi K3 · 免费");
   });
 
-  it("兜底表 32 条（含 4 隐藏）；exposedIds 只放行 flash（2 条）", () => {
+  it("兜底表 32 条（含 4 隐藏）；exposedIds 放行全部可见模型（全模型池）", () => {
     assert.equal(catalog.FALLBACK_MODELS.length, 32);
     const ids = catalog.exposedIds();
-    assert.equal(ids.length, 2, "28 条可见兜底里只有 2 条是 flash 家族（未登录也必须有模型）");
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能有 flash 家族");
-    assert.ok(!ids.includes("glm-5.2") && !ids.includes("kimi-k3"), "非 flash 被白名单过滤");
+    // 全模型池：放行全部可见模型（32 - 4 隐藏 - 11 自定义模型占位 = 17 条）
+    assert.equal(ids.length, 17, `应放行全部 17 条可见兜底，实际: ${ids.length}`);
+    assert.ok(ids.includes("DeepSeek-V4-Flash-Official"), "应包含 DeepSeek-V4-Flash-Official");
+    assert.ok(ids.includes("glm-5.2"), "应包含 glm-5.2（非 flash 也进池）");
+    assert.ok(ids.includes("kimi-k3"), "应包含 kimi-k3（别家模型也进池）");
     // 过滤只发生在呈现层：底层表仍含全部可见条目（含被过滤的 kimi/glm）
     const detailIds = catalog.details().map((e) => e["id"]);
     assert.equal(detailIds.length, 28, "details 仍给出 28 条可见条目（4 条隐藏不出现在其中）");
-    assert.ok(detailIds.includes("kimi-k3"), "底层表含非白名单模型（数据没丢）");
+    assert.ok(detailIds.includes("kimi-k3"), "底层表含 kimi（数据没丢）");
     assert.ok(!ids.includes("summary") && !ids.includes("browser_use_subagent"));
     assert.equal(catalog.resolveModel("nope-1"), "nope-1", "未知原样透传");
     assert.equal(catalog.channelFor("glm-5.2"), "solo_work_lite", "缺省通道");
@@ -910,22 +912,22 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     catalog.resetRemoteCache();
   });
 
-  it("/v1/models 来自远端且已过滤；目录请求带 22 个通道", async () => {
+  it("/v1/models 来自远端且已过滤；目录请求带 22 个通道（全模型池）", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/models`);
     const payload = (await resp.json()) as { data: Array<{ id: string }> };
     const ids = payload.data.map((m) => m.id);
-    assert.deepEqual(
-      ids,
-      ["deepseek-v4.1-flash", "glm-5.3-flash"],
-      "对外只有两个池模型（不带渠道前缀）",
-    );
+    // 全模型池：不再限制只有两个池模型，而是动态返回渠道能提供的全部模型
+    assert.ok(ids.includes("deepseek-v4-flash"), "应包含 deepseek-v4-flash");
+    assert.ok(ids.includes("glm-5.2"), "应包含 glm-5.2（非 flash 也进池）");
+    assert.ok(ids.includes("kimi-k3"), "应包含 kimi-k3（别家模型也进池）");
+    assert.ok(ids.includes("solo-agent-only"), "应包含 solo-agent-only（远端目录）");
     assert.ok(
       ids.every((id) => !id.includes("/")),
       "不再暴露 <cid>/<模型> 形态",
     );
-    // 远端目录确实被采信：非白名单条目被过滤但数据没丢（solo-agent-only 只在远端载荷里）
+    // 远端目录确实被采信：solo-agent-only 只在远端载荷里
     const detailIds = catalog.details().map((e) => e["id"]);
-    assert.ok(detailIds.includes("solo-agent-only") && detailIds.includes("kimi-k3"), "过滤发生在呈现层，底层目录未丢数据");
+    assert.ok(detailIds.includes("solo-agent-only") && detailIds.includes("kimi-k3"), "远端目录已灌入");
     const modelsReq = fake.requests.find((r) => r.path === upstream.MODELS_PATH)!;
     assert.equal((modelsReq.body?.["functions"] as string[]).length, 22);
     assert.equal(modelsReq.headers["authorization"], "Cloud-IDE-JWT tok-e2e");

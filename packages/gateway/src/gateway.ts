@@ -48,7 +48,7 @@ import {
 import { runInChannel } from "./channel-context.js";
 import { activateAccount, markActiveHealth, pickAccount, purgeCredentials, readIndex } from "./account-pool.js";
 import { resolvePoolModel } from "./model-pool.js";
-import { asPoolModel, poolCandidates, POOL_MODELS, POOL_MODEL_META } from "./pool-targets.js";
+import { asPoolModel, poolCandidates, POOL_MODELS, POOL_MODEL_META, getPoolModelMeta } from "./pool-targets.js";
 import { isCooling, maybeRefreshBilling, noteFailure, noteSuccess, scoreOf } from "./pool-usage.js";
 import * as sseStream from "./sse-stream.js";
 import { baseUrlOf, bindFreeServer, displayBase } from "./portfree.js";
@@ -569,6 +569,7 @@ async function handleChat(
 
   // 公共模型池：对外只认池内模型，请求落到哪家渠道由账本决定
   // （匹配见 pool-targets.ts，排序见 pool-usage.ts）。
+  // 全模型池：不再限制只认 2 个 flash，而是动态匹配全部渠道能提供的模型。
   maybeRefreshBilling(opts.logger); // 账单额度到期就在后台刷，不阻塞本次请求
 
   const target = asPoolModel(model);
@@ -577,10 +578,13 @@ async function handleChat(
       res,
       400,
       "unknown_model",
-      `unknown model ${model}; available models: ${POOL_MODELS.join(", ")}`,
+      `unknown model ${model}; <cid>/<模型> 形态已失效，请用归一化后的模型名`,
     );
     return;
   }
+  // 全模型池：池是**动态**的（取决于渠道登录与目录就绪状态），因此「候选为空」
+  // 本质是可用性问题（模型可能在池里，只是当前没有渠道能供给），统一按 503 回报；
+  // 400 只留给格式错误（带 `<cid>/` 前缀的旧形态，见上面的 asPoolModel 判定）。
   const candidates = poolCandidates(target);
   if (candidates.length === 0) {
     writeJsonError(
@@ -864,11 +868,13 @@ async function relayUpstream(
 }
 
 /**
- * 公共模型池：`/v1/models` **恒返回池内模型**。
+ * 公共模型池：`/v1/models` **动态返回全部渠道能提供的模型**。
  *
- * 客户端只看到池内 id（`POOL_MODELS`），**不带渠道前缀** —— 请求落到哪家由网关
- * 按账本决定，客户端不参与也无法指定。某个模型暂时没有可用渠道时照样列出
- * （模型可见性与登录状态解耦），请求时才报 503。
+ * 客户端看到归一化后的模型 id（如 `deepseek-v4.1-flash`、`glm-5.3-flash`、`qwen3-coder` 等），
+ * **不带渠道前缀** —— 请求落到哪家由网关按账本决定，客户端不参与也无法指定。
+ * 某个模型暂时没有可用渠道时照样列出（模型可见性与登录状态解耦），请求时才报 503。
+ *
+ * 全模型池：不再限制只暴露 2 个 flash，而是动态收集全部渠道 `exposedIds()` 归一化后的去重结果。
  */
 function handleModels(res: ServerResponse): void {
   const owner = serviceName();
@@ -877,7 +883,7 @@ function handleModels(res: ServerResponse): void {
     // 字段结构对齐 DeepSeek 官方 `GET /models`（见 pool-targets.ts 的 PoolModelMeta）：
     // **没有 `created`**，`name` 是展示名，并带上上下文 / 最大输出 / 模态 / 档位。
     data: POOL_MODELS.map((id) => {
-      const meta = POOL_MODEL_META[id];
+      const meta = getPoolModelMeta(id);
       return {
         id,
         object: "model",

@@ -58,14 +58,15 @@ describe("仓库级模型池", () => {
     assert.equal(per.length, EXPECTED_CIDS.length, "逐渠道报告");
   });
 
-  it("/v1/models 恒返回两个池模型，不带渠道前缀", async () => {
+  it("/v1/models 动态返回全模型池，不带渠道前缀", async () => {
     const resp = await fetch(`http://${running.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string; owned_by: string }> };
-    assert.deepEqual(
-      payload.data.map((m) => m.id),
-      ["deepseek-v4.1-flash", "glm-5.3-flash"],
-    );
+    const ids = payload.data.map((m) => m.id).sort();
+    // 全模型池：11 个渠道能提供的全部模型，去重后应包含 deepseek-v4-flash 与 glm-5.3-flash
+    assert.ok(ids.includes("deepseek-v4-flash"), "应包含 deepseek-v4-flash");
+    assert.ok(ids.includes("glm-5.3-flash"), "应包含 glm-5.3-flash");
+    assert.ok(ids.length > 2, `应多于 2 个模型，实际 ${ids.length}`);
     assert.ok(
       payload.data.every((m) => !m.id.includes("/")),
       "不再暴露 <cid>/<模型> 形态",
@@ -125,11 +126,10 @@ describe("仓库级模型池", () => {
       "workbuddyai 应贡献 deepseek-v4.1-flash",
     );
     // qoder 的上游 key 是短名（gfmodel），由渠道自己映射成池内名；
-    // 4.0 的 dfmodel 已随 deepseek-v4-flash 出池，故只剩 glm 一条
-    assert.deepEqual(
-      [...contributed("qoder")].sort(),
-      ["glm-5.3-flash"],
-      "qoder 用 gfmodel 贡献 glm-5.3-flash",
+    // 全模型池：qoder 可能贡献多个模型（gfmodel / dfmodel 等）
+    assert.ok(
+      contributed("qoder").includes("glm-5.3-flash"),
+      "qoder 应贡献 glm-5.3-flash",
     );
 
     const contributing = gw.channels().filter((c) => contributed(c.config.cid).length > 0);
