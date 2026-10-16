@@ -23,3 +23,6 @@ __pycache__/
 
 # 规划过程文件（planning-with-files；结项即删）
 .planning/
+
+# ZCode 会话产物（计划/exec 缓存等），不入库
+.zcode/

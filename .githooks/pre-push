@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# 推送门禁：把仓库（完整历史）clone 到 WSL ext4，在真 Linux 环境跑 CI 完全相同
+# 的命令（npm ci + npm test），全绿才放行推送。
+#
+# 在 WSL 内 clone 而非直接在 /mnt/c 工作树上跑：verify:commits 需要完整 git 历史
+# （与 CI fetch-depth: 0 对齐），且 ext4 上无 DrvFs 符号链接/性能问题，
+# npm ci 还能装上 Linux 平台的 esbuild 等原生依赖。
+# 紧急绕过：git push --no-verify（按 AGENTS.md 门禁规则，须先经主人同意）。
+set -euo pipefail
+
+# MSYS/Git Bash 下 pwd -W 给出 Windows 形式（C:/...），其余环境退回 pwd
+win_path=$(pwd -W 2>/dev/null || pwd)
+lx_path=$(printf '%s' "$win_path" | sed -E 's#^([A-Za-z]):/#/mnt/\L\1/#')
+GATE=/tmp/modelmux-gate
+
+echo "[pre-push] WSL 门禁：clone $lx_path → $GATE → npm ci → npm test"
+if ! wsl.exe -e bash -lc "
+  rm -rf '$GATE' && git clone --no-hardlinks -q '$lx_path' '$GATE' &&
+  cd '$GATE' && npm ci --no-fund --no-audit && npm test
+"; then
+  echo "[pre-push] WSL 测试未全绿，推送已拦截（如确需绕过：git push --no-verify）" >&2
+  exit 1
+fi
+echo "[pre-push] WSL 测试全绿，放行推送"
