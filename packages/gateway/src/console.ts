@@ -25,10 +25,8 @@ export const DEFAULT_UI_HOST = "127.0.0.1";
 
 const THEME_MODES = new Set(["system", "dark", "light"]);
 
-/** UI 静态产物根：与 dist/main/*.js 平级。 */
-const WEB_UI_ROOT = resolve(
-  process.env["MODELMUX_WEB_UI_ROOT"] ?? resolve(fileURLToPath(new URL(".", import.meta.url)), "..", "ui"),
-);
+/** UI 静态产物根：与 dist/*.js 平级。 */
+const WEB_UI_ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "ui");
 const WEB_UI_INDEX = join(WEB_UI_ROOT, "index.html");
 
 const MIME: Record<string, string> = {
@@ -97,9 +95,14 @@ function text(res: import("node:http").ServerResponse, status: number, body: str
 
 /** 静态文件服务（含路径穿越校验）。 */
 function serveStatic(res: import("node:http").ServerResponse, relPath: string): void {
-  const file = isAbsolute(relPath)
-    ? relPath
-    : resolve(WEB_UI_ROOT, relPath.replace(/^[\/]+/, ""));
+  const relative = decodeURIComponent(relPath).replace(/^[\\\/]+/, "");
+  if (relative.split("/").some((segment) => segment === "..")) {
+    text(res, 403, "Forbidden");
+    return;
+  }
+  const file = isAbsolute(relative)
+    ? relative
+    : resolve(WEB_UI_ROOT, relative);
   if (!file.startsWith(`${WEB_UI_ROOT}${sep}`) && file !== WEB_UI_ROOT) {
     text(res, 403, "Forbidden");
     return;
