@@ -19,37 +19,37 @@
       "path": "../gateway"
     },
     {
-      "path": "../../channels/catpaw"
+      "path": "../channels/catpaw"
     },
     {
-      "path": "../../channels/codearts"
+      "path": "../channels/codearts"
     },
     {
-      "path": "../../channels/lobsterai"
+      "path": "../channels/lobsterai"
     },
     {
-      "path": "../../channels/loomy"
+      "path": "../channels/loomy"
     },
     {
-      "path": "../../channels/orcaterm"
+      "path": "../channels/orcaterm"
     },
     {
-      "path": "../../channels/qoder"
+      "path": "../channels/qoder"
     },
     {
-      "path": "../../channels/qodercn"
+      "path": "../channels/qodercn"
     },
     {
-      "path": "../../channels/raccoon"
+      "path": "../channels/raccoon"
     },
     {
-      "path": "../../channels/traecn"
+      "path": "../channels/traecn"
     },
     {
-      "path": "../../channels/workbuddy"
+      "path": "../channels/workbuddy"
     },
     {
-      "path": "../../channels/workbuddyai"
+      "path": "../channels/workbuddyai"
     }
   ]
 }

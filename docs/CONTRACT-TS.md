@@ -5,7 +5,7 @@
 ## 0. 一句话架构
 
 **共享层在 `packages/gateway`（工作区名 `@modelmux/gateway`），渠道差异通过
-`Channel` 注册表注入。每个 `channels/<cid>/` 只实现 4 个渠道特有模块，其余一律复用共享包。**
+`Channel` 注册表注入。每个 `packages/channels/<cid>/` 只实现 4 个渠道特有模块，其余一律复用共享包。**
 
 旧实现（已废弃）是「每个项目各存一份共享模块副本 + 用 `scaffold_ts.py` 做字符串替换」，
 改一处要重刷 11 份。现在共享模块只有一份，字符串替换已彻底移除。
@@ -31,20 +31,20 @@ modelmux/                     ← 仓库根 = 工作区根
 │       ├── sse-stream.ts         ← SSE 规范化、聚合、中继
 │       ├── model-family.ts       ← 模型池白名单（见 §4）
 │       └── index.ts              ← 对外的统一出口
-├── channels/                     ← 渠道（每个 = 一个模型池 + 账号池；清单以 mx model list 为准）
+├── packages/channels/                     ← 渠道（每个 = 一个模型池 + 账号池；清单以 mx model list 为准）
 │   └── <cid>/                    ← 结构见下
 ├── packages/cli/                 ← **CLI 入口**（bin `modelmux` / `mx`）
 │   └── src/
 │       ├── channels.ts           ← import 全部渠道包（副作用 = setChannel）
 │       └── cli.ts                ← bin 入口：注册全部渠道后调共享 `main()`
-├── docs/                         ← 契约与规范（渠道文档在各包 channels/<cid>/docs/）
+├── docs/                         ← 契约与规范（渠道文档在各包 packages/channels/<cid>/docs/）
 └── tools/                        ← 仓库级校验器（verify-contract / verify-storage / verify-docs）
 ```
 
-`channels/<cid>/` 内部（= 一个**池子**）：
+`packages/channels/<cid>/` 内部（= 一个**池子**）：
 
 ```
-channels/<cid>/
+packages/channels/<cid>/
 ├── docs/                       ← 渠道文档：README.md（说明）+ PROTOCOL.md（协议规格），随包走
 └── src/
    ├── channel.ts                ← **本渠道装配**：ChannelConfig + 4 个模块 → setChannel()
@@ -60,12 +60,12 @@ channels/<cid>/
 > 两个跨渠道的对外模型（见 §4 与 [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md)）。
 > 账号池见同文档 §3。
 
-**每个 `channels/<cid>/` 的 `src/` 只有 7 个文件。** 任何不在上表里的 `src/*.ts`
+**每个 `packages/channels/<cid>/` 的 `src/` 只有 7 个文件。** 任何不在上表里的 `src/*.ts`
 （`gateway.ts` / `daemon.ts` / `paths.ts` / `sse-stream.ts` …）都是旧副本残留，应删除。
 
 ### 1.1 各渠道的共享依赖声明
 
-每个 `channels/<cid>/package.json` 必须声明：
+每个 `packages/channels/<cid>/package.json` 必须声明：
 
 ```json
 { "dependencies": { "@modelmux/gateway": "*" } }
@@ -98,7 +98,7 @@ channels/<cid>/
 ### 2.1 发布构建：单文件 bundle（`packages/cli/scripts/bundle.mjs`）
 
 `packages/cli` 是**唯一可全局安装/发布的单元**。它的运行时依赖是 workspace 软链
-（`@modelmux/catpaw` → `channels/catpaw`），直接 `npm i -g` 会因软链断裂而失败。
+（`@modelmux/catpaw` → `packages/channels/catpaw`），直接 `npm i -g` 会因软链断裂而失败。
 因此 `npm run build` 在 `tsc -b` 之后追加一步 esbuild 打包：从唯一聚合点
 `src/cli.ts` 沿静态 import 把 cli + gateway + 全部渠道内联成
 `dist/cli.bundle.js`（带 shebang），`bin` 指向它，tarball 自包含。
@@ -377,7 +377,7 @@ Ctrl+点击 / 复制），用户自行在浏览器打开，再轮询/回调拿�
   - `paths`：存储根覆盖（`MODELMUX_HOME`）、`<cid>` 分层
   - `catalog`：别名映射、未知名透传、**白名单过滤只作用于呈现层**（`details()` 仍全量）
   - `cred`：未登录抛错、落盘读回、损坏容忍
-  - `upstream`：URL 组装、鉴权头、请求体改写的关键字段（对照 `channels/<cid>/docs/PROTOCOL.md`）
+  - `upstream`：URL 组装、鉴权头、请求体改写的关键字段（对照 `packages/channels/<cid>/docs/PROTOCOL.md`）
   - **`newTranslator()`（`WIRE === "custom"` 时）**：事件映射、`finish()` 补帧，
     且**必须测逐字节喂入**（切帧 bug 的高发区）
   - **端到端网关**：假上游 + 真实网关，断言流式与非流式都能出正文，
@@ -410,7 +410,7 @@ Ctrl+点击 / 复制），用户自行在浏览器打开，再轮询/回调拿�
 ### 8.2 机制化防线（**不靠人记**）
 
 `packages/gateway/src/stale-build.ts`：比较**构建产物的最新 mtime**（工作区内各
-`packages/*/dist`、`channels/*/dist` 下的 `.js`）与**守护进程启动时刻**
+`packages/*/dist`、`packages/channels/*/dist` 下的 `.js`）与**守护进程启动时刻**
 （pid 文件的 mtime，`start` 亲手写的那一刻，等价且零平台依赖）。
 
 - `mx status`：命中时打印
@@ -478,5 +478,5 @@ mx <命令组> <子命令> [参数...]           # mx model list / mx model usag
 - [ ] `npm install && npm run build` 无错误（`tsc -b`，严格模式；各包 `extends` 根 `tsconfig.base.json`）
 - [ ] `node --test tests/selftest.test.ts` 全绿
 - [ ] 全仓验证：`npm test` 退出码 0（自带 `build`；根 `tsconfig.json` 为 solution 文件，一次 `tsc -b` 编全仓）
-- [ ] README 更新为 TypeScript 安装/使用说明，并指向 `channels/<cid>/docs/PROTOCOL.md`
-- [ ] `channels/<cid>/docs/PROTOCOL.md` 保留（协议规格，实现的依据）
+- [ ] README 更新为 TypeScript 安装/使用说明，并指向 `packages/channels/<cid>/docs/PROTOCOL.md`
+- [ ] `packages/channels/<cid>/docs/PROTOCOL.md` 保留（协议规格，实现的依据）
