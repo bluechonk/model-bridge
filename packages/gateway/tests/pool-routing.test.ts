@@ -84,20 +84,22 @@ describe("1. 归一化：各渠道实测写法都能收敛", () => {
 });
 
 describe("2. asPoolModel：命中/不命中", () => {
-  it("两个池内目标（含大小写变体）都命中", () => {
+  it("全模型池：动态匹配（依赖渠道目录）", () => {
+    // 全模型池：asPoolModel 依赖渠道 exposedIds，测试桩渠道注册后动态计算
+    // 这里只验证归一化逻辑本身（不依赖渠道注册）
     assert.equal(asPoolModel("deepseek-v4.1-flash"), "deepseek-v4.1-flash");
     assert.equal(asPoolModel("DEEPSEEK-V4.1-FLASH"), "deepseek-v4.1-flash");
     assert.equal(asPoolModel("Glm-5.3-Flash"), "glm-5.3-flash");
-    // 4.0 已移出池：归一化仍正确，但不再是可路由的池模型
-    assert.equal(asPoolModel("deepseek-v4-flash"), null);
-    assert.equal(asPoolModel("DEEPSEEK-V4-FLASH"), null);
+    // 全模型池：4.0 也进池（不再限制 flash-only）
+    assert.equal(asPoolModel("deepseek-v4-flash"), "deepseek-v4-flash");
+    assert.equal(asPoolModel("DEEPSEEK-V4-FLASH"), "deepseek-v4-flash");
   });
 
   it("近亲不命中（4.0 vs 4.1、flashx、vision-exp、无版本）", () => {
-    assert.equal(asPoolModel("deepseek-v4-flashx"), null);
-    assert.equal(asPoolModel("glm-5.3-flashx"), null);
-    assert.equal(asPoolModel("deepseek-v4-flash-vision-exp"), null);
-    assert.equal(asPoolModel("deepseek-flash"), null);
+    assert.equal(asPoolModel("deepseek-v4-flashx"), "deepseek-v4-flashx");
+    assert.equal(asPoolModel("glm-5.3-flashx"), "glm-5.3-flashx");
+    assert.equal(asPoolModel("deepseek-v4-flash-vision-exp"), "deepseek-v4-flash-vision-exp");
+    assert.equal(asPoolModel("deepseek-flash"), "deepseek-flash");
     assert.equal(asPoolModel("alpha/deepseek-v4-flash"), null, "渠道前缀形态不再被接受");
   });
 });

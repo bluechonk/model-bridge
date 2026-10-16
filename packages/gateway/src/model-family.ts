@@ -1,12 +1,8 @@
 /**
- * 模型家族白名单：**只把「deepseek 系 / glm 系」的 flash 模型放进模型池**。
+ * 模型家族白名单：**放行全部模型**（全模型池模式）。
  *
- * 两条判据**同时**成立才放行：
- * 1. 家族 ∈ `FAMILY_ALLOWLIST`（deepseek 或 glm）
- * 2. 命中 `REQUIRED_ALLOWLIST`（flash 系）
- *
- * 即 `(deepseek|glm) && flash`。同家族的非 flash（`deepseek-v4-pro`、`glm-5.2`）
- * 与别家的 flash（`qwen3.8-flash`、`gemini-3.8-flash`、`mimo-v2.6-flash`）都被挡在池外。
+ * 历史：曾限制为 `(deepseek|glm) && flash`，现已放宽为全部模型。
+ * 如需重新限制，往 `FAMILY_ALLOWLIST` 里加正则（如 `/qwen/i`）。
  *
  * ## 为什么放在共享层
  *
@@ -14,59 +10,18 @@
  * 每个渠道的目录都由上游决定，而策略由使用方决定。放在共享层的好处：
  * 一次改动覆盖全部渠道，且将来新增渠道自动遵守同一策略。
  *
- * ## 判据为什么同时看 id 与展示名
- *
- * 各渠道的模型 id 形态不同，家族信息不一定在 id 里：
- *
- * | 渠道 | id 形态 | 家族在哪 |
- * |---|---|---|
- * | codearts / lobsterai | `deepseek-v4-flash` / `glm-5.3-flash` | id 里 |
- * | zcode | `GLM-5.3-Flash` | id 里 |
- * | raccoon | `sn-glm-5-3-flash` / `sn-deepseek-v4-1-flash` | id 里（带渠道前缀） |
- * | traecn | `DeepSeek-V4-Flash-Official` | id 里 |
- * | qoder | `dfmodel` / `gfmodel` / `qfmodel` | **只在展示名里**（DeepSeek-Flash / GLM-5.3-Flash） |
- * | workbuddyai | `deepseek-v4.1-flash` | id 里 |
- *
- * ⇒ 只匹配 id 会漏掉 Qoder 那类「目录 key 当 id」的渠道，故两者都要看。
- *
- * ## 策略边界（改前必读）
- *
- * 两道闸门意味着**别家的 flash 型号也会被挡在池外** ——
- * `qwen3.8-flash`、`mimo-v2.6-flash`、`MiniMax-M3.1-Flash-Preview` 等都不再暴露；
- * 没有 deepseek / glm 产品的渠道（如 qoder）池子会**变空**。
- * 这是刻意的过滤，不是渠道坏了：底层目录 / `catalog.details()` 仍保留完整数据，
- * 只是 `/v1/models` 不放它们出来。
- *
  * ## 怎么改
  *
- * - 想放行全部模型：把 `FAMILY_ALLOWLIST` 置为 `[]`
- * - 想加家族：往 `FAMILY_ALLOWLIST` 里加正则（如 `/qwen/i`）—— 家族之间是**并集**
- * - 想放宽型号要求：把 `REQUIRED_ALLOWLIST` 置为 `[]`（不再强制 flash）
+ * - 想限制家族：往 `FAMILY_ALLOWLIST` 里加正则（如 `/deepseek/i`）
+ * - 想限制型号：往 `REQUIRED_ALLOWLIST` 里加正则（如 `/\bflash/i`）
  * - 想临时排查：设 `MODELMUX_ALLOW_ALL_MODELS=1` 绕过白名单（不改代码）
  */
 
-/**
- * 放行的模型**家族**（任一命中即可）。
- *
- * ⚠ 用**前置词边界**而不是裸子串：
- * - 上游写法有 `glm-5.3-flash`、`sn-glm-5-3-flash`、`z-ai/glm-5.3-flashx`、
- *   `~deepseek/deepseek-flash-latest` —— 家族名前面总是 `-` / `/` / `~` / 串首，
- *   这些位置都有词边界，所以 `\b` 覆盖全部真实变体（实测逐条验证过）。
- * - 而裸子串会把 `alglmx-flash`、`glimmer-flash` 这类**不是 GLM 的**名字放进来。
- *   误放行的代价是**把别家模型塞进用户的模型选择器**，比漏掉一个变体严重得多。
- */
-export const FAMILY_ALLOWLIST: RegExp[] = [/\bdeepseek/i, /\bglm/i];
+/** 放行的模型**家族**（任一命中即可）。空数组 = 放行全部。 */
+export const FAMILY_ALLOWLIST: RegExp[] = [];
 
-/**
- * 必须**同时**命中的型号标记（全部命中才算过）。
- *
- * ⚠ 只加**前置**边界（`\bflash`），**不能**加后置 —— 同系变体靠后缀才认得出：
- * `glm-5.3-flashx`（FlashX）、`~z-ai/glm-flash-latest`（跟随最新），
- * 加后置边界 `\bflash\b` 会把这些变体全丢掉（实测）。
- * 前置边界既覆盖 `glm-5.3-flash` / `deepseek-v4-flash-0731` /
- * `DeepSeek-V4-Flash-Official` / `:batch` 等全部真实写法，也排除 `flashlight` 这类词。
- */
-export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];
+/** 必须**同时**命中的型号标记（全部命中才算过）。空数组 = 不强制型号。 */
+export const REQUIRED_ALLOWLIST: RegExp[] = [];
 
 /** 判据用的拼接串（各段都是可选，便于调用方只传它有的信息）。 */
 export type FamilyHint = string | undefined;

@@ -770,15 +770,15 @@ describe("9. 模型目录：兜底表 / 图片能力 / 倍率规则", () => {
     assert.equal(catalog.displayName(byId.get("sn-glm-5-3-flash")!), "GLM-5-3-Flash · x0.2→x0.1");
   });
 
-  it("未登录时同样列出兜底表；未知模型原样透传", () => {
+  it("未登录时同样列出兜底表；未知模型原样透传（全模型池）", () => {
     catalog.clearCache();
     const ids = catalog.exposedIds();
-    assert.deepEqual(
-      ids,
-      ["sn-glm-5-3-flash", "sn-deepseek-v4-1-flash"],
-      "池策略 (deepseek|glm)×flash：6 条兜底里 2 条命中（命中 flash 但非 deepseek/glm 的挡下）",
-    );
-    assert.ok(ids.every((id) => /flash/i.test(id) && /deepseek|glm/i.test(id)), "两道闸门都要过");
+    // 全模型池：放行全部模型，不再限制 (deepseek|glm)×flash
+    assert.equal(ids.length, 6, `应放行全部 6 条兜底，实际: ${ids.join(", ")}`);
+    assert.ok(ids.includes("sn-glm-5-3-flash"), "应包含 sn-glm-5-3-flash");
+    assert.ok(ids.includes("sn-deepseek-v4-1-flash"), "应包含 sn-deepseek-v4-1-flash");
+    assert.ok(ids.includes("sn-sensenova-6-8-flash"), "应包含 sn-sensenova-6-8-flash");
+    assert.ok(ids.includes("sn-kimi-k3"), "应包含 sn-kimi-k3");
     assert.equal(catalog.resolveModel("sn-brand-new"), "sn-brand-new");
     assert.equal(catalog.resolveModel("sn-glm-5-3"), "sn-glm-5-3");
   });
@@ -831,9 +831,9 @@ describe("10. 模型目录：远端优先与缓存", () => {
     catalog.clearCache();
     await catalog.refreshCatalog();
     assert.deepEqual(
-      catalog.exposedIds(),
-      ["sn-glm-5-3-flash"],
-      "远端 glm flash 进池；sn-deepseek-v4-1-flash 不在这个假上游里，别家 flash 被策略挡下",
+      catalog.exposedIds().sort(),
+      ["sn-glm-5-3", "sn-glm-5-3-flash"].sort(),
+      "全模型池：远端 glm flash + glm 都进池（不再限制 flash-only）",
     );
     assert.equal(st.sentModels, 1);
     await catalog.refreshCatalog();

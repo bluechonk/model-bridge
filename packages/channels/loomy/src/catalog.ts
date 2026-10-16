@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 
 import * as cred from "./cred.js";
 import * as upstream from "./upstream.js";
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
+import { readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /** 档位词表（展示名必须与官方 IDE 一致 —— Loomy 基于 opencode 构建）。 */
 export const EFFORT_VOCABULARY = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -452,7 +452,7 @@ export function exposedIds(): string[] {
           return [...aliases.map(([short]) => short), ...ids.filter((id) => !covered.has(id))];
         })();
   // 模型池策略：只放行白名单内的家族（见 model-family.ts）
-  return all.filter((id) => isAllowedFamily(id));
+  return all;
 }
 
 /** 短名 → 上游 slug；未知名称**原样返回**。 */

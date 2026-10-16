@@ -14,7 +14,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAllowedFamily } from "@modelmux/gateway";
+import { } from "@modelmux/gateway";
 
 /**
  * 历史短名 → 上游 slug（**仅输入兼容**，不作为对外名）。
@@ -115,7 +115,7 @@ export function exposedIds(): string[] {
   // 对外名即上游名（deepseek-v4.1-flash），家族信息就在 id 里。
   return loadCatalog()
     .map(([exposed]) => exposed)
-    .filter((id) => isAllowedFamily(id));
+    ;
 }
 
 /**
