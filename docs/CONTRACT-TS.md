@@ -432,6 +432,16 @@ Ctrl+点击 / 复制），用户自行在浏览器打开，再轮询/回调拿�
 改完共享层/渠道代码并 `npm run build` 后，**主动 `restart` 再验证**；
 涉及登录链路/上游协议的改动必须走一次真机验证（`login <cid>` → `status` → 一次真实对话）。
 
+### 8.4 spawn 入口契约与 PID mtime 注记
+
+`daemon.start` 不再直接 spawn `serve`，而是 spawn **监督进程**（`supervise`；
+契约见 [`DAEMON-SUPERVISOR.md`](./DAEMON-SUPERVISOR.md)）：
+
+- **入口解析仍是 `cliEntry()`**：`start` / `supervise` / `serve` 三者都重跑当前进程的
+  入口（`process.argv[1]`，须为存在的 `.m?js/.cjs`），bundle 与单渠道 bin 自洽。
+- **PID mtime 锚点不变**：`stale-build` 读的仍是 `gateway.pid` 的 mtime——它由
+  `start` 亲手写（≈ start 时刻），worker 由监督者重生**不更新**它，判定语义不受影响。
+
 ---
 
 ## 9. CLI 命令形态（动词优先）

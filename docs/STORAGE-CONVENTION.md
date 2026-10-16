@@ -17,12 +17,14 @@
 ~/.modelmux/                 ← 唯一存储根（MODELMUX_HOME 可覆盖）
 ├── prefs.json                   ← （可选）跨渠道共享偏好
 ├── gateway.pid / gateway.log    ← 仓库级网关的 PID 与日志（不属于任何渠道）
+├── gateway-worker.pid           ← 仓库级网关 worker 的 PID（监督进程维护）
 ├── pool-usage.json              ← 公共模型池的渠道账本（账单已用量 + 失败冷却）
 ├── workbuddyai/                 ← cid 层
 │   ├── credentials.json
 │   ├── upstream.json
 │   ├── prefs.json
 │   ├── gateway.pid
+│   ├── gateway-worker.pid
 │   ├── gateway.log
 │   ├── cache/                   ← 可安全删除（含 cache/models.json）
 │   ├── state/                   ← 跨重启保持
@@ -59,7 +61,8 @@
   | `credentials.json` | 登录凭证 |
   | `upstream.json` | 上游端点与鉴权头名称 |
   | `prefs.json` | 渠道内偏好（`auto_start` 等） |
-  | `gateway.pid` | 守护式网关 PID |
+  | `gateway.pid` | 守护式网关 PID（记监督进程） |
+  | `gateway-worker.pid` | 守护式网关 worker PID（监督进程维护） |
   | `gateway.log` | 守护进程 stdout/stderr |
 
 5. **渠道特有文件必须落在自己的 cid 层内**：

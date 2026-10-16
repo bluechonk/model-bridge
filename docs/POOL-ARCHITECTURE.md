@@ -336,3 +336,20 @@ hasChannel(cid?: string): boolean;
 - **插件层已整体移除（2026-10-13）**：`plugins/` 与 `marketplace.json` 删除，项目更名
  `modelmux`，定位 = 纯 npx/npm -g 可装的 CLI；集成方式就是「任何 OpenAI 兼容客户端
  指向 `http://127.0.0.1:8787/v1`」。（更早：per-channel 插件 → 单插件收敛 → 全部移除。）
+
+### 4.4 三层进程模型（2026-10-16 落地）
+
+网关的生命周期由三层进程承担（契约细节见 [`DAEMON-SUPERVISOR.md`](./DAEMON-SUPERVISOR.md)）：
+
+```
+mx start（短命命令，写 PID 文件后退出）
+  └─ mx supervise  监督进程（detached 常驻；只管 spawn / 重生 / 心跳）
+       └─ mx serve  网关 worker（stderr → gateway.log；IPC + supervisor-ping 双通道感知父死）
+```
+
+- **谁管谁**：`start` 拉起的是监督者，PID 文件（`gateway.pid`）记监督者 pid；
+ worker pid 由监督者维护到 `gateway-worker.pid`。
+- **自动重生**：worker 意外退出且死前曾 healthy → 指数退避重生
+ （1s→2→4→8→16→30s 封顶；稳定 ≥60s 计数清零；从未 healthy 的启动窗口死亡不重生）。
+- **干净终止**：`mx stop` 杀监督者即作废重生，再等 worker IPC/心跳自退（≤3s），
+ 最后兜底清 worker；`mx serve` 直跑是调试路径，无监督、不自动拉回。

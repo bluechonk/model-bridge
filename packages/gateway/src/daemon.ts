@@ -1,9 +1,10 @@
 /**
  * 守护式网关管理：`start / stop / restart / logs / status / models / credits` 的实现。
  *
- * 进程模型：网关是**共享本地服务**，守护式常驻、不随宿主会话生灭。
- * `start` 负责拉起（幂等：先探测 `/health`，已在跑直接返回）并落 PID 文件；
- * `stop` 读 PID 文件杀进程树；会话期不做自动回收。
+ * 进程模型（见 docs/DAEMON-SUPERVISOR.md）：`start` 拉起的是**监督进程**
+ * （`supervise`，detached 常驻），worker（`serve`）由监督进程 spawn 与重生 ——
+ * worker 意外死亡会被按指数退避自动拉回；`stop` 杀监督者即作废重生，再兜底清 worker。
+ * `start` 幂等：先探测 `/health`，已在跑直接返回。
  *
  * 渠道差异由注册的 `Channel` 提供；本文件里的 CLI 名/日志前缀取自其 config。
  */
@@ -52,6 +53,7 @@ interface Scope {
   /** CLI 名与日志前缀。 */
   name: string;
   pidPath: () => string;
+  workerPidPath: () => string;
   logPath: () => string;
   prefsPath: () => string;
 }
@@ -63,6 +65,7 @@ function scopeOf(cid?: string): Scope {
       cid,
       name,
       pidPath: () => paths.pidPath(cid),
+      workerPidPath: () => paths.workerPidPath(cid),
       logPath: () => paths.logPath(cid),
       prefsPath: () => paths.prefsPath(cid),
     };
@@ -71,6 +74,7 @@ function scopeOf(cid?: string): Scope {
     return {
       name: channels()[0]!.config.cid,
       pidPath: () => paths.pidPath(),
+      workerPidPath: () => paths.workerPidPath(),
       logPath: () => paths.logPath(),
       prefsPath: () => paths.prefsPath(),
     };
@@ -78,6 +82,7 @@ function scopeOf(cid?: string): Scope {
   return {
     name: "modelmux",
     pidPath: () => paths.rootPidPath(),
+    workerPidPath: () => paths.rootWorkerPidPath(),
     logPath: () => paths.rootLogPath(),
     prefsPath: () => paths.rootPrefsPath(),
   };
@@ -242,12 +247,11 @@ export async function killTree(pid: number): Promise<boolean> {
  * 注意 bundle 形态下该回退同样失效（bundle 里没有独立 cli.js）——但回退只在异常启动方式
  * （非文件入口）下触发，属已知限制。
  */
-function cliEntry(): string {
+export function cliEntry(): string {
   const entry = process.argv[1];
   if (entry && /\.(m?js|cjs)$/i.test(entry) && existsSync(entry)) return entry;
   return fileURLToPath(new URL("./cli.js", import.meta.url));
 }
-
 export interface StartOptions {
   addr?: string;
   uiPort?: number;
@@ -310,19 +314,30 @@ export async function start(options: StartOptions = {}): Promise<number> {
   for (const channel of scopeChannels(scope)) {
     runInChannel(channel.config.cid, () => syncPool(channel.config.cid));
   }
-  const args = [
+  // 拉起的是**监督进程**（supervise，detached 常驻）：worker（serve）由它 spawn 与重生。
+  // PID 文件记监督者 pid；worker pid 由监督者维护到 gateway-worker.pid。
+  // 落点（worker pid/日志/cwd）以显式路径下发 —— scope 推导是 daemon 的职责，
+  // 监督者不重复推导（多渠道路由下 paths 渠道级函数需要 explicit cid）。
+  const workerDir = ensureScopeDir(scope);
+  const superviseArgs = [
     cliEntry(),
-    "serve",
+    "supervise",
     "--addr",
     addr,
     "--ui-port",
     String(uiPort),
     "--json",
+    "--worker-pid",
+    scope.workerPidPath(),
+    "--log",
+    scope.logPath(),
+    "--cwd",
+    workerDir,
   ];
-  // ⚠ stdio 全部重定向到日志文件：守护进程没有控制台可继承，
+  // ⚠ stdio 全部重定向到日志文件：监督进程没有控制台可继承，
   //   继承父进程的 stdout 会在父进程退出后写入失败（EPIPE 刷屏）
   const logFd = openSync(scope.logPath(), "a");
-  const child = spawn(process.execPath, args, {
+  const child = spawn(process.execPath, superviseArgs, {
     detached: true,
     stdio: ["ignore", logFd, logFd],
     windowsHide: true,
@@ -369,10 +384,18 @@ function recordStop(scope: Scope, pid: number): void {
   }
 }
 
-/** 停止守护式网关（只管理有 PID 文件的实例，不碰第三方进程）。 */
+/**
+ * 停止守护式网关（只管理有 PID 文件的实例，不碰第三方进程）。
+ *
+ * 三步流（杀监督者 = 天然作废重生，见 docs/DAEMON-SUPERVISOR.md §4）：
+ * ① killTree 监督者 —— 重生代次随进程消失，worker 后续退出不会再被拉回；
+ * ② 等 worker IPC 自退（≤3s，reason=supervisor-gone），未退则 killTree worker 兜底；
+ * ③ 终验：监督者/worker 进程对象与端口上的网关健康全部确认消失才声称「已停止」。
+ */
 export async function stop(options: { quiet?: boolean; addr?: string; cid?: string } = {}): Promise<number> {
   const { quiet = false } = options;
   const scope = scopeOf(options.cid);
+  const addr = options.addr ?? defaultAddr(options.cid);
   const pid = readPid(scope);
   const name = scope.name;
   const log = (m: string): void => {
@@ -380,7 +403,7 @@ export async function stop(options: { quiet?: boolean; addr?: string; cid?: stri
   };
 
   if (!pid) {
-    if (await gatewayHealthy(options.addr ?? defaultAddr(options.cid))) {
+    if (await gatewayHealthy(addr)) {
       log("网关在运行但没有 PID 文件（非本机守护拉起），未做处理");
       return 1;
     }
@@ -389,21 +412,57 @@ export async function stop(options: { quiet?: boolean; addr?: string; cid?: stri
   }
   const dead = await killTree(pid);
   // 二次验证：taskkill 异步竞态下 waitDead 可能误报「已死」——
-  // 进程对象还在、或端口仍在被本网关监听，都不能声称停止
-  // （实测踩过：stop 报成功、删了 PID 文件，进程照常服务）
-  if (!dead || pidAlive(pid) || (await gatewayHealthy(options.addr ?? defaultAddr(options.cid)))) {
+  // 进程对象还在，都不能声称停止（实测踩过：stop 报成功、删了 PID 文件，
+  // 进程照常服务）。端口的最终核验放到 worker 清理完之后做。
+  if (!dead || pidAlive(pid)) {
     // 进程还活着就不能声称「已停止」：留着 PID 文件，下一次 stop 还能再试
-    log(`未能停止网关 (PID ${pid})：进程或端口仍在运行，请手动结束`);
+    log(`未能停止网关 (PID ${pid})：进程仍在运行，请手动结束`);
     return 1;
   }
   recordStop(scope, pid);
+
+  // ② worker 兜底：监督者死了，worker 应因 IPC 断开自退；留出优雅停机窗口再补刀
+  const workerPid = readPidAt(scope.workerPidPath());
+  if (workerPid && pidAlive(workerPid)) {
+    let selfGone = false;
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      if (!pidAlive(workerPid)) {
+        selfGone = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!selfGone) await killTree(workerPid);
+  }
+
+  // ③ 端口终验：worker 进程对象也消失、端口上无本网关健康，才算停干净
+  if ((workerPid !== 0 && pidAlive(workerPid)) || (await gatewayHealthy(addr))) {
+    log(`未能停止网关 (PID ${pid})：端口仍在被本网关监听，请手动结束`);
+    return 1;
+  }
   try {
     unlinkSync(scope.pidPath());
   } catch {
     /* 已被清掉 */
   }
+  try {
+    unlinkSync(scope.workerPidPath());
+  } catch {
+    /* 已被清掉 */
+  }
   log(`已停止网关 (PID ${pid})`);
   return 0;
+}
+
+/** 从指定 PID 文件读数字（不存在/损坏 → 0）。 */
+function readPidAt(path: string): number {
+  try {
+    const value = Number.parseInt(readFileSync(path, "utf8").trim(), 10);
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /** 重启守护式网关（stop + start；换配置/升级后用）。 */
@@ -417,6 +476,12 @@ export async function restart(options: StartOptions = {}): Promise<number> {
 
 function readPidValue(scope: Scope): number | null {
   const pid = readPid(scope);
+  return pid || null;
+}
+
+/** worker pid（监督进程维护，重生会变；无监督拉起的裸 serve 恒空）。 */
+function readWorkerPidValue(scope: Scope): number | null {
+  const pid = readPidAt(scope.workerPidPath());
   return pid || null;
 }
 
@@ -486,6 +551,7 @@ export async function status(
     },
     console: consoleState,
     daemon_pid: readPidValue(scope),
+    worker_pid: readWorkerPidValue(scope),
     credentials:
       list.length === 1
         ? { present: credentialsPresent }

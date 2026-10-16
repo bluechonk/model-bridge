@@ -16,6 +16,7 @@ import * as groups from "./command-groups.js";
 import { defaultAddr, defaultUiPort, version } from "./cli-consts.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
+import * as supervisor from "./supervisor.js";
 
 /** 生成当前渠道的帮助文本。 */
 export function usage(): string {
@@ -149,6 +150,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         "force-login": { type: "boolean" },
         verbose: { type: "boolean" },
         "no-console": { type: "boolean" },
+        // supervise（内部命令）的落点参数 —— 由 `start` 以显式路径下发
+        "worker-pid": { type: "string" },
+        log: { type: "string" },
+        cwd: { type: "string" },
         follow: { type: "boolean", short: "f" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
@@ -232,6 +237,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         auto: boolOpt(o, "auto"),
         force: boolOpt(o, "force"),
         strict: boolOpt(o, "strict"),
+      });
+
+    case "supervise":
+      // 内部命令（由 `start` spawn；藏而不删，同 `serve` 待遇，不走帮助）
+      return supervisor.runSupervise({
+        addr,
+        uiPort,
+        workerPid: strOpt(o, "worker-pid") ?? "",
+        log: strOpt(o, "log") ?? "",
+        cwd: strOpt(o, "cwd") ?? process.cwd(),
       });
 
     case "stop":
