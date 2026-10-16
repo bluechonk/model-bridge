@@ -22,7 +22,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
+import { readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /** 缺省通道（`function` 字段）。 */
 export const DEFAULT_FUNCTION = "solo_work_lite";
@@ -483,8 +483,6 @@ export function exposedIds(): string[] {
     // endpoint），**不是可调用模型** —— 实测选中它们 5/5 报 `4001 param is invalid`。
     // 列出来只会让用户点到必然失败的条目，故排除。
     .filter((e) => !e.id.startsWith("custom_model"))
-    // 模型池策略：只放行白名单内的家族（见 model-family.ts）
-    .filter((e) => isAllowedFamily(e.id, e.name, e.model))
     .map((e) => e.id);
 }
 

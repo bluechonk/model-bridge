@@ -257,20 +257,16 @@ describe("2. 模型目录", () => {
     assert.equal(catalog.isBenefitModel("some-new-benefit"), false, "reset 后不再命中");
   });
 
-  it("兜底表 9 条；exposedIds 只放行 (deepseek|glm)×flash（3 条）；resolveModel 归一化已知 id", () => {
+  it("兜底表 9 条；exposedIds 放行全部模型（全模型池）；resolveModel 归一化已知 id", () => {
     catalog.resetRemoteCache();
     assert.equal(catalog.FALLBACK_MODEL_IDS.length, 9);
     const ids = catalog.exposedIds();
-    assert.deepEqual(
-      ids,
-      ["glm-5.3-flash", "deepseek-v4-flash", "deepseek-v4.1-flash"],
-      "池策略 (deepseek|glm)×flash：9 条兜底里 3 条命中；openpangu 是 flash 但非 deepseek/glm → 挡下",
-    );
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里必须带 flash");
-    assert.ok(
-      ids.every((id) => /deepseek|glm/i.test(id)),
-      "且必须属于 deepseek 或 glm 家族",
-    );
+    // 全模型池：放行全部模型，不再限制 (deepseek|glm)×flash
+    assert.equal(ids.length, 9, "应放行全部 9 条兜底");
+    assert.ok(ids.includes("glm-5.3-flash"), "应包含 glm-5.3-flash");
+    assert.ok(ids.includes("deepseek-v4-flash"), "应包含 deepseek-v4-flash");
+    assert.ok(ids.includes("deepseek-v4.1-flash"), "应包含 deepseek-v4.1-flash");
+    assert.ok(ids.includes("openpangu-2.0-flash"), "应包含 openpangu-2.0-flash");
     // 过滤只发生在呈现层：底层表仍含非 flash 条目
     const underlying = catalog.details().map((e) => e["id"] as string);
     assert.equal(underlying.length, 9, "details 仍给出全部 9 条");
@@ -1280,13 +1276,16 @@ describe("10. 端到端网关（假上游）", () => {
     if (fake) await new Promise<void>((r) => fake.server.close(() => r()));
   });
 
-  it("fetchModels 合并两目录并写 benefit 缓存", () => {
+  it("fetchModels 合并两目录并写 benefit 缓存（全模型池）", () => {
     const fake = holder.fake!;
-    assert.deepEqual(
-      catalog.exposedIds(),
-      ["glm-5.3-flash", "deepseek-v4-flash"],
-      "GLM-5.2 非 flash → 不进池；openpangu-2.0-flash 是 flash 但非 deepseek/glm → 也挡下（数据仍在底层目录）",
-    );
+    // 全模型池：放行全部模型，不再限制 (deepseek|glm)×flash
+    const ids = catalog.exposedIds();
+    assert.ok(ids.includes("glm-5.3-flash"), "应包含 glm-5.3-flash");
+    assert.ok(ids.includes("deepseek-v4-flash"), "应包含 deepseek-v4-flash");
+    assert.ok(ids.includes("GLM-5.2"), "应包含 GLM-5.2（非 flash 也进池）");
+    // openpangu-2.0-flash 只在兜底表里，fake 上游没提供它
+    // 全模型池：兜底表全部放行，但 fetchModels 后 remote 目录优先（只有 fake 提供的 3 条）
+    assert.equal(ids.length, 3, `fake 上游提供 3 条，实际: ${ids.join(", ")}`);
     assert.equal(catalog.isBenefitModel("glm-5.3-flash"), true);
     assert.equal(
       catalog.isBenefitModel("deepseek-v4-flash"),
@@ -1315,11 +1314,11 @@ describe("10. 端到端网关（假上游）", () => {
     const models = (await (await fetch(`http://${gw.addr}/v1/models`)).json()) as {
       data: Array<{ id: string }>;
     };
-    assert.deepEqual(
-      models.data.map((m) => m.id),
-      ["deepseek-v4.1-flash", "glm-5.3-flash"],
-      "对外只有两个池模型（不带渠道前缀）",
-    );
+    // 全模型池：不再限制只有两个池模型，而是动态返回渠道能提供的全部模型
+    const ids = models.data.map((m) => m.id);
+    assert.ok(ids.includes("glm-5.3-flash"), "应包含 glm-5.3-flash");
+    assert.ok(ids.includes("deepseek-v4-flash"), "应包含 deepseek-v4-flash");
+    assert.ok(!ids.some((id) => id.includes("/")), "不带渠道前缀");
     const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<string, unknown>;
     assert.equal(health["logged_in"], true);
   });

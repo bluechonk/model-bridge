@@ -179,7 +179,7 @@ function chat(gw: gateway.RunningGateway, model: string) {
 
 // ── 1. 对外形态与池路由 ──────────────────────────────────────────────────────
 
-describe("1. /v1/models 只有两个模型，请求由池决定落到谁", () => {
+describe("1. /v1/models 动态返回全模型池，请求由池决定落到谁", () => {
   let deep: FakeUpstream; // 提供 glm-5.3-flash（目录里是混排大小写 + 一个出池的 4.0）
   let four: FakeUpstream; // 提供 deepseek-v4.1-flash（raccoon 式连字符写法）
   let gw: gateway.RunningGateway;
@@ -193,7 +193,7 @@ describe("1. /v1/models 只有两个模型，请求由池决定落到谁", () =>
       makeChannel("alpha", deep.url, [
         ["DeepSeek-V4-Flash", "DeepSeek-V4-Flash-Official"],
         ["glm-5.3-flash", "GLM-5.3-Flash"],
-        ["glm-5.3-flashx", "GLM-5.3-FlashX"], // 不在池内
+        ["glm-5.3-flashx", "GLM-5.3-FlashX"], // 全模型池：也进池
       ]),
     );
     setChannel(
@@ -212,13 +212,15 @@ describe("1. /v1/models 只有两个模型，请求由池决定落到谁", () =>
     clearChannels();
   });
 
-  it("/v1/models 恒返回两个模型，不带渠道前缀", async () => {
+  it("/v1/models 动态返回全模型池，不带渠道前缀", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string; owned_by: string }> };
+    // 全模型池：alpha 提供 3 个 + beta 提供 1 个，去重后 4 个
+    const ids = payload.data.map((m) => m.id).sort();
     assert.deepEqual(
-      payload.data.map((m) => m.id),
-      ["deepseek-v4.1-flash", "glm-5.3-flash"],
+      ids,
+      ["deepseek-v4-flash", "deepseek-v4.1-flash", "glm-5.3-flash", "glm-5.3-flashx"],
     );
     assert.equal(payload.data[0]!.owned_by, "modelmux", "池身份，不泄露候选渠道");
   });
@@ -255,14 +257,15 @@ describe("1. /v1/models 只有两个模型，请求由池决定落到谁", () =>
     assert.equal(deep.captured.length, 0, "4.0 的渠道不该被 4.1 的请求命中");
   });
 
-  it("glm-5.3-flash 命中对应上游；flashx 不在池内", async () => {
+  it("glm-5.3-flash 命中对应上游；flashx 也进池（全模型池）", async () => {
     deep.captured.length = 0;
     const ok = await chat(gw, "glm-5.3-flash");
     assert.equal(ok.status, 200);
     assert.equal(deep.captured[0]!.body!["model"], "GLM-5.3-Flash");
-    // flashx 不在池内 → 当作未知模型
+    // 全模型池：flashx 也进池，命中对应上游
     const fx = await chat(gw, "glm-5.3-flashx");
-    assert.equal(fx.status, 400);
+    assert.equal(fx.status, 200);
+    assert.equal(deep.captured[1]!.body!["model"], "GLM-5.3-FlashX");
   });
 
   it("没有任何渠道提供的池模型 → 503", async () => {
@@ -285,13 +288,13 @@ describe("1. /v1/models 只有两个模型，请求由池决定落到谁", () =>
     }
   });
 
-  it("未知模型 → 400 并列出两个可用 id", async () => {
+  it("未知模型 → 400 并列出可用 id（全模型池）", async () => {
     const { status, text } = await chat(gw, "gpt-4o");
     assert.equal(status, 400);
     const err = JSON.parse(text) as { error: { code: string; message: string } };
     assert.equal(err.error.code, "unknown_model");
-    assert.ok(err.error.message.includes("deepseek-v4.1-flash"));
-    assert.ok(err.error.message.includes("glm-5.3-flash"));
+    assert.ok(err.error.message.includes("deepseek-v4-flash"), "应列出 deepseek-v4-flash");
+    assert.ok(err.error.message.includes("glm-5.3-flash"), "应列出 glm-5.3-flash");
   });
 
   it("旧的 `<cid>/<模型>` 形态已失效（破坏性更新）", async () => {
@@ -439,13 +442,14 @@ describe("4. 单渠道模式也走池（不再暴露裸短名）", () => {
     clearChannels();
   });
 
-  it("/v1/models 仍是两个池模型；service 身份是 cid（solo）", async () => {
+  it("/v1/models 动态返回渠道能提供的模型；service 身份是 cid（solo）", async () => {
     const models = (await (await fetch(`http://${gw.addr}/v1/models`)).json()) as {
       data: Array<{ id: string; owned_by: string }>;
     };
+    // 全模型池：单渠道只返回它能提供的模型
     assert.deepEqual(
       models.data.map((m) => m.id),
-      ["deepseek-v4.1-flash", "glm-5.3-flash"],
+      ["deepseek-v4.1-flash"],
     );
     assert.equal(models.data[0]!.owned_by, "solo");
 

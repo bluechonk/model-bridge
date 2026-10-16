@@ -313,8 +313,9 @@ describe("6. 端到端网关", () => {
     assert.equal(text, "网关通了");
   });
 
-  it("旧短名不再是可用的模型 id（网关只认池内两个规范名）", async () => {
+  it("旧短名不再是可用的模型 id（网关只认池内规范名）", async () => {
     // 渠道自己的 catalog 仍能解析旧短名，但**网关入口**只接受池内 id —— 刻意的破坏性更新。
+    // 全模型池：deepseek-flash 归一化后是 deepseek-flash，不在池内 → 400
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

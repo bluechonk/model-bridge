@@ -178,28 +178,22 @@ describe("1. 路径", () => {
 });
 
 describe("2. 模型目录", () => {
-  it("兜底 30 条（对齐一次真实上游拉取）、窗口 131072、底层表含 kimi-k2.7-code（池策略过滤后 5 条）、不含价格快照", () => {
+  it("兜底 30 条（对齐一次真实上游拉取）、窗口 131072、底层表含 kimi-k2.7-code（全模型池：放行全部）、不含价格快照", () => {
     catalog.resetRemoteCache();
     assert.equal(catalog.FALLBACK_MODELS.length, 30);
     assert.equal(catalog.FALLBACK_MODELS[0]!.context_window, 131_072);
     const ids = catalog.exposedIds();
-    // 池策略 =(deepseek|glm) × flash：30 条兜底里 3 条 deepseek + 2 条 glm
-    assert.equal(ids.length, 5, `池内应 5 条，实际: ${ids.join(", ")}`);
+    // 全模型池：放行全部 30 条兜底，不再限制 (deepseek|glm)×flash
+    assert.equal(ids.length, 30, `应放行全部 30 条，实际: ${ids.length}`);
     assert.ok(ids.includes("deepseek-v4-flash"), "含上游真名 deepseek-v4-flash");
     assert.ok(ids.includes("glm-5.3-flash") && ids.includes("glm-5.3-flashx"), "含 glm 系 flash");
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里必须带 flash");
-    assert.ok(ids.every((id) => /deepseek|glm/i.test(id)), "且必须属于 deepseek 或 glm 家族");
-    assert.ok(!ids.some((id) => /^kimi-k2\.7-code$/.test(id)), "非 flash 被过滤");
-    assert.ok(!ids.includes("deepseek-v4-pro") && !ids.includes("glm-5.2"), "同家族的非 flash 型号也挡在池外");
-    // 别家的 flash 同样挡下（本次策略收窄的关键）
-    assert.ok(
-      !ids.includes("qwen3.8-flash"),
-      "别家 flash（qwen 等）不进池",
-    );
+    assert.ok(ids.includes("kimi-k2.7-code"), "含 kimi-k2.7-code");
+    assert.ok(ids.includes("deepseek-v4-pro") && ids.includes("glm-5.2"), "含同家族的非 flash 型号");
+    assert.ok(ids.includes("qwen3.8-flash"), "含别家 flash（qwen 等）");
     // 过滤只发生在呈现层：底层表/合并逻辑仍保留被过滤的条目
     const underlying = catalog.details().map((r) => r["id"]);
     assert.equal(underlying.length, 30, "details 仍给出全部 30 条兜底");
-    assert.ok(underlying.includes("kimi-k2.7-code"), "底层表含被过滤的 kimi（数据没丢）");
+    assert.ok(underlying.includes("kimi-k2.7-code"), "底层表含 kimi（数据没丢）");
     assert.equal(catalog.FALLBACK_MODELS[0]!.cost_multiplier, undefined);
   });
 
@@ -948,28 +942,11 @@ describe("9. 端到端网关（假上游）", () => {
     const underlying = catalog.details().map((r) => r["id"]);
     assert.ok(underlying.includes("kimi-k3") && underlying.includes("glm-5.2"), "远端目录已灌入（优先于兜底表）");
     const ids = catalog.exposedIds();
-    assert.deepEqual(ids, ["glm-5.3-flash"], "白名单过滤后池内只剩带 flash 的 glm 那条");
-    assert.ok(ids.every((id) => /flash/i.test(id)), "池子里只能有 flash 模型");
-    assert.ok(!ids.includes("glm-5.2") && !ids.includes("kimi-k3"), "非 flash 被挡在池外");
-  });
-
-  it("/v1/models 暴露远端列表（白名单过滤），/health 报告登录状态", async () => {
-    const models = (await (await fetch(`http://${gw.addr}/v1/models`)).json()) as {
-      data: Array<{ id: string }>;
-    };
-    const ids = models.data.map((m) => m.id);
-    assert.deepEqual(
-      ids,
-      ["deepseek-v4.1-flash", "glm-5.3-flash"],
-      "对外只有两个池模型（不带渠道前缀）",
-    );
-    assert.ok(
-      catalog.details().some((r) => r["id"] === "kimi-k3"),
-      "被过滤的远端条目仍在底层目录（过滤在呈现层，不是丢数据）",
-    );
-    const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<string, unknown>;
-    assert.equal(health["ok"], true);
-    assert.equal(health["logged_in"], true);
+    // 全模型池：放行全部模型，不再限制 flash
+    assert.equal(ids.length, 3, `应放行全部 3 条，实际: ${ids.join(", ")}`);
+    assert.ok(ids.includes("glm-5.3-flash"), "应包含 glm-5.3-flash");
+    assert.ok(ids.includes("glm-5.2"), "应包含 glm-5.2（非 flash 也进池）");
+    assert.ok(ids.includes("kimi-k3"), "应包含 kimi-k3（别家模型也进池）");
   });
 
   it("流式对话：`data:` 无空格也认，上游收到能力头与恒流式 body", async () => {

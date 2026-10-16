@@ -1,7 +1,8 @@
 /**
- * 公共模型池：对外只有**两个跨渠道模型**。
+ * 公共模型池：对外暴露**全部渠道能提供的真实模型**。
  *
- * 客户端看到的 id 是固定的两个（`deepseek-v4.1-flash` / `glm-5.3-flash`），**不带渠道前缀**；请求落到哪家渠道由网关按账本决定
+ * 客户端看到的 id 是归一化后的模型名（如 `deepseek-v4.1-flash`、`glm-5.3-flash`、
+ * `qwen3-coder` 等），**不带渠道前缀**；请求落到哪家渠道由网关按账本决定
  * （见 `pool-usage.ts`）。客户端不需要、也无法指定渠道。
  *
  * ## 为什么要归一化
@@ -18,23 +19,63 @@
  * 归一化之后做**精确相等**比较 —— 这是 4.0 与 4.1 不互相串号的唯一保证
  * （用包含匹配就会让 `deepseek-v4-flash` 也命中 `deepseek-v4.1-flash`）。
  *
- * ## 被收窄掉的模型
+ * ## 全模型池
  *
- * `glm-5.3-flashx`（FlashX 变体）、`deepseek-v4-flash-vision-exp`、
- * 无版本号的 `deepseek-flash` 都**不**进池 —— 它们仍在渠道自己的目录里，
- * 经渠道 CLI 仍可用，只是不出现在 `/v1/models`。
+ * 不再限制只暴露 `deepseek-v4.1-flash` / `glm-5.3-flash` 两个 flash 模型，
+ * 而是**动态收集**全部渠道 `exposedIds()` 归一化后的去重结果。
+ * 模型元数据从渠道 catalog 缓存中提取（contextWindow / name 等）。
  */
 
 import { channels, type Channel } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
+import { readCatalogCache } from "./catalog-cache.js";
 
-/** 对外暴露的两个模型 id（恒小写，也是客户端应使用的写法）。 */
-export const POOL_MODELS = [
-  "deepseek-v4.1-flash",
-  "glm-5.3-flash",
-] as const;
+/** 对外暴露的模型 id（恒小写，也是客户端应使用的写法）。动态从全部渠道收集。 */
+export function getPoolModels(): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const channel of channels()) {
+    const cid = channel.config.cid;
+    const ids = runInChannel(cid, () => {
+      try {
+        return channel.catalog.exposedIds();
+      } catch {
+        return [] as string[];
+      }
+    });
+    for (const id of ids) {
+      const canonical = canonicalModelId(id);
+      if (!seen.has(canonical)) {
+        seen.add(canonical);
+        out.push(canonical);
+      }
+    }
+  }
+  // 无渠道注册时返回默认模型列表（保持向后兼容）
+  if (out.length === 0) {
+    return ["deepseek-v4-flash", "deepseek-v4.1-flash", "glm-5.3-flash"];
+  }
+  return out.sort();
+}
 
-export type PoolModel = (typeof POOL_MODELS)[number];
+/** 兼容旧代码的常量形式（只读快照）。 */
+export const POOL_MODELS: readonly string[] = new Proxy([] as string[], {
+  get(_target, prop) {
+    const models = getPoolModels();
+    if (prop === "length") return models.length;
+    if (prop === "join") return models.join.bind(models);
+    if (prop === "filter") return models.filter.bind(models);
+    if (prop === "flatMap") return models.flatMap.bind(models);
+    if (prop === "map") return models.map.bind(models);
+    if (prop === "includes") return models.includes.bind(models);
+    if (prop === "slice") return models.slice.bind(models);
+    if (prop === Symbol.iterator) return models[Symbol.iterator].bind(models);
+    if (typeof prop === "string" && /^\d+$/.test(prop)) return models[parseInt(prop)];
+    return (models as any)[prop];
+  },
+});
+
+export type PoolModel = string;
 
 /**
  * 池模型的对外元数据 —— **字段结构对齐 DeepSeek 官方 `GET /models`**。
@@ -61,27 +102,48 @@ export interface PoolModelMeta {
   effort: { supportedLevels: string[]; defaultLevel: string };
 }
 
-/** 两个池模型的元数据（数值取各上游口径）。 */
-export const POOL_MODEL_META: Record<PoolModel, PoolModelMeta> = {
-  // 直接采官方 `deepseek-flash` 的数值（我们的 4.1 flash 就是它）
-  "deepseek-v4.1-flash": {
-    name: "DeepSeek-V4.1-Flash",
-    contextWindow: 1_048_576,
-    maxOutputTokens: 393_216,
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    effort: { supportedLevels: ["low", "high", "max"], defaultLevel: "high" },
-  },
-  // GLM-5.3-Flash：上游目录口径（1M 上下文），无多模态输入
-  "glm-5.3-flash": {
-    name: "GLM-5.3-Flash",
-    contextWindow: 1_048_576,
-    maxOutputTokens: 131_072,
-    inputModalities: ["text"],
-    outputModalities: ["text"],
-    effort: { supportedLevels: ["low", "high", "max"], defaultLevel: "high" },
-  },
+/** 默认元数据（从渠道 catalog 中提取不到时的兜底）。 */
+const DEFAULT_META: PoolModelMeta = {
+  name: "Unknown",
+  contextWindow: 128_000,
+  maxOutputTokens: 4_096,
+  inputModalities: ["text"],
+  outputModalities: ["text"],
+  effort: { supportedLevels: ["low", "high"], defaultLevel: "high" },
 };
+
+/** 动态元数据：从渠道 catalog 缓存（models.json）中提取。 */
+export function getPoolModelMeta(model: string): PoolModelMeta {
+  for (const channel of channels()) {
+    const cid = channel.config.cid;
+    const cache = runInChannel(cid, () => {
+      try {
+        return readCatalogCache(cid) ?? [];
+      } catch {
+        return [];
+      }
+    });
+    const entry = cache.find((d: any) => canonicalModelId(d.id) === model) as any;
+    if (entry) {
+      return {
+        name: entry.name ?? model,
+        contextWindow: entry.contextWindow ?? entry.context_window ?? DEFAULT_META.contextWindow,
+        maxOutputTokens: entry.maxOutputTokens ?? entry.max_output_tokens ?? DEFAULT_META.maxOutputTokens,
+        inputModalities: entry.inputModalities ?? entry.input_modalities ?? DEFAULT_META.inputModalities,
+        outputModalities: entry.outputModalities ?? entry.output_modalities ?? DEFAULT_META.outputModalities,
+        effort: entry.effort ?? DEFAULT_META.effort,
+      };
+    }
+  }
+  return DEFAULT_META;
+}
+
+/** 兼容旧代码的常量形式。 */
+export const POOL_MODEL_META: Record<string, PoolModelMeta> = new Proxy({} as Record<string, PoolModelMeta>, {
+  get(_target, prop: string) {
+    return getPoolModelMeta(prop);
+  },
+});
 
 /** 渠道包装前缀（去掉后才可能命中池内模型）。 */
 const WRAPPER_PREFIXES = ["sn-", "z-ai-", "bytedance-"];
@@ -126,14 +188,19 @@ export function canonicalModelId(exposedId: string): string {
 }
 
 /**
- * 客户端请求的模型名是否是池内模型；不是返回 null。
+ * 客户端请求的模型名归一化；带渠道前缀（`<cid>/<模型>`）返回 null（已失效的旧形态）。
  *
  * 不做路径段剥离（见 `normalize` 的说明），所以 `<cid>/<模型>` 这类旧形态会
  * 直接判为未知 —— 这是刻意的破坏性行为。
+ *
+ * 全模型池：不再限制只匹配固定 2 个 flash，而是动态匹配全部渠道能提供的模型。
+ * 无渠道注册时仍返回归一化后的模型名（由 poolCandidates 空检查兜底）。
  */
 export function asPoolModel(name: string): PoolModel | null {
   const canonical = normalize(name, false);
-  return (POOL_MODELS as readonly string[]).includes(canonical) ? (canonical as PoolModel) : null;
+  if (canonical.includes("/")) return null; // 渠道前缀形态不再被接受
+  // 无渠道时仍返回归一化后的模型名（由 poolCandidates 空检查兜底）
+  return canonical;
 }
 
 /** 一个候选：某渠道能提供该池模型（带渠道目录里的原始 exposedId）。 */

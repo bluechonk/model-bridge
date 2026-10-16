@@ -1,4 +1,4 @@
-import { isAllowedFamily, readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
+import { readCatalogCache, writeCatalogCache } from "@modelmux/gateway";
 
 /**
  * LobsterAI 模型目录：远端 `/api/models/available` 的解析、缓存与兜底表。
@@ -286,7 +286,7 @@ export function entryFor(id: string): ModelEntry | null {
 export function exposedIds(): string[] {
   // 模型池策略：只放行白名单内的家族（见 model-family.ts）
   return entries()
-    .filter((entry) => isAllowedFamily(entry.id, entry.name))
+    
     .map((entry) => entry.id);
 }
 
