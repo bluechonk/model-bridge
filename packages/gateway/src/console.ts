@@ -15,7 +15,7 @@
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve, sep } from "node:path";
+import { isAbsolute, extname, join, resolve, sep } from "node:path";
 import { createServer, type Server } from "node:http";
 import { fileURLToPath } from "node:url";
 
@@ -32,11 +32,21 @@ const WEB_UI_INDEX = join(WEB_UI_ROOT, "index.html");
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
   ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
 };
 
 /** 状态快照；`ui_state` 取值 probing / login / error / running。 */
@@ -95,7 +105,16 @@ function text(res: import("node:http").ServerResponse, status: number, body: str
 
 /** 静态文件服务（含路径穿越校验）。 */
 function serveStatic(res: import("node:http").ServerResponse, relPath: string): void {
-  const relative = decodeURIComponent(relPath).replace(/^[\\\/]+/, "");
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(relPath);
+  } catch {
+    // 畸形百分号编码（如 `%E0%A4%A`）会让 decodeURIComponent 抛 URIError；
+    // 不接住就是 uncaughtException，控制台进程会随网关一起挂掉。
+    text(res, 400, "Bad request");
+    return;
+  }
+  const relative = decoded.replace(/^[\\\/]+/, "");
   if (relative.split("/").some((segment) => segment === "..")) {
     text(res, 403, "Forbidden");
     return;
@@ -111,17 +130,23 @@ function serveStatic(res: import("node:http").ServerResponse, relPath: string): 
     text(res, 404, "Not found");
     return;
   }
-  const type = MIME[file.slice(file.lastIndexOf("."))] ?? "application/octet-stream";
-  res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
+  const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
+  // 内容哈希命名的资产可长缓存；其余（index.html 等）保持不缓存
+  const cache = relative.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-store";
+  res.writeHead(200, { "Content-Type": type, "Cache-Control": cache });
   res.end(readFileSync(file));
 }
 
-/** 写操作同源校验（简化版：只认请求 Origin 与监听域名一致，多主机部署时需后端自行放宽）。 */
+/** 写操作同源校验（比对 host:port，避免只比 hostname 时跨端口请求被放行）。 */
 function isSameOrigin(req: import("node:http").IncomingMessage, host: string): boolean {
   const origin = req.headers["origin"];
-  if (typeof origin !== "string" || !origin) return true; // 同源 fetch 不会带 origin（老浏览器）
+  // 同源 POST 也会带 Origin（浏览器规范），缺失时才按「非浏览器客户端」放行
+  if (typeof origin !== "string" || !origin) return true;
   try {
-    return new URL(origin).hostname === host || origin === `http://${req.headers["host"]}`;
+    const parsed = new URL(origin);
+    const reqHost = req.headers["host"] ?? "";
+    // 严格比较 host:port —— 只比 hostname 会让 127.0.0.1:其他端口 / https 变体穿透
+    return parsed.host === reqHost || (parsed.hostname === host && parsed.port === new URL(`http://${reqHost}`).port);
   } catch {
     return false;
   }

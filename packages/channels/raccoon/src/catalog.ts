@@ -357,11 +357,8 @@ function currentEntries(): ModelEntry[] {
 
 /** 对外暴露的模型 id。 */
 export function exposedIds(): string[] {
-  // 模型池策略：只放行白名单内的家族（见 model-family.ts）。
-  // Raccoon 的 id 带渠道前缀（`sn-glm-5-3`），但家族名仍在 id 里。
-  return currentEntries()
-    
-    .map((e) => e.id);
+  // 全模型池：catalog 内全部模型都对外暴露（Raccoon 的 id 带渠道前缀 `sn-`）。
+  return currentEntries().map((e) => e.id);
 }
 
 /** 模型 id → 上游 slug：Raccoon 的 id 就是 slug，**未知原样返回**。 */

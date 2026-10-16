@@ -284,10 +284,8 @@ export function entryFor(id: string): ModelEntry | null {
 
 /** 对外暴露的模型 id（短名；本渠道短名即上游 id）。 */
 export function exposedIds(): string[] {
-  // 模型池策略：只放行白名单内的家族（见 model-family.ts）
-  return entries()
-    
-    .map((entry) => entry.id);
+  // 全模型池：catalog 内全部模型都对外暴露。
+  return entries().map((entry) => entry.id);
 }
 
 /**

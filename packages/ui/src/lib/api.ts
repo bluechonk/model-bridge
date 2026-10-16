@@ -49,8 +49,14 @@ export interface WebApi {
   };
 }
 
+/**
+ * 统一命令载荷：`{ action, cid?, args }`。
+ *
+ * ⚠ `args` 必须是**独立字段** —— 后端 `console.ts` 只取顶层的 `action` / `cid` / `args`，
+ * 把参数字段扁平拼到顶层会被静默丢弃（登录 force、账号 key 都传不到）。
+ */
 function command(action: string, cid: string | undefined, args: Record<string, unknown> = {}): Promise<CommandResult> {
-  const body: Record<string, unknown> = { action, ...(args) };
+  const body: Record<string, unknown> = { action, args };
   if (cid !== undefined) body["cid"] = cid;
   return post("/api/commands", body) as Promise<CommandResult>;
 }

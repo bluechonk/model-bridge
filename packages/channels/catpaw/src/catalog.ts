@@ -37,7 +37,7 @@ export interface CatalogEntry {
  * `channels/catpaw/docs/PROTOCOL.md`）。
  *
  * ⚠ 曾被写成占位名 `catpaw-flash` —— 那个 id 上游**根本不存在**，
- * 池策略改成「家族 + flash」后它必然被过滤，于是「未回填前」池子是空的。
+ * 这条兜底项在旧的「家族 + flash」白名单下会被过滤，全模型池下正常出现在池视图中。
  * 兜底表要能真的兜住，就得用真实 id。
  */
 const FALLBACK_MODELS: CatalogEntry[] = [
@@ -160,14 +160,10 @@ export function toModelInfo(row: Record<string, unknown>): CatalogEntry | null {
 }
 
 /**
- * 对外暴露的模型 ID 列表（短名，已过 flash 白名单）。
- *
-  * 过滤只发生在呈现层 —— 被挡在池外的模型仍在 `details()` 里可见。
+ * 对外暴露的模型 ID 列表（全模型池：`catalog` 内全部模型）。
  */
 export function exposedIds(): string[] {
-  return loadCatalog()
-    
-    .map((e) => e.id);
+  return loadCatalog().map((e) => e.id);
 }
 
 /**

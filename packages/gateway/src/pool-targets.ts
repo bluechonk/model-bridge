@@ -30,8 +30,16 @@ import { channels, type Channel } from "./channel.js";
 import { runInChannel } from "./channel-context.js";
 import { readCatalogCache } from "./catalog-cache.js";
 
-/** 对外暴露的模型 id（恒小写，也是客户端应使用的写法）。动态从全部渠道收集。 */
-export function getPoolModels(): string[] {
+/**
+ * 对外暴露的模型池（动态收集：全部渠道 `exposedIds()` 归一化后去重）。
+ *
+ * ⚠ 不做进程内缓存：渠道目录可随登录/刷新变化，每次调用重新收集是刻意的
+ * （调用方若需在同一表达式里保持一致快照，应先取一次局部变量）。
+ *
+ * 空池返回 `[]`（**不硬编码兜底模型**）——共享层不持有任何渠道知识（AGENTS.md §1）；
+ * 空池意味着所有渠道目录都读不出来，此时对外公布幻影模型只会让请求必然落空。
+ */
+export function poolModels(): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const channel of channels()) {
@@ -39,7 +47,9 @@ export function getPoolModels(): string[] {
     const ids = runInChannel(cid, () => {
       try {
         return channel.catalog.exposedIds();
-      } catch {
+      } catch (err) {
+        // 一个渠道的目录崩掉不该拖垮整池，但必须留痕（否则它只会从 /v1/models 静默消失）
+        console.warn(`[pool] channel ${cid} exposedIds failed: ${String(err)}`);
         return [] as string[];
       }
     });
@@ -51,27 +61,43 @@ export function getPoolModels(): string[] {
       }
     }
   }
-  // 无渠道注册时返回默认模型列表（保持向后兼容）
-  if (out.length === 0) {
-    return ["deepseek-v4-flash", "deepseek-v4.1-flash", "glm-5.3-flash"];
-  }
   return out.sort();
 }
 
-/** 兼容旧代码的常量形式（只读快照）。 */
+/**
+ * 池模型的只读快照（兼容旧调用形态）。
+ *
+ * 底层是**真实数组**：每次读属性时按当前渠道目录重建，因此 `Object.keys` /
+ * `JSON.stringify` / 展开 / 迭代 / 数字索引天然一致（早期用空数组 + Proxy
+ * 只会让 `keys` 与 `length` 互相矛盾，序列化时会静默丢内容）。
+ */
 export const POOL_MODELS: readonly string[] = new Proxy([] as string[], {
-  get(_target, prop) {
-    const models = getPoolModels();
+  get(_target, prop, receiver) {
+    const models = poolModels();
     if (prop === "length") return models.length;
-    if (prop === "join") return models.join.bind(models);
-    if (prop === "filter") return models.filter.bind(models);
-    if (prop === "flatMap") return models.flatMap.bind(models);
-    if (prop === "map") return models.map.bind(models);
-    if (prop === "includes") return models.includes.bind(models);
-    if (prop === "slice") return models.slice.bind(models);
-    if (prop === Symbol.iterator) return models[Symbol.iterator].bind(models);
-    if (typeof prop === "string" && /^\d+$/.test(prop)) return models[parseInt(prop)];
-    return (models as any)[prop];
+    if (typeof prop === "string" && /^\d+$/.test(prop)) return models[Number(prop)];
+    const value = (models as unknown as Record<string | symbol, unknown>)[prop];
+    // 函数一律绑定到本次快照：避免 this 落到 Proxy 上导致 sort/push 之类静默失效
+    return typeof value === "function" ? value.bind(models) : value;
+  },
+  has(_target, prop) {
+    const models = poolModels();
+    if (typeof prop === "string" && /^\d+$/.test(prop)) return Number(prop) < models.length;
+    return prop in (models as unknown as object);
+  },
+  ownKeys() {
+    // 让 Object.keys / JSON.stringify / spread 看到真实索引
+    return poolModels().map((_, i) => String(i));
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    const models = poolModels();
+    if (typeof prop === "string" && /^\d+$/.test(prop)) {
+      const i = Number(prop);
+      if (i < models.length) {
+        return { value: models[i], writable: false, enumerable: true, configurable: true };
+      }
+    }
+    return undefined;
   },
 });
 
