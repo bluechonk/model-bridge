@@ -15,7 +15,7 @@
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { isAbsolute, join, resolve, sep } from "node:path";
 import { createServer, type Server } from "node:http";
 import { fileURLToPath } from "node:url";
 
@@ -27,9 +27,7 @@ const THEME_MODES = new Set(["system", "dark", "light"]);
 
 /** UI 静态产物根：与 dist/main/*.js 平级。 */
 const WEB_UI_ROOT = resolve(
-  process.env["MODELMUX_WEB_UI_ROOT"] ?? fileURLToPath(new URL(".", import.meta.url)),
-  "..",
-  "ui",
+  process.env["MODELMUX_WEB_UI_ROOT"] ?? resolve(fileURLToPath(new URL(".", import.meta.url)), "..", "ui"),
 );
 const WEB_UI_INDEX = join(WEB_UI_ROOT, "index.html");
 
@@ -99,7 +97,7 @@ function text(res: import("node:http").ServerResponse, status: number, body: str
 
 /** 静态文件服务（含路径穿越校验）。 */
 function serveStatic(res: import("node:http").ServerResponse, relPath: string): void {
-  const file = relPath.startsWith("/")
+  const file = isAbsolute(relPath)
     ? relPath
     : resolve(WEB_UI_ROOT, relPath.replace(/^[\/]+/, ""));
   if (!file.startsWith(`${WEB_UI_ROOT}${sep}`) && file !== WEB_UI_ROOT) {
@@ -149,8 +147,8 @@ export async function start(
       return;
     }
 
-    // SPA 回退：React Router 在客户端负责路由
-    if (path !== "/" && !path.startsWith(assetsPrefix) && !path.startsWith("/api/") && (req.method === "GET" || req.method === "HEAD")) {
+    // SPA 回退：React Router 在客户端负责路由（非 API 路径都回 index.html）
+    if (!path.startsWith("/api/") && (req.method === "GET" || req.method === "HEAD")) {
       serveStatic(res, WEB_UI_INDEX);
       return;
     }

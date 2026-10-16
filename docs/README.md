@@ -26,6 +26,7 @@
 | [STORAGE-CONVENTION.md](./STORAGE-CONVENTION.md) | **存储落点与文件命名规范**：统一根 `~/.modelmux/` + 按 cid 分层、命名与权限条文 |
 | [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) | **池化架构**：公共模型池（两个跨渠道模型 + 账单额度排序，§2）+ 账号池 |
 | [DAEMON-SUPERVISOR.md](./DAEMON-SUPERVISOR.md) | **网关进程生命周期**：监督者 + worker 自动重生（指数退避/代次作废/父死自退，学 CCR 骨架） |
+| [UI-WEB-PROGRESS.md](./UI-WEB-PROGRESS.md) | **UI Web 进度**：mx web React 管理看板当前实施与遗留问题 |
 
 ## 2. 渠道文档 `packages/channels/<cid>/docs/`
 
