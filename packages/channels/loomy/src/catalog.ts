@@ -451,7 +451,6 @@ export function exposedIds(): string[] {
           const covered = new Set(aliases.map(([, slug]) => slug));
           return [...aliases.map(([short]) => short), ...ids.filter((id) => !covered.has(id))];
         })();
-  // 模型池策略：只放行白名单内的家族（见 model-family.ts）
   return all;
 }
 

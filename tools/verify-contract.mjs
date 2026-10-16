@@ -143,8 +143,17 @@ check(gwDeps.length === 0, `packages/gateway: 共享包必须零运行依赖，�
 
 // 公共池模型动态化（全模型池）：不再断言固定 2 个 flash，改为检查动态收集函数存在
 const poolTargets = read("packages/gateway/src/pool-targets.ts");
-check(/function getPoolModels\(\)/.test(poolTargets), "pool-targets.ts: 缺 getPoolModels()（全模型池动态收集）");
+check(/export function poolModels\(\)/.test(poolTargets), "pool-targets.ts: 缺 poolModels()（全模型池动态收集）");
 check(/function asPoolModel\(/.test(poolTargets), "pool-targets.ts: 缺 asPoolModel()（动态匹配）");
+// 共享层代码不得硬编码厂商模型名（AGENTS.md §1：packages/gateway 不许出现渠道知识）。
+// 剥离注释后再查 —— JSDoc 里的示例 id 是文档，不是共享层持有的模型知识。
+const poolCode = poolTargets
+  .replace(/\/\*[\s\S]*?\*\//g, "") // 块注释
+  .replace(/^\s*\/\/.*$/gm, ""); // 行注释
+check(
+  !/"(deepseek|glm|qwen|kimi|doubao)-[a-z0-9.-]+"/i.test(poolCode),
+  "pool-targets.ts: 共享层不得硬编码厂商模型名（模型只由各渠道 exposedIds() 提供）",
+);
 
 // 池白名单判据定义在共享层（渠道不得自行实现家族过滤，CONTRACT-TS §4）
 const modelFamily = read("packages/gateway/src/model-family.ts");

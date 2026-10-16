@@ -313,7 +313,7 @@ describe("6. 端到端网关", () => {
     assert.equal(text, "网关通了");
   });
 
-  it("旧短名不再是可用的模型 id（网关只认池内规范名）", async () => {
+  it("旧短名不再有候选渠道（网关只认渠道目录里的规范名）", async () => {
     // 渠道自己的 catalog 仍能解析旧短名，但**网关入口**只接受池内 id —— 刻意的破坏性更新。
     // 全模型池：deepseek-flash 归一化后是 deepseek-flash，不在池内 → 400
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
@@ -325,7 +325,7 @@ describe("6. 端到端网关", () => {
         stream: true,
       }),
     });
-    assert.equal(resp.status, 400);
+    assert.equal(resp.status, 503);
   });
 
   it("上游约束：注入 system + 强制 stream + 模型名映射", async () => {

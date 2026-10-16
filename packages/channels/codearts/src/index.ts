@@ -23,9 +23,6 @@ export {
   version,
   defaultAddr,
   defaultUiPort,
-  isAllowedFamily,
-  filterAllowedFamily,
-  allowlistSummary,
 } from "@modelmux/gateway";
 
 // 渠道独有模块

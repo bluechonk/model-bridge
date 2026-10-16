@@ -582,30 +582,17 @@ async function handleChat(
     );
     return;
   }
-  // 全模型池：先查候选渠道，再区分"无渠道提供"（503）和"未知模型"（400）
+  // 全模型池：池是**动态**的（取决于渠道登录与目录就绪状态），因此「候选为空」
+  // 本质是可用性问题（模型可能在池里，只是当前没有渠道能供给），统一按 503 回报；
+  // 400 只留给格式错误（带 `<cid>/` 前缀的旧形态，见上面的 asPoolModel 判定）。
   const candidates = poolCandidates(target);
   if (candidates.length === 0) {
-    // 无渠道提供：如果模型在池内（归一化后命中任何渠道目录），是 503；否则是 400
-    // 判断依据：模型名是否在池内（POOL_MODELS 包含它）
-    // 注意：不能用 POOL_MODELS.includes(target)，因为 clearChannels 后 POOL_MODELS 为空
-    const isKnownFamily = /^(deepseek-v4|glm-5)/i.test(target);
-    if (isKnownFamily) {
-      writeJsonError(
-        res,
-        503,
-        "not_authenticated",
-        `no channel provides ${target} (channel not logged in or catalog not ready)`,
-      );
-    } else {
-      const available = POOL_MODELS.slice(0, 10).join(", ");
-      const more = POOL_MODELS.length > 10 ? `, ...（共 ${POOL_MODELS.length} 个）` : "";
-      writeJsonError(
-        res,
-        400,
-        "unknown_model",
-        `unknown model ${target}; available models: ${available}${more}`,
-      );
-    }
+    writeJsonError(
+      res,
+      503,
+      "not_authenticated",
+      `no channel provides ${target} (channel not logged in or catalog not ready)`,
+    );
     return;
   }
 

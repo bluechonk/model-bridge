@@ -288,13 +288,11 @@ describe("1. /v1/models 动态返回全模型池，请求由池决定落到谁",
     }
   });
 
-  it("未知模型 → 400 并列出可用 id（全模型池）", async () => {
+  it("无渠道提供的模型 → 503（池是动态的，候选为空属可用性问题）", async () => {
     const { status, text } = await chat(gw, "gpt-4o");
-    assert.equal(status, 400);
-    const err = JSON.parse(text) as { error: { code: string; message: string } };
-    assert.equal(err.error.code, "unknown_model");
-    assert.ok(err.error.message.includes("deepseek-v4-flash"), "应列出 deepseek-v4-flash");
-    assert.ok(err.error.message.includes("glm-5.3-flash"), "应列出 glm-5.3-flash");
+    assert.equal(status, 503);
+    const err = JSON.parse(text) as { error: { code: string } };
+    assert.equal(err.error.code, "not_authenticated");
   });
 
   it("旧的 `<cid>/<模型>` 形态已失效（破坏性更新）", async () => {

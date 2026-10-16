@@ -341,7 +341,7 @@ export function gatewayCandidates(realm: Realm): string[] {
 
 /** 环境变量可覆盖 UA（排查时用）。 */
 function clientUserAgent(): string {
-  return process.env["QODER_CLIENT_UA"] ?? "Go-http-client/2.0";
+  return process.env["QODERCN_CLIENT_UA"] ?? "Go-http-client/2.0";
 }
 
 export function buildHeaders(credential: Credentials): Record<string, string> {
