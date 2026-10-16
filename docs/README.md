@@ -43,6 +43,12 @@
 | `traecn` | TRAE（字节，中国版） | [说明](../channels/traecn/docs/README.md) · [PROTOCOL](../channels/traecn/docs/PROTOCOL.md) |
 | `workbuddy` | WorkBuddy（国内版 CodeBuddy） | [说明](../channels/workbuddy/docs/README.md) —— 与 `workbuddyai` **同一套端点协议**，无独立 PROTOCOL.md |
 | `workbuddyai` | WorkBuddyAI（国际版） | [说明](../channels/workbuddyai/docs/README.md) —— 协议事实记在说明里，无独立 PROTOCOL.md |
+| `orcaterm` | OrcaTerm（腾讯云，登录已实现 / 上游待实现） | [说明](../channels/orcaterm/docs/README.md) · [PROTOCOL](../channels/orcaterm/docs/PROTOCOL.md) + [FINDINGS](../channels/orcaterm/docs/FINDINGS.md) |
+
+> `orcaterm` 是**渠道包**（7 文件齐备并已注册），但只有**登录已实现**：
+> `upstream` / `catalog` / `billing` 按契约做成「尚未实现」桩 —— 上游对话协议
+> （`/messages*` 请求体与鉴权）尚未抓到，见其 FINDINGS。
+> 登录支持两路：腾讯云 / 微信（`mx login orcaterm` 弹菜单）；GitHub 仅协议事实，未实现。
 
 `catpaw` 的规格不是单文件，而是一条完整的凭据逆向链路（`PROTOCOL.md` 是它的索引）：
 

@@ -1,5 +1,5 @@
 /**
- * Loomy（讯飞）认证：HMAC-SHA1 账号签名、短信/微信登录、凭据持久化与「续期=探测」。
+ * Loomy（讯飞）认证：HMAC-SHA1 账号签名、微信登录、凭据持久化与「续期=探测」。
  *
  * ## 本模块承载的渠道知识（每条都是实测结论，见 channels/loomy/docs/PROTOCOL.md）
  *
@@ -21,12 +21,11 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { chmod, rename, writeFile } from "node:fs/promises";
-import { createInterface } from "node:readline";
 
 import { credentialsPath, ensureDir, login as sharedLogin } from "@modelmux/gateway";
 import * as upstream from "./upstream.js";
 
-/** 账号端点基址（短信登录走这里）。 */
+/** 账号端点基址（微信绑定的发码/校验走这里）。 */
 export const DEFAULT_BASE_URL = "https://account.xfinfr.com";
 
 /** 讯飞 AccessKey（随客户端分发 + AES 混淆，只用于账号端点的请求签名）。 */
@@ -37,8 +36,6 @@ export const APP_ID = "GM3LOOMY";
 /** session 声明有效期 14 天（响应不带到期时间，故本地推算）。 */
 export const SESSION_TTL_SECONDS = 1_209_600;
 
-export const SEND_MSG_PATH = "/login/phone/sendMsgCode";
-export const CHECK_CODE_PATH = "/login/phone/checkCode";
 export const BIND_AUTH_PATH = "/login/thirdAccount/bind/auth";
 export const BIND_SEND_MSG_PATH = "/login/thirdAccount/bind/sendMsg";
 export const BIND_CHECK_CODE_PATH = "/login/thirdAccount/bind/checkCode";
@@ -284,43 +281,6 @@ export async function accountPost(
     throw new Error(`account endpoint ${path} failed: code=${env.code} ${env.desc}`);
   }
   return env.data;
-}
-
-/** 第 1 步：发短信验证码，返回 `msgid`（提交验证码时必须原样带回）。 */
-export async function sendSmsCode(phone: string, baseOverride?: string): Promise<string> {
-  const data = await accountPost(SEND_MSG_PATH, { ccode: "86", phone, expire: 300 }, baseOverride);
-  const msgid = str(data["msgid"]);
-  if (!msgid) throw new Error("send-code response has no msgid");
-  return msgid;
-}
-
-/** 第 2 步：短信验证码登录，返回凭据。 */
-export async function verifySmsCode(
-  phone: string,
-  mcode: string,
-  msgid: string,
-  baseOverride?: string,
-): Promise<Credentials> {
-  const data = await accountPost(
-    CHECK_CODE_PATH,
-    { ccode: "86", phone, mcode, msgid, expire: SESSION_TTL_SECONDS },
-    baseOverride,
-  );
-  const session = str(data["session"]);
-  const userid = str(data["userid"]);
-  if (!session) throw new Error("login response has no session");
-  const c: Credentials = {
-    ...EMPTY_CREDENTIALS,
-    accessToken: session,
-    userid,
-    uid: userid,
-    phone: str(data["phone"]) || phone,
-    expiresAt: computeExpiresAt(),
-    obtainedAt: nowIso(),
-    source: "loomy-sms",
-  };
-  await save(c);
-  return c;
 }
 
 // ── 微信扫码（纯 HTTP 路线）───────────────────────────────────────────────────
@@ -681,227 +641,23 @@ export async function save(c: Credentials): Promise<void> {
   await chmod(path, 0o600).catch(() => {});
 }
 
-// ── 登录（短信）/ 续期（探测）──────────────────────────────────────────────────
+// ── 登录（微信）/ 续期（探测）──────────────────────────────────────────────────
 
-/** 登录方式。 */
-export type LoginMethod = "sms" | "wechat";
-
-/** 登录选项：两端（短信 / 微信扫码）的等待参数共用；`method` 可显式指定。 */
-export interface LoginOptions extends WechatWaitOptions {
-  /**
-   * 登录方式。不给时：交互终端里**弹菜单让用户选**；非交互（`serve` 重试、
-   * 管道）按 `defaultLoginMethod()` 自动选（短信环境变量齐 → sms，否则 wechat）。
-   */
-  method?: LoginMethod;
-}
-
-/** 非交互时的默认方式：短信环境变量齐 → `sms`（自动化）；否则 `wechat`（唯一可交互完成的路径）。 */
-export function defaultLoginMethod(env: NodeJS.ProcessEnv = process.env): LoginMethod {
-  return env[PHONE_ENV] && env[SMS_CODE_ENV] ? "sms" : "wechat";
-}
-
-/** 菜单输入的解析结果：`"default"` = 空输入用默认；`"invalid"` = 认不出的输入。 */
-export type MethodChoice = LoginMethod | "default" | "invalid";
-
-/** 解析菜单输入（英文别名也认，便于自动化）。 */
-export function parseLoginMethodChoice(raw: string): MethodChoice {
-  const text = raw.trim().toLowerCase();
-  if (text === "") return "default";
-  if (text === "1" || text === "sms") return "sms";
-  if (text === "2" || text === "wechat" || text === "wx") return "wechat";
-  return "invalid";
-}
-
-/** 规范化手机号输入（容忍空格与连字符）。 */
-export function normalizePhone(raw: string): string {
-  return raw.replace(/[\s-]/g, "");
-}
-
-/** 中国大陆手机号：11 位、`1[3-9]` 开头。 */
-export function isValidPhone(raw: string): boolean {
-  return /^1[3-9]\d{9}$/.test(raw);
-}
-
-/** 短信验证码：6 位数字。 */
-export function isValidSmsCode(raw: string): boolean {
-  return /^\d{6}$/.test(raw);
-}
+/** 登录选项：微信扫码的等待参数。 */
+export interface LoginOptions extends WechatWaitOptions {}
 
 /**
- * 一行输入的抽象（提示写 stderr —— `--json` 时 stdout 要保持干净的 JSON 流）。
- * EOF 返回 `null`（stdin 关闭 = 用户放弃）。
- */
-export interface LinePrompt {
-  ask(prompt: string): Promise<string | null>;
-}
-
-/** stdin 实现（readline）。 */
-class StdinPrompt implements LinePrompt {
-  private readonly rl = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-    terminal: Boolean(process.stdin.isTTY),
-  });
-  private readonly lines = this.rl[Symbol.asyncIterator]();
-
-  async ask(prompt: string): Promise<string | null> {
-    process.stderr.write(prompt);
-    const { value, done } = await this.lines.next();
-    return done ? null : String(value);
-  }
-
-  close(): void {
-    this.rl.close();
-  }
-}
-
-/** 反复追问直到输入合法；EOF（`null`）直接放弃。 */
-export async function askUntilValid(
-  prompt: LinePrompt,
-  question: string,
-  validate: (value: string) => boolean,
-  invalidHint: string,
-): Promise<string | null> {
-  for (;;) {
-    const raw = await prompt.ask(question);
-    if (raw === null) return null;
-    const value = raw.trim();
-    if (value && validate(value)) return value;
-    process.stderr.write(`${invalidHint}\n`);
-  }
-}
-
-/** 交互式选择登录方式。 */
-async function chooseLoginMethodInteractively(
-  defaultMethod: LoginMethod,
-  prompt: LinePrompt,
-  envComplete: boolean,
-): Promise<LoginMethod> {
-  process.stderr.write(
-    [
-      "Select login method:",
-      `  1) SMS code (${envComplete ? `using ${PHONE_ENV} / ${SMS_CODE_ENV} from env` : "type your phone number, then the code"})`,
-      "  2) WeChat QR code (scan with WeChat)",
-      `Choice [1/2] (default: ${defaultMethod === "sms" ? 1 : 2}): `,
-    ].join("\n") + "\n",
-  );
-  for (;;) {
-    const line = await prompt.ask("");
-    if (line === null) return defaultMethod; // EOF：用默认
-    const choice = parseLoginMethodChoice(line);
-    if (choice === "invalid") {
-      process.stderr.write("Invalid choice: enter 1 (SMS) or 2 (WeChat).\n");
-      continue;
-    }
-    return choice === "default" ? defaultMethod : choice;
-  }
-}
-
-/**
- * 短信登录的公共尾段：**先发码 → 再取验证码 → 校验 → 每日额度初始化**。
+ * 登录：微信扫码（本渠道只保留微信这一条路）。
  *
- * ⚠ 顺序不能颠倒：验证码必须是**发出后**才问（把「取码」做成回调而不是调用前
- * 求值的参数 —— 参数求值会让提示出现在发送之前，真机踩过）。
- */
-async function smsLoginWith(
-  baseUrl: string | undefined,
-  phone: string,
-  codeProvider: () => Promise<string | null>,
-  onStatus?: (message: string) => void,
-): Promise<Credentials> {
-  onStatus?.(`sending SMS code to ${phone}...`);
-  const msgid = await sendSmsCode(phone, baseUrl);
-  const smsCode = await codeProvider();
-  if (!smsCode) throw new Error("login aborted: no SMS code provided (stdin closed)");
-  onStatus?.("verifying SMS code...");
-  const c = await verifySmsCode(phone, smsCode, msgid, baseUrl);
-  await upstream.triggerFirstLogin(c).catch((err: unknown) => {
-    onStatus?.(`daily quota init failed (does not affect login): ${String(err)}`);
-  });
-  return c;
-}
-
-/**
- * 交互式短信登录：手机号与验证码都**当场输入**（无窗口工程不再要求环境变量）。
+ * > 短信验证码登录（含交互菜单）曾作为另一种方式存在，已按决定移除。
+ * > 但**微信绑定**在未绑手机号时仍需手机号 + 验证码（见 `loginWechat`）——
+ * > 那属于微信链路的子步骤，故 `LOOMY_PHONE` / `LOOMY_SMS_CODE` 仍保留。
  *
- * 顺序：问手机号 → 发码 → 问验证码 → 换凭证。环境变量给了的值作为**预填**
- * （不再追问那一项）；两处都 EOF（用户放弃）→ 抛错中止。
- */
-export async function loginSmsInteractive(
-  baseUrl: string | undefined,
-  prompt: LinePrompt,
-  options: LoginOptions = {},
-): Promise<Credentials> {
-  const { onStatus } = options;
-  const envPhone = normalizePhone(process.env[PHONE_ENV] ?? "");
-  const envCode = (process.env[SMS_CODE_ENV] ?? "").trim();
-
-  const phone =
-    (isValidPhone(envPhone) ? envPhone : null) ??
-    (await askUntilValid(
-      prompt,
-      "Phone number (11 digits): ",
-      isValidPhone,
-      "Invalid phone number: expected 11 digits starting with 1.",
-    ));
-  if (!phone) throw new Error("login aborted: no phone number provided (stdin closed)");
-
-  return smsLoginWith(
-    baseUrl,
-    phone,
-    async () =>
-      isValidSmsCode(envCode)
-        ? envCode
-        : askUntilValid(prompt, "SMS code (6 digits): ", isValidSmsCode, "Invalid code: expected 6 digits."),
-    onStatus,
-  );
-}
-
-/**
- * 默认登录：交互式弹菜单选短信 / 微信；非交互按环境变量自动选。
- *
- * - 选 1（短信）：手机号与验证码**当场输入**（环境变量可选预填）
- * - 选 2（微信）：扫码授权（未绑手机号时绑定环节仍需手机号 + 验证码）
- *
- * ⚠ 别在非交互路径上直接报「缺环境变量」：`serve` 的重试登录也调到这里，
- *   报错会让重试完全无路可走（真机踩过）——非交互时按环境变量自动选，选不成就明确报错。
- *
- * 登录成功后立即调 `POST /points/first-login`（每日额度初始化），**失败仅 warn**。
+ * 登录成功后由 `loginWechat` 调 `POST /points/first-login`（每日额度初始化，失败仅 warn）。
  */
 export async function login(baseUrl?: string, options: LoginOptions = {}): Promise<Credentials> {
-  const { onStatus } = options;
-  const envPhone = (process.env[PHONE_ENV] ?? "").trim();
-  const envCode = (process.env[SMS_CODE_ENV] ?? "").trim();
-  const envComplete = Boolean(envPhone && envCode);
-
-  // 非交互（脚本 / 网关重试）：不弹菜单、不问输入，按环境变量定方式
-  if (!process.stdin.isTTY) {
-    const method = options.method ?? defaultLoginMethod();
-    if (method === "wechat") {
-      onStatus?.("using WeChat QR login");
-      return loginWechat(baseUrl, options);
-    }
-    if (!isValidPhone(normalizePhone(envPhone)) || !isValidSmsCode(envCode)) {
-      throw new Error(
-        `SMS login needs a phone number and code: run in a terminal to type them, or set ${PHONE_ENV} (11-digit phone) and ${SMS_CODE_ENV} (6-digit code); ` +
-          "or choose 2 for WeChat QR login (--wechat)",
-      );
-    }
-    return smsLoginWith(baseUrl, normalizePhone(envPhone), async () => envCode, onStatus);
-  }
-
-  const prompt = new StdinPrompt();
-  try {
-    const method =
-      options.method ?? (await chooseLoginMethodInteractively(defaultLoginMethod(), prompt, envComplete));
-    if (method === "wechat") {
-      onStatus?.("using WeChat QR login");
-      return await loginWechat(baseUrl, options);
-    }
-    return await loginSmsInteractive(baseUrl, prompt, options);
-  } finally {
-    prompt.close();
-  }
+  options.onStatus?.("using WeChat QR login");
+  return loginWechat(baseUrl, options);
 }
 
 /**

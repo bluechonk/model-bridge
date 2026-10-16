@@ -1,0 +1,41 @@
+{
+  "name": "@modelmux/orcaterm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OrcaTerm（腾讯云 AI 运维终端）渠道：双路登录（腾讯云 / 微信），对话上游消费待实现",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "bin": {
+    "orcaterm": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "orcaterm",
+    "tencent-cloud",
+    "gateway",
+    "openai",
+    "cli",
+    "typescript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelmux/gateway": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.2"
+  }
+}
