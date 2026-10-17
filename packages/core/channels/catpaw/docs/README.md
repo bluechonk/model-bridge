@@ -65,6 +65,16 @@ node channels/catpaw/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 - 模型池只放 **deepseek / glm 家族的 flash 模型**（判据在共享层 `isAllowedFamily()`）
 - 文档与代码同 commit 更新：改了实现就要同步 `docs/` 与本文档
 
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；结论进 [`PROTOCOL.md`](./PROTOCOL.md)。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [HITZY2002/catpaw2api](https://github.com/HITZY2002/catpaw2api) | 主参照（Go）：`internal/upstream/const.go` 的网关/直连双 host 划分与额度、签到端点（`/api/gateway/credit/balance`、`/api/gateway/credit/register`） |
+| [zhou-gy/catpawai-proxy](https://github.com/zhou-gy/catpawai-proxy) | 代理形态参照 |
+| [Juwan-Hwang/catpaw2api](https://github.com/Juwan-Hwang/catpaw2api)、[KanoNoUta/thief-neko](https://github.com/KanoNoUta/thief-neko)、[fifasheng-tech/catpaw-bridge](https://github.com/fifasheng-tech/catpaw-bridge)、[icebears111/catpaw2api](https://github.com/icebears111/catpaw2api) | 同类实现的对照样本 |
+
 ## 许可证
 
 MIT

@@ -41,6 +41,16 @@ mx status / mx model list / mx billing raccoon
 **接入**：任意 OpenAI 兼容客户端，baseUrl `http://127.0.0.1:8787/v1`（仓库级网关）、
 API key 任意非空、模型 `deepseek-v4.1-flash` / `glm-5.3-flash`（不带渠道前缀）。
 
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；结论进 [`PROTOCOL.md`](./PROTOCOL.md)。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [aimod-cc/agent2api](https://github.com/aimod-cc/agent2api) | 主参照（642 文件）：登录回调、请求头形态与错误分类 |
+| [swysgh/xiaohuanxiong2api](https://github.com/swysgh/xiaohuanxiong2api) | 协议补充参照 |
+| [xxhhlk/raccoon2api](https://github.com/xxhhlk/raccoon2api) | 接口结构参考（仅 README + LICENSE，信息量少） |
+
 ## 许可证
 
 MIT

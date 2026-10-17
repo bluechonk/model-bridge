@@ -76,6 +76,12 @@ docs/                         契约与规范（唯一的仓库级文档层）
    - 跑 `npm test`：`scripts/verify-docs.mjs` 拦住落错位置的 md，`scripts/verify-storage.mjs` 校验落点规范。
 5. 完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
    需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
+6. **第三方参考实现（`reference/`）约定**：
+   - 逆向学习用的开源反代项目 clone 到 `packages/core/channels/<cid>/reference/<owner>_<repo>/`
+     （`--depth 1`），由渠道级 `.gitignore` 的 `reference/` 条目忽略，**不入库**；
+   - 从参考实现学到的**结论**写进该渠道自己的 `docs/PROTOCOL.md`（每条标注来源仓库与文件）；
+   - 渠道 `docs/README.md` 必须维护「参考实现」一节，列出全部已 clone 仓库的 **GitHub 链接**
+     与一句话用途 —— 克隆或删除参考仓库时同步更新本节。
 
 ## 代码约定
 
