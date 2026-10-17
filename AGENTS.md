@@ -1,14 +1,19 @@
 # AGENTS.md —— 工作区规则（`modelmux`）
 
-本文件是**仓库级**规则（与 `~/.zcode/AGENTS.md` 的个人偏好同时生效；项目约定以本文件为准）。
+本文件是**仓库级**规则，与 `~/.zcode/AGENTS.md` 的个人偏好同时生效；项目约定以本文件为准。
 
-## 1. 这是什么
+**本文档的编写格式（强制）**：小节一律用 `【小节名】` 独占一行，正文用编号列表（`1.` `2.` `3.`）或短横线列表（`-`）。
+**禁止**使用 markdown 的 `##` / `###` 标题层级 —— 与全局 `~/.zcode/AGENTS.md` 的体例保持一致。
 
-一个本地 OpenAI 兼容网关 CLI（`modelmux`，bin `modelmux` / `mx`）+ 全部渠道：
-专注一件事——多个渠道汇成一个 OpenAI 兼容端点，对外暴露各渠道目录里的真实模型。
-每个渠道在下游是一个**池子**：模型池（`catalog` 全量暴露）+ 账号池（同渠道多账号）。
-**对外模型是动态模型池**（全池，不再限定 flash 家族），
-请求落到哪家渠道由网关按各渠道**账单已用量**决定（`pool-targets.ts` / `pool-usage.ts`）。
+【这是什么】
+
+1. 一个本地 OpenAI 兼容网关 CLI（`modelmux`，bin `modelmux` / `mx`）+ 全部渠道。
+2. 专注一件事：多个渠道汇成一个 OpenAI 兼容端点，对外暴露各渠道目录里的真实模型。
+3. 每个渠道在下游是一个**池子**：模型池（`catalog` 全量暴露）+ 账号池（同渠道多账号）。
+4. 对外模型是**动态模型池**（全池，不再限定 flash 家族）；请求落到哪家渠道由网关按各渠道**账单已用量**决定
+   （`pool-targets.ts` / `pool-usage.ts`）。
+
+【仓库结构】
 
 ```
 packages/
@@ -22,111 +27,120 @@ packages/
 docs/                         契约与规范（唯一的仓库级文档层）
 ```
 
-## 2. 文档规则（**强制**）
+1. `packages/` 只允许 `cli` / `ui` / `core` 三个直接子目录；新增包必须归入其中之一。
+2. `packages/core/gateway` 是共享层，**不许出现任何渠道知识**（厂商名、渠道特有字段、渠道模型名一律不得硬编码）。
+3. `packages/core/channels/<cid>` 是渠道包，**只实现 4 个渠道特有模块**，其余一律复用共享层。
 
-**契约与规范集中在 `docs/`；渠道文档跟着包走，放在 `packages/core/channels/<cid>/docs/`。**
+【分支与重构】（**强制**）
 
-| 类别 | 位置 | 内容 |
-| --- | --- | --- |
-| 契约与规范 | `docs/*.md` | 改代码前必读；索引见 `docs/README.md` |
-| 渠道说明 | `packages/core/channels/<cid>/docs/README.md` | 用法 / 存储 / 测试 |
-| 渠道协议规格 | `packages/core/channels/<cid>/docs/PROTOCOL.md` | 实测协议（实现的依据） |
+1. **大规模修改或重构必须先创建新分支**，禁止在 `main` 上直接动手。
+2. 分支名使用明确的类型前缀：`refactor/<模块名>` / `feat/<模块名>` / `fix/<模块名>`。
+3. 分支必须从**最新的 `main`** 创建，保持目标明确、改动可控。
+4. 分支完成后必须走完整流程：推送 → 建 PR → 合并 → 删除分支。
+5. 判定为「大规模修改」的情形（命中任一即必须开分支）：
+   - 改动跨越 `packages/` 下两个及以上包；
+   - 涉及目录结构、包边界、`workspaces`、`tsconfig` references 的调整；
+   - 涉及契约变更（`docs/CONTRACT-TS.md`）、存储落点（`docs/STORAGE-CONVENTION.md`）、
+     池架构（`docs/POOL-ARCHITECTURE.md`）的规则修改；
+   - 对外 API 形态或模型 id 形态的变更；
+   - 预计改动文件数超过 20 个。
+6. 大规模修改**动手前**必须先产出方案：目标、影响范围、迁移路径、验证方式、回滚方式。
+7. 重构以**可运行、可测试**为分界；大步骤拆小提交，每个提交保持可构建与逻辑一致。
+8. 纯文档、单文件修复、注释订正等小改动可直接在 `main` 上提交。
 
-完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
-需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
+【文档规则】（**强制**）
 
-**`.md` 只允许落在以下位置**（`tools/verify-docs.mjs` 在 `npm test` 里强制）：
+1. 契约与规范集中在 `docs/`；渠道文档跟着包走，放在 `packages/core/channels/<cid>/docs/`。
+2. 各类文档的落点：
 
-0. `docs/` —— 契约与规范 + 文档总入口 `docs/README.md`
-1. `README.md`（**仓库根**）—— 仓库门面，GitHub 只渲染根 README
-2. `packages/core/channels/<cid>/docs/` —— 该渠道自己的文档（说明 + 协议规格 + 逆向结论层）
-3. `packages/core/channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
+   | 类别 | 位置 | 内容 |
+   | --- | --- | --- |
+   | 契约与规范 | `docs/*.md` | 改代码前必读；索引见 `docs/README.md` |
+   | 渠道说明 | `packages/core/channels/<cid>/docs/README.md` | 用法 / 存储 / 测试 |
+   | 渠道协议规格 | `packages/core/channels/<cid>/docs/PROTOCOL.md` | 实测协议（实现的依据） |
 
-新增或修改文档时：
+3. `.md` **只允许**落在以下位置（`tools/verify-docs.mjs` 在 `npm test` 里强制）：
+   - `docs/` —— 契约与规范 + 文档总入口 `docs/README.md`
+   - `README.md`（**仓库根**）—— 仓库门面，GitHub 只渲染根 README
+   - `packages/core/channels/<cid>/docs/` —— 该渠道自己的文档（说明 + 协议规格 + 逆向结论层）
+   - `packages/core/channels/<cid>/AGENTS.md` —— 目录级工具指令（工具从目录读，不能搬）
+4. 新增或修改文档时：
+   - 渠道协议 → `<cid>/docs/PROTOCOL.md`；渠道说明 → `<cid>/docs/README.md`；
+     **渠道文档不要写进仓库级 `docs/`**（包要能单独打包发布）。
+   - 同步更新 `docs/README.md`（文档总入口）。
+   - markdown 链接用**相对路径**；源码注释里的引用用**仓库根相对路径**
+     （如 `packages/core/channels/catpaw/docs/PROTOCOL.md`）。
+   - 跑 `npm test`：`tools/verify-docs.mjs` 拦住落错位置的 md，`tools/verify-storage.mjs` 校验落点规范。
+5. 完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
+   需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
 
-- 渠道协议 → `packages/core/channels/<cid>/docs/PROTOCOL.md`；渠道说明 → `packages/core/channels/<cid>/docs/README.md`
-   （**渠道文档不要写进仓库级 `docs/`**，包要能单独打包发布）
-- 同步更新 `docs/README.md`（它是文档总入口）
-- markdown 链接用**相对路径**；源码注释里的引用用**仓库根相对路径**
-  （如 `packages/core/channels/catpaw/docs/PROTOCOL.md`）—— 搬完文件要顺手检查链接
-- 跑 `npm test`：`tools/verify-docs.mjs` 会拦住落错位置的 md，`tools/verify-storage.mjs` 会校验落点规范
+【代码约定】
 
-## 3. 代码约定（摘要；详见 `docs/CONTRACT-TS.md`）
+1. 渠道包 `src/` **只能有 7 个文件**（`channel` / `cli` / `index` + `cred` / `upstream` / `catalog` / `billing`）；
+   多出来的共享模块副本一律删除。详见 `docs/CONTRACT-TS.md`。
+2. 零第三方运行依赖：渠道包 `dependencies` 只允许 `@modelmux/gateway`；共享层 `dependencies` 必须为空。
+3. **落点由共享层按 `cid` 推导**：渠道不许自己拼路径（见 `docs/STORAGE-CONVENTION.md`）。
+4. 调用渠道模块前必须包 `runInChannel(cid, …)`（`AsyncLocalStorage` 上下文；
+   否则渠道内部的 `paths.*` 在多渠道路由下不知道为谁解析）。
+5. 对外模型 id 是**动态模型池**（各渠道 `catalog.exposedIds()` 归一化去重），恒小写、不带渠道前缀；
+   客户端请求名不剥路径段（`<cid>/<模型>` 旧形态一律 400）。
+   模型收集见 `pool-targets.ts`，匹配与排序见 `docs/POOL-ARCHITECTURE.md`。
+6. **测试只做端到端真实测试**：跑真实网关、真实上游、真实登录链路，以「用户视角能跑通」为准；
+   **不写单元测试、不写集成测试**，也不再要求测试「完全离线」。
 
-- 渠道包 `src/` **只能有 7 个文件**（`channel` / `cli` / `index` + `cred` / `upstream` / `catalog` / `billing`）；
- 多出来的共享模块副本一律删除。
-- 零第三方运行依赖：`dependencies` 只允许 `@modelmux/gateway`。
-- **落点由共享层按 `cid` 推导**：渠道不许自己拼路径（见 `docs/STORAGE-CONVENTION.md`）。
-- 调用渠道模块前必须包 `runInChannel(cid, …)`（`AsyncLocalStorage` 上下文；否则渠道内部的
- `paths.*` 在多渠道路由下不知道为谁解析）。
-- 对外模型 id 是**动态模型池**（各渠道 `catalog.exposedIds()` 归一化去重），恒小写、不带渠道前缀；
- 客户端请求名不剥路径段（`<cid>/<模型>` 旧形态一律 400）。
- 模型收集见 `pool-targets.ts`，匹配与排序见 `docs/POOL-ARCHITECTURE.md` §2。
-- **测试只做端到端真实测试**：跑真实网关、真实上游、真实登录链路，以「用户视角能跑通」为准；
-  **不写单元测试、不写集成测试**，也不再要求测试「完全离线」。
-
-## 4. 命令
+【命令】
 
 ```bash
 npm install                       # 装工作区依赖（含软链）
 npm run build                     # 全仓编译（tsc -b 增量 + cli 单文件 bundle）
-npm test                          # build + 三个校验器 + 全部包的测试（链首编译，见 §5）
+npm test                          # build + 三个校验器 + 全部包的测试
 npm run build --workspace=packages/core/channels/<cid>    # 只编一个渠道（也走引用链）
-node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，**唯一网关端口 8787**（REPO_DEFAULT_ADDR）
+node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，唯一网关端口 8787（REPO_DEFAULT_ADDR）
 node packages/cli/dist/cli.js model list    # 池视图：动态模型 → 候选渠道 + 账单用量 + 冷却
 node packages/cli/dist/cli.js model usage   # 池账本；--refresh 立刻重查
 node packages/cli/dist/cli.js login <cid>   # 对某个渠道操作：login / relogin / status / models / billing / accounts / paths / logs
 node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调试/回归用；只有它才用该渠道的 defaultAddr）
 ```
 
-**命令形态（动词优先）**：`mx` 的**动词永远在第一个位置**，渠道 id 是**第二个位置的操作对象**：
+1. **命令形态（动词优先）**：`mx` 的**动词永远在第一个位置**，渠道 id 是**第二个位置的操作对象**：
 
-```
-mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn / mx models traecn / mx billing traecn
-```
+   ```
+   mx <动词> [<cid>] [参数...]     # 如 mx login traecn / mx status traecn / mx models traecn
+   ```
 
-- 对齐 `git` / `docker` / `gh` / `kubectl` / `npm` 的心智（`<动词> [<对象>]`），也让 `mx login <TAB>`
- 能直接补全渠道名 —— 补全器只需在位置 2 补「已注册渠道」这一个维度。
-- **命令组**（名词在位置 1、子命令在位置 2）同样遵循「动词在前」：`mx model list` / `mx model usage`。
-- **仓库级动词**（`start` / `stop` / `restart` / `status` / `logs`）**不接受**渠道 id ——
- 它们操作的网关是仓库级的（见「端口语义」）；`mx status <cid>` 才是「某渠道的状态」。
-- **反面写法 `mx <cid> <动词>` 一律不采用**：渠道名与动词共享位置 1 的命名空间会让两者二义
- （一旦某个渠道叫 `models`，`mx models` 就无法区分），且与主流 CLI 心智相悖。
+2. 对齐 `git` / `docker` / `gh` / `kubectl` / `npm` 的心智（`<动词> [<对象>]`），也让 `mx login <TAB>`
+   能直接补全渠道名 —— 补全器只需在位置 2 补「已注册渠道」这一个维度。
+3. **命令组**（名词在位置 1、子命令在位置 2）同样遵循「动词在前」：`mx model list` / `mx model usage`。
+4. **仓库级动词**（`start` / `stop` / `restart` / `status` / `logs`）**不接受**渠道 id；
+   `mx status <cid>` 才是「某渠道的状态」。
+5. **反面写法 `mx <cid> <动词>` 一律不采用**：渠道名与动词共享位置 1 的命名空间会让两者二义
+   （一旦某个渠道叫 `models`，`mx models` 就无法区分），且与主流 CLI 心智相悖。
+6. **端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，控制台 8788）；
+   `ChannelConfig.defaultAddr` / `uiPort` 只在**单渠道独立运行**时生效。`--addr` 可覆盖。
+7. **构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出全部包），
+   公共编译选项在根 `tsconfig.base.json`（各包 `extends` 它）；`tsc -b` 一次调度整个依赖图，
+   产物落在各包 `dist/`，增量状态在 `dist/tsconfig.tsbuildinfo`。
+8. `npm run build` 末尾追加 `packages/cli` 的 bundle 步骤（esbuild 内联成 `dist/cli.bundle.js`）。
+   **这一步不能省**：全局 `mx` / `modelmux` 的 `bin` 指向该 bundle。
+9. `npm run build` 末尾还要跑 `tools/copy-ui.mjs`，把 UI 产物拷到**两个**落点
+   （`packages/core/gateway/dist/ui` 与 `packages/cli/dist/ui`）—— 少拷一份，全局 `mx web` 就报「UI 未构建」。
 
-**端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，
-控制台 8788），10 个渠道从它后面供给那两个公共模型；`ChannelConfig.defaultAddr`/`uiPort`
-只在**单渠道独立运行**（`packages/core/channels/<cid>/dist/cli.js start|serve`）时生效。`--addr` 可覆盖。
+【提交前检查】
 
-**构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出全部包），
-公共编译选项在根 `tsconfig.base.json` 里（各包 `extends` 它）；`tsc -b` 一次调度整个依赖图，
-产物仍落在各包 `dist/`（包边界不破），增量状态在 `dist/tsconfig.tsbuildinfo`。
-实测：冷编译 ~5s、无改动 ~1.2s、改一个渠道 ~1.3s、改共享层公开 API ~4s（连带重编依赖者）。
+1. `npm test` 全绿（自带 `build`，含 `verify:storage` / `verify:docs` / `verify:commits`）。
+2. **测试链读的是各包 `dist/`（不是 `src/`）**，所以编译必须在链首：`npm test` 已内置 `npm run build`；
+   单独跑 `npm run verify:storage` 或 `npm test --workspace=packages/core/channels/<cid>` 前必须**先** `npm run build`。
+3. 文档与代码**同一个 commit** 更新。
+4. 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。
+5. 推送前必须跑本地 WSL 测试门禁（`.githooks/pre-push` 自动执行）；禁止用 `--no-verify` 绕过。
 
-`npm run build` 末尾追加 `packages/cli` 的 bundle 步骤（esbuild 内联成 `dist/cli.bundle.js`，
-见 `docs/CONTRACT-TS.md` §2.1）。**这一步不能省**：全局 `mx` / `modelmux` 的 `bin` 指向该 bundle，
-只跑 `tsc -b` 会让它在下次调用时报 `Cannot find module … dist/cli.bundle.js`。
+【改完代码的执行顺序】（**强制**）
 
-`verify:contract` 兜底 `references` 形状：根 solution 文件的引用必须与 `packages/core/channels/*` + `packages/*`
-逐一对应，且每个条目恰含一个 `path`。空条目与合并条目（一条目两个 `path`）都是脚本化增删渠道的
-残留 —— TS 自己的解析器会保留重复键，编译照过，只有该渠道的 `dist/` 悄悄缺席。
-
-## 5. 提交前检查
-
-- `npm test` 全绿（自带 `build`，含 `verify:storage` / `verify:docs`）。
-  **测试链读的是各包 `dist/`（不是 `src/`）**，所以编译必须在链首：`npm test` 已内置
-  `npm run build`；单独跑 `npm run verify:storage` 或 `npm test --workspace=packages/core/channels/<cid>`
-  前要先 `npm run build`，否则校验的是旧产物。
-- 文档与代码**同一个 commit** 更新。
-- 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。
-
-## 6. 改完代码的执行顺序（**强制**）
-
-改动 `packages/core/**` 或 `packages/cli/**` 或 `packages/ui/**` 后，必须按此顺序执行全部四步：
+改动 `packages/core/**`、`packages/cli/**`、`packages/ui/**` 后，必须按顺序完成全部四步：
 
 1. **构建**：`npm run build`
 2. **重启**：`node packages/cli/dist/cli.js restart`
-3. **确认无陈旧构建**：`node packages/cli/dist/cli.js status`
-   —— 输出必须**不含** `网关在跑旧代码`。
+3. **确认无陈旧构建**：`node packages/cli/dist/cli.js status` —— 输出必须**不含** `网关在跑旧代码`。
 4. **真机验证**：涉及 `login` / `cred` / `upstream` 的改动，必须走一遍
    `mx login <cid>` → `mx status <cid>` → 一次真实对话。
 
@@ -137,40 +151,37 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 - 禁止在 `status` 报陈旧构建时继续验证或宣称修复生效。
 - 禁止修改 `packages/core/gateway/src/stale-build.ts` 的判据来让 `status` 不再报警。
 
-判定口径：`status --json` 的 `stale_build` 必须为 `false`。实现见 `packages/core/gateway/src/stale-build.ts`，
-事故记录见 `docs/CONTRACT-TS.md` 的「陈旧构建」一节。
+判定口径：`status --json` 的 `stale_build` 必须为 `false`。
+实现见 `packages/core/gateway/src/stale-build.ts`；事故记录见 `docs/CONTRACT-TS.md` 的「陈旧构建」一节。
 
-## 7. 开发规范（与全局 `~/.zcode/AGENTS.md` 一致，落到本仓库）
+【开发规范】
 
-| 项 | 要求 |
-| --- | --- |
-| 换行 | 一律 **LF**；根 `.gitattributes` 强制（`* text=auto eol=lf`），**禁止 CRLF 混入提交** |
-| 敏感信息 | 严禁提交 apikey / accesskey / secret / token / 密码 / 私钥 / 证书 / 含真实凭据的 `.env`。敏感内容进 `.gitignore`，改用环境变量；提交前自查 `git status` 与 `git diff` |
-| 注释 | **中文**、简洁、不复述代码；随代码同步更新，**禁止留过时或误导性注释** |
-| 日志 | 运行时日志一律**英文**（避免 Git Bash / PowerShell 下的编码问题）；CLI 报表属**产品界面**，保持中文 |
-| 文档 | 全部**中文**、**不使用 emoji**；根 `README.md` 是仓库门面，必须全中文 |
-| 提交信息 | 遵循 Conventional Commits 并改中文：格式 `type(scope): 中文描述`（`type` ∈ feat / fix / docs / style / refactor / perf / test / chore）；**scope 必填**（模块或对象名）；描述简体中文、**结尾不加句号**；破坏性变更可加 `!`（如 `refactor(repo)!:`）。校验器 `tools/verify-commits.mjs`（已接入 `npm test`） |
-| 依赖与环境 | Python 一律走 `uv`（`uv add` / `uv run` / `uv sync` / `uv venv`）；命令行只用 PowerShell 7 与 Git Bash |
-| 复用优先 | 开发前先检索现成方案（GitHub 优先），优先复用而非自建；借鉴重构前先检查许可证 |
+1. 换行一律 **LF**；根 `.gitattributes` 强制（`* text=auto eol=lf`），**禁止 CRLF 混入提交**。
+2. 严禁提交 apikey / accesskey / secret / token / 密码 / 私钥 / 证书 / 含真实凭据的 `.env`。
+   敏感内容进 `.gitignore`，改用环境变量；提交前自查 `git status` 与 `git diff`。
+3. 注释一律**中文**、简洁、不复述代码；随代码同步更新，**禁止留过时或误导性注释**。
+4. 运行时日志一律**英文**（避免 Git Bash / PowerShell 下的编码问题）；
+   CLI 报表属**产品界面**，保持中文。
+5. 文档全部**中文**、**不使用 emoji**；根 `README.md` 是仓库门面，必须全中文。
+6. Python 一律走 `uv`（`uv add` / `uv run` / `uv sync` / `uv venv`）；
+   命令行只用 PowerShell 7 与 Git Bash。
+7. 开发前先检索现成方案（GitHub 优先），优先复用而非自建；借鉴重构前先检查许可证。
+8. 临时文件一律写入项目根目录下的 `.tmp/`（必须已被 `.gitignore` 覆盖），任务结束前清理。
 
-> 这一节是全局偏好的**项目内落点**：全局规则在 `~/.zcode/AGENTS.md`，本仓库要遵守的具体形态写在这里
-> （例如"日志英文"在本项目的边界是——运行时日志英文、CLI 报表中文）。
+【提交信息规范】
 
-### 提交信息规范
+格式 `type(scope): 中文描述`，即 Conventional Commits 的中文版（`tools/verify-commits.mjs` 已接入 `npm test`）。
 
-格式 `type(scope): 中文描述`，即 Conventional Commits 的中文版（`tools/verify-commits.mjs` 已接入 `npm test`）：
-
-| 部分 | 要求 |
-| --- | --- |
-| type | feat / fix / docs / style / refactor / perf / test / chore |
-| scope | 必填，变更涉及的模块或对象名（如 `cli` / `gateway` / `repo`） |
-| 描述 | 简体中文，一句话说清改了什么，结尾不加句号 |
-| 正文 | 可选；与主题空一行；不要求解释「为什么」 |
-| footer | 可选；破坏性变更用 `!` 或 `BREAKING CHANGE: …` 标注 |
+1. `type` 只允许：`feat` / `fix` / `docs` / `style` / `refactor` / `perf` / `test` / `chore`。
+2. `scope` **必填**，填变更涉及的模块或对象名（如 `cli` / `gateway` / `repo`）。
+3. 描述为简体中文，一句话说清改了什么，**结尾不加句号**。
+4. 正文可选，与主题空一行；不要求解释「为什么」。
+5. footer 可选；破坏性变更用 `!` 或 `BREAKING CHANGE: …` 标注（如 `refactor(repo)!:`）。
+6. 一次逻辑变更只产生一个提交；能合并的改动不要拆成多个 commit。
 
 **merge commit 同样适用**（校验器不过滤 merge）：
 
-- 本地合并必须显式给标题：`git merge --no-ff -m "merge(scope): 中文描述"`。
-- 禁止 `Merge pull request #N from …` 这类 GitHub 默认标题（无 type/scope/中文）。
-  仓库设置已固定为 `merge_commit_title=PR_TITLE`，故建 PR 时**PR 标题本身**必须是
-  `type(scope): 中文描述` —— 它会被直接用作 merge commit 标题。
+1. 本地合并必须显式给标题：`git merge --no-ff -m "merge(scope): 中文描述"`。
+2. **禁止** `Merge pull request #N from …` 这类 GitHub 默认标题（无 type / scope / 中文）。
+3. 仓库设置已固定为 `merge_commit_title=PR_TITLE`，故建 PR 时**PR 标题本身**必须是
+   `type(scope): 中文描述` —— 它会被直接用作 merge commit 标题。

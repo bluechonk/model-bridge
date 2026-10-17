@@ -7,7 +7,7 @@
 | 契约与规范 | `docs/`（本目录） | 仓库级规则，改代码前必读 |
 | 渠道文档 | `packages/core/channels/<cid>/docs/` | 每个渠道自己的说明与协议规格（**随包走**） |
 
-> 规则本身写在根 [`AGENTS.md`](../AGENTS.md) §2：契约留在 `docs/`，渠道文档跟包走，
+> 规则本身写在根 [`AGENTS.md`](../AGENTS.md)【文档规则】：契约留在 `docs/`，渠道文档跟包走，
 > 每个渠道包都必须带 `docs/README.md`。由 `tools/verify-docs.mjs` 在 `npm test` 里强制检查。
 
 > 各 `packages/core/channels/<cid>/` 目录里只有 `src/`（实现）与 `docs/`（文档）；
