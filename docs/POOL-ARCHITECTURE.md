@@ -34,21 +34,31 @@
 
 ---
 
-## 2. 公共模型池：跨渠道的两个模型
+## 2. 公共模型池：动态模型池（全渠道模型并集）
 
-网关对外**只有两个模型**，与「这些模型来自哪个渠道」无关：
+网关对外暴露**全部渠道 `catalog` 归一化后的模型并集**，与「这些模型来自哪个渠道」无关：
 
-| 对外 id | 候选渠道 | 各家目录里的写法（归一化后命中，实测示例） |
-|---|---|---|
-| `deepseek-v4.1-flash` | codearts、raccoon、workbuddy、workbuddyai | `deepseek-v4.1-flash`（codearts / workbuddy / workbuddyai）、`sn-deepseek-v4-1-flash`（raccoon） |
-| `glm-5.3-flash` | catpaw、codearts、lobsterai、loomy、qoder、qodercn、raccoon | `glm-5.3-flash`（catpaw / codearts / lobsterai）、`GLM-5.3-Flash`（loomy）、`sn-glm-5-3-flash`（raccoon）、`gfmodel`（qoder / qodercn，展示名 `GLM-5.3-Flash`） |
+```
+/v1/models = ⋃ 各渠道 exposedIds()  →  归一化（小写、版本号点号、去 `-official`/日期/`-latest`、剥厂商路径段）  →  去重  →  排序
+```
 
-> `deepseek-v4-flash`（4.0，早期池内模型）**已移出池**：各渠道上游目录里仍有它
-> （catpaw / codearts / lobsterai 的 `deepseek-v4-flash`、traecn 的 `DeepSeek-V4-Flash`、
-> loomy 的 `deepseek-v4-flash-0731`），经渠道 CLI 仍可用，只是不再作为对外模型、
-> 也不出现在 `/v1/models`。**`traecn` 因此不再贡献任何池内模型。**
+历史：早期只放行 `(deepseek|glm) × flash` 两个家族（`deepseek-v4.1-flash` / `glm-5.3-flash`），
+现已放宽为全池 —— 上游目录里有什么就对外暴露什么（各渠道的 kimi / qwen / MiniMax /
+豆包 / 盘古 等型号同样进池）。
 
-来源：`packages/gateway/src/pool-targets.ts`（目标与匹配）、`pool-usage.ts`（账本与排序）。
+**归一化的作用**是让「同一模型在各渠道的不同写法」收敛成一个对外 id：
+
+| 对外 id（归一化后） | 各渠道目录里的原始写法（实测） |
+|---|---|
+| `deepseek-v4.1-flash` | `deepseek-v4.1-flash`（codearts / workbuddy / workbuddyai）、`sn-deepseek-v4-1-flash`（raccoon） |
+| `deepseek-v4-flash` | `deepseek-v4-flash`（catpaw / codearts / lobsterai）、`DeepSeek-V4-Flash-Official`（traecn）、`deepseek-v4-flash-0731`（loomy） |
+| `glm-5.3-flash` | `glm-5.3-flash`（catpaw / codearts / lobsterai）、`GLM-5.3-Flash`（loomy）、`sn-glm-5-3-flash`（raccoon）、`gfmodel`（qoder / qodercn，按展示名归一） |
+
+> 过滤只由**渠道自己的目录**决定：隐藏条目（`hidden` / `visible === false`）、
+> 官方「自定义模型」占位（`custom_model_*`）、上游标记不可用的通道会被各渠道排除，
+> 共享层不再做家族闸门。`traecn` 的隐藏条目与 `custom_model_*` 同样不出现在 `/v1/models`。
+
+来源：`packages/core/gateway/src/pool-targets.ts`（目标与匹配）、`pool-usage.ts`（账本与排序）。
 
 ### 2.1 匹配 = 归一化 + 精确相等
 
@@ -161,7 +171,7 @@
 | `mx models <cid>` | **渠道视角**：该渠道贡献了池内哪些模型（`--refresh` 重拉上游目录） |
 | `mx model usage [--refresh]` | 看账本；`--refresh` 立刻重查各渠道账单额度 |
 
-> 单渠道独立运行（`packages/channels/<cid>/dist/cli.js start`）**也走池**：`/v1/models` 同样是那两条，
+> 单渠道独立运行（`packages/core/channels/<cid>/dist/cli.js start`）**也走池**：`/v1/models` 同样是那两条，
 > 只是候选渠道只有一个（提供不了的模型请求时回 503）。
 
 ---
@@ -303,7 +313,7 @@ hasChannel(cid?: string): boolean;
 
 ### 4.2 路由层（已落地）
 
-- `/v1/chat/completions`：**池路由** —— 客户端只给两个池模型 id，落到哪家渠道由网关按账本挑
+- `/v1/chat/completions`：**池路由** —— 客户端只给池内的模型 id，落到哪家渠道由网关按账本挑
  （见 §2.2 / §2.4）。早期按 `<cid>/` 前缀选渠道的做法**已移除**。
 - `/v1/models`：恒两个公共模型（见 §2）。
 - `/health`：报告**整体**状态 + 每个渠道一行（登录/池子/是否上架），而不是单个渠道。

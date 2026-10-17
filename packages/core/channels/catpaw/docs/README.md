@@ -8,7 +8,7 @@
 
 > 本仓库原为 Python 实现（uv + aiohttp + cryptography），已重构为 TypeScript
 > （Node ≥ 22.6，零第三方运行依赖），并纳入 `modelmux` 工作区的
-> `packages/gateway` 共享层。旧实现与逆向研究结论保留在 git 历史与 `docs/` 里。
+> `packages/core/gateway` 共享层。旧实现与逆向研究结论保留在 git 历史与 `docs/` 里。
 
 ## 特性
 

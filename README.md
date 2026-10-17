@@ -1,24 +1,27 @@
 # modelmux
 
-本地多渠道路由网关 CLI：把多个渠道汇成**一个 OpenAI 兼容端点**，对外只暴露两个模型，
+本地多渠道路由网关 CLI：把多个渠道汇成**一个 OpenAI 兼容端点**，对外暴露各渠道目录里的真实模型，
 由全部渠道按账单用量自动供给。专注做一件事：`npx modelmux` 起网关，任何
 OpenAI 兼容客户端指过来就能用。
 
 ## 这是什么
 
 - **一个网关**：监听 `127.0.0.1:8787`，提供 `/v1/chat/completions`、`/v1/models`、`/health`。
-- **两个对外模型**：`deepseek-v4.1-flash` 与 `glm-5.3-flash`。客户端只写模型名，
-  请求落到哪家渠道由网关按各渠道账单已用量决定（失败的渠道进冷却、当 0 处理）。
-- **10 个渠道**：每个渠道是一个池子（模型目录 + 凭据 + 上游协议），注册在 `packages/channels/` 下。
+- **动态模型池**：对外模型是全部渠道 `catalog` 的归一化并集（`/v1/models` 实时汇总）。
+  客户端只写模型名，请求落到哪家渠道由网关按各渠道账单已用量决定（失败的渠道进冷却、当 0 处理）。
+- **11 个渠道**：每个渠道是一个池子（模型目录 + 凭据 + 上游协议），注册在 `packages/core/channels/` 下。
 - **自动化兜底**：签到、死凭据清理、账单/目录刷新、失败转移全部由网关自动完成。
 
 ## 目录
 
 ```
-packages/gateway/    共享层（网关 / 守护 / 路径 / 渠道注册表，不含任何渠道知识）
-packages/cli/        CLI 入口（bin modelmux / mx，注册全部渠道后交给共享 CLI）
-packages/channels/<cid>/      一个渠道 = 一个池子（只实现 cred / upstream / catalog / billing）
-docs/                契约与规范（渠道文档在各包 packages/channels/<cid>/docs/）
+packages/
+├── cli/                      CLI 入口（bin modelmux / mx，注册全部渠道后交给共享 CLI）
+├── ui/                       Web 管理看板（React 19 SPA，`mx web` 托管）
+└── core/                     服务端运行时
+    ├── gateway/              共享层（网关 / 守护 / 路径 / 渠道注册表，不含任何渠道知识）
+    └── channels/<cid>/       一个渠道 = 一个池子（只实现 cred / upstream / catalog / billing）
+docs/                         契约与规范（渠道文档在各包 packages/core/channels/<cid>/docs/）
 ```
 
 ## 快速开始
@@ -55,15 +58,15 @@ mx model list
 
 ## 文档
 
-契约与规范在 `docs/`（入口 [docs/README.md](docs/README.md)），**渠道文档跟包走**，在各包 `packages/channels/<cid>/docs/`：
+契约与规范在 `docs/`（入口 [docs/README.md](docs/README.md)），**渠道文档跟包走**，在各包 `packages/core/channels/<cid>/docs/`：
 
 | 想看什么 | 去哪 |
 | --- | --- |
 | 契约与规范（改代码前必读） | [docs/CONTRACT-TS.md](docs/CONTRACT-TS.md) |
 | 公共模型池怎么选渠道 | [docs/POOL-ARCHITECTURE.md](docs/POOL-ARCHITECTURE.md) |
 | 存储落点规范 | [docs/STORAGE-CONVENTION.md](docs/STORAGE-CONVENTION.md) |
-| 某个渠道怎么用 | `packages/channels/<cid>/docs/README.md`（如 [packages/channels/qodercn/docs/README.md](packages/channels/qodercn/docs/README.md)） |
-| 某个上游的协议细节 | `packages/channels/<cid>/docs/PROTOCOL.md` |
+| 某个渠道怎么用 | `packages/core/channels/<cid>/docs/README.md`（如 [packages/core/channels/qodercn/docs/README.md](packages/core/channels/qodercn/docs/README.md)） |
+| 某个上游的协议细节 | `packages/core/channels/<cid>/docs/PROTOCOL.md` |
 
 ## 约定
 
