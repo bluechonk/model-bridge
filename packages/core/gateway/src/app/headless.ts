@@ -30,10 +30,17 @@ class StdoutLoginUi implements authFlow.LoginUi {
     private readonly jsonMode: boolean,
     /** 多渠道路由时带上渠道 id，便于解析方区分（单渠道为 undefined）。 */
     private readonly cid?: string,
+    /**
+     * 额外观察者。控制台触发的登录没有终端可看，必须把状态同步进
+     * `ServiceState`，否则 `GET /web/api/state` 的 auth_url 恒为空 ——
+     * 页面承诺「授权链接通过轮询获取」却永远等不到。
+     */
+    private readonly observer?: authFlow.LoginUi,
   ) {}
 
   setState(state: string, message = "", url = ""): void {
     if (url) this.authUrl = url;
+    this.observer?.setState(state, message, url);
     const tag = this.cid ? `[${this.cid}] ` : "";
     if (this.jsonMode) {
       const event: Record<string, unknown> = { event: "login", state, message };
@@ -107,8 +114,13 @@ export async function runLogin(options: {
   cid?: string;
   /** 微信扫码登录（渠道声明 `cred.loginWechat` 才支持，如 loomy）。 */
   wechat?: boolean;
+  /**
+   * 状态观察者：把登录状态额外同步给调用方（控制台需要它填 `auth_url`）。
+   * 省略时行为与以前一致，只打 stdout。
+   */
+  observer?: authFlow.LoginUi;
 } = {}): Promise<number> {
-  const { force = false, json = false, realm = "auto", cid, wechat = false } = options;
+  const { force = false, json = false, realm = "auto", cid, wechat = false, observer } = options;
   const target = getChannel(cid);
   const { cred } = target;
   if (force) {
@@ -127,7 +139,7 @@ export async function runLogin(options: {
       console.error(`[login] channel ${target.config.cid} does not support --wechat login`);
       return 1;
     }
-    const ui = new StdoutLoginUi(json, cid);
+    const ui = new StdoutLoginUi(json, cid, observer);
     if (json) emit({ event: "start", mode: "login", force, realm, wechat: true, ...(cid ? { cid } : {}) });
     let ok = false;
     try {
@@ -162,7 +174,7 @@ export async function runLogin(options: {
     return ok ? 0 : 1;
   }
 
-  const ui = new StdoutLoginUi(json, cid);
+  const ui = new StdoutLoginUi(json, cid, observer);
   if (json) emit({ event: "start", mode: "login", force, realm, ...(cid ? { cid } : {}) });
 
   // 已有凭据且未 force：login 是幂等的，不会重新授权 —— 必须明确说清，
@@ -275,7 +287,9 @@ export async function runServe(options: ServeOptions): Promise<number> {
     // 控制台的「登录」按钮经此回调触发真实登录流程（本函数在 app 层，
     // 控制台层不认识它 —— 见 scripts/verify-layering.mjs）
     triggerLogin: (cid, force) => {
-      void runLogin({ cid, force, json: true, realm: "auto" }).catch(() => {
+      // 把 state 当观察者传给登录流程：控制台没有 stdout 可看，
+      // 授权链接必须落到 `/web/api/state`，否则页面永远等不到 auth_url。
+      void runLogin({ cid, force, json: true, realm: "auto", observer: state }).catch(() => {
         // 登录失败会反映在后续 /web/api/state 的 auth_url 或 gateway_error 上
       });
     },
