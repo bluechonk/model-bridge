@@ -53,7 +53,6 @@ export async function runVerb(verb: string, args: string[], ctx: CommandContext)
       return daemon.status({
         json: ctx.json,
         addr: ctx.addr,
-        uiPort: ctx.uiPort,
         ...(cid !== undefined ? { cid } : {}),
       });
     case "models":

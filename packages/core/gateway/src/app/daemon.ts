@@ -21,7 +21,7 @@ import {
   type CreditPackage,
   type CreditsResult,
 } from "../runtime/channel.js";
-import { defaultAddr, defaultUiPort } from "../runtime/cli-consts.js";
+import { defaultAddr, defaultUiPort, REPO_UI_PREFIX } from "../runtime/cli-consts.js";
 import { syncPool } from "../runtime/account-pool.js";
 import { claimedTodayPerLedger, ledgerExists } from "../auth/signin-ledger.js";
 import { runInChannel } from "../runtime/channel-context.js";
@@ -319,11 +319,10 @@ function readWorkerPidValue(scope: Scope): number | null {
 
 /** 聚合状态：网关健康、控制台快照、守护 PID、凭证、auto_start。 */
 export async function status(
-  options: { json?: boolean; addr?: string; uiPort?: number; cid?: string } = {},
+  options: { json?: boolean; addr?: string; cid?: string } = {},
 ): Promise<number> {
   const scope = scopeOf(options.cid);
   const addr = options.addr ?? defaultAddr(options.cid);
-  const uiPort = options.uiPort ?? defaultUiPort(options.cid);
   const health = await probe(addr);
   const gatewayUp = health !== null;
   // 端口上若有别的服务（同名的旧实现 / 别的项目的网关），明确报出来
@@ -332,7 +331,9 @@ export async function status(
   let consoleState: Record<string, unknown> | null = null;
   if (gatewayUp) {
     try {
-      const resp = await fetch(`http://127.0.0.1:${uiPort}/api/state`, {
+      // 单端口模式：控制台与网关共用 `addr`，控制台 API 在 `/web/api/*` 下。
+      // （旧实现探测 `uiPort/api/state` —— 那是控制台独立进程时代的两端口布局，已失效。）
+      const resp = await fetch(`${baseUrlOf(addr)}${REPO_UI_PREFIX}/api/state`, {
         signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
       });
       if (resp.status === 200) consoleState = (await resp.json()) as Record<string, unknown>;
