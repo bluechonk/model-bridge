@@ -43,7 +43,7 @@
 - **调试变量命名**：每渠道为 `<CID 大写、- 换 _>_DEBUG_DUMP`（如 `TRAECN_DEBUG_DUMP`），
   由 `tools/verify-storage.mjs` 逐渠道强制校验。
 - **端口**：每渠道独占一组，登记在 `ChannelConfig.defaultAddr` / `uiPort`，不与他渠道重复
-  （仓库级网关不用它们，见 AGENTS.md §4；单渠道独立运行才生效）。
+  （仓库级网关不用它们，见 AGENTS.md【命令】；单渠道独立运行才生效）。
 - `*_DEBUG_DUMP` 是运行期抓包目录（opt-in，值须为绝对路径或 `1`），不构成固定落点。
 - 各包根目录的 `models.json` 是**只读的包内资源**（兜底模型表，随包分发），不是用户存储。
 
