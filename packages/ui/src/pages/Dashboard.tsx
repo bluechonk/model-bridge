@@ -120,20 +120,7 @@ export function Dashboard(): ReactElement {
         )}
       </section>
 
-      {state.message && <div className="text-sm text-gray-400">{state.message}</div>}
-      {state.auth_url && (
-        <Alert tone="info">
-          <span className="font-medium">授权链接：</span>
-          <a
-            className="ml-1 break-all text-sky-300 underline hover:text-sky-200"
-            href={state.auth_url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {state.auth_url}
-          </a>
-        </Alert>
-      )}
+      {/* 授权链接 / 登录进度属于登录弹窗（账号池页），仪表盘不再渲染 —— 避免出现在各个页面 */}
     </div>
   );
 }

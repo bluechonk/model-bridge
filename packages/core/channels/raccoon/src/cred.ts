@@ -450,9 +450,13 @@ async function resolveCallback(options: LoginOptions, timeoutMs: number): Promis
             "waiting for pasted callback",
           );
           if (line === null) {
-            throw new Error("stdin closed before a callback url was provided; run raccoon login again");
+            // stdin 已 EOF（daemon 场景）：从双通道竞争中**静默退场**（挂起不 resolve），
+            // 等待 pasteCode 轮询或超时 —— 在这里抛错会让 Promise.race 提前终止，
+            // 把还活着的 Web 粘贴通道一起拖死（真机踩过）。
+            // 永不兑现：本通道退场，等 pasteCode 或超时
+            return await new Promise<string>(() => {});
           }
-          const trimmed = line.trim();
+          const trimmed = (line as string).trim();
           if (trimmed) return trimmed;
           process.stderr.write(
             "(empty input) Nothing was pasted. Finish the login in the browser first; the address bar will show `office-raccoon://auth/callback?code=…` — copy that whole line and paste it here. ",

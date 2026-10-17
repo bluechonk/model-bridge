@@ -22,7 +22,7 @@ import {
 } from "@modelmux/gateway";
 
 /** 登录基址（国内版 CodeBuddy）。 */
-export const DEFAULT_BASE_URL = "https://www.codebuddy.ai";
+export const DEFAULT_BASE_URL = "https://copilot.tencent.com";
 
 /** 向插件端点标识本客户端。 */
 const PLATFORM_QS = "platform=workbuddy";
@@ -184,6 +184,12 @@ function anonHeaders(): Record<string, string> {
     "X-No-User-Id": "true",
     "X-No-Enterprise-Id": "true",
     "X-No-Department-Info": "true",
+    // reference cmd/login 的 commonHeaders：Origin/Referer 缺失上游会拒（CN 是 codebuddy.cn 站点域）
+    Accept: "application/json, text/plain, */*",
+    "X-Requested-With": "XMLHttpRequest",
+    Origin: "https://codebuddy.cn",
+    Referer: "https://codebuddy.cn/",
+    "User-Agent": "WorkBuddy/5.5.6 WorkBuddy/5.5.6 CLI/2.137.1",
   };
 }
 
