@@ -130,12 +130,20 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
 
 ## 提交前检查
 
+**强制**。
+
 1. `npm test` 全绿（自带 `build`，含 `verify:storage` / `verify:docs` / `verify:commits`）。
 2. **测试链读的是各包 `dist/`（不是 `src/`）**，所以编译必须在链首：`npm test` 已内置 `npm run build`；
    单独跑 `npm run verify:storage` 或 `npm test --workspace=packages/core/channels/<cid>` 前必须**先** `npm run build`。
-3. 文档与代码**同一个 commit** 更新。
-4. 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。
-5. 推送前必须跑本地 WSL 测试门禁（`.githooks/pre-push` 自动执行）；禁止用 `--no-verify` 绕过。
+3. **CI 不通过禁止提交**：
+   - 提交前必须先在本地 WSL 跑通与 CI 等价的命令（`npm test`），本地全绿才允许 `git commit` / `git push`。
+   - 推送后必须确认 GitHub Actions 的 CI 为 `success`；**CI 红着时禁止继续提交新 commit**，
+     必须先把红的那次修绿。
+   - **禁止用 `--no-verify` 绕过** `.githooks/pre-push` 门禁；确需绕过必须先说明理由并获同意。
+   - 禁止「先推再修」：不得以「后面会修」为由推送明知会红的提交。
+4. 文档与代码**同一个 commit** 更新。
+5. 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。
+6. 核对口径：`gh run list --limit 5` 中本次推送对应的 run 必须是 `completed / success`。
 
 ## 改完代码的执行顺序
 
