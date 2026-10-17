@@ -42,7 +42,7 @@ function packageDirs() {
     }
     for (const dir of candidates) {
       // 只认 `packages/core/channels/` 树下的包：`packages/*` 是基础设施
-      //（注意 packages/core/gateway/src/channel.ts 是共享层的**注册表模块**，不能按文件名判据放行）。
+      //（注意 packages/core/gateway/src/runtime/channel.ts 是共享层的**注册表模块**，不能按文件名判据放行）。
       if (!relative(workspaceRoot, dir).split(sep).join("/").startsWith("packages/core/channels/")) continue;
       out.push(dir);
     }

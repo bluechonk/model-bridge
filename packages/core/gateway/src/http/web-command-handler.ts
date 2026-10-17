@@ -5,11 +5,11 @@
  * 所有 handler 输出 JSON 对象（不是 `console.log`），与 CLI 的进程退出码语义解耦。
  */
 
-import { channels, getChannel, hasChannel } from "./channel.js";
-import { runInChannel } from "./channel-context.js";
-import { POOL_MODELS, poolCandidates, canonicalModelId, asPoolModel } from "./pool-targets.js";
-import { ledgerSnapshot, scoreOf } from "./pool-usage.js";
-import { listAccounts, activateAccount, removeAccount, syncPool } from "./account-pool.js";
+import { channels, getChannel, hasChannel } from "../runtime/channel.js";
+import { runInChannel } from "../runtime/channel-context.js";
+import { POOL_MODELS, poolCandidates, canonicalModelId, asPoolModel } from "../pool/pool-targets.js";
+import { ledgerSnapshot, scoreOf } from "../pool/pool-usage.js";
+import { listAccounts, activateAccount, removeAccount, syncPool } from "../runtime/account-pool.js";
 import { renderChannelPool } from "./web-types.js";
 import type { WebCommandBody, WebCommandResult, WebChannelStatus } from "./web-types.js";
 
@@ -137,7 +137,7 @@ async function handleLogin(cid: string, force: boolean): Promise<WebCommandResul
     void (async () => {
       try {
         // 动态 import 避免 web-command-handler 在启动时强依赖 headless（重依赖网络）
-        const { runLogin } = await import("./headless.js");
+        const { runLogin } = await import("../app/headless.js");
         await runLogin({ cid, force, json: true, realm: "auto" });
       } catch {
         // 登录失败会反映在后续 /api/state 的 auth_url 或 gateway_error 上

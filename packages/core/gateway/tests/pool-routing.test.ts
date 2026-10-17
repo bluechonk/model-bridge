@@ -11,10 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { clearChannels, setChannel, type Channel } from "../dist/channel.js";
-import { poolUsagePath } from "../dist/paths.js";
-import * as poolUsage from "../dist/pool-usage.js";
-import { asPoolModel, canonicalModelId, POOL_MODELS, poolCandidates } from "../dist/pool-targets.js";
+import { clearChannels, setChannel, type Channel } from "../dist/runtime/channel.js";
+import { poolUsagePath } from "../dist/runtime/paths.js";
+import * as poolUsage from "../dist/pool/pool-usage.js";
+import { asPoolModel, canonicalModelId, POOL_MODELS, poolCandidates } from "../dist/pool/pool-targets.js";
 
 let root = "";
 let savedRoot: string | undefined;

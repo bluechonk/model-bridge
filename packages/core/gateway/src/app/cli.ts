@@ -10,10 +10,10 @@
 
 import { parseArgs } from "node:util";
 
-import { channelCount, getChannel, hasChannel } from "./channel.js";
+import { channelCount, getChannel, hasChannel } from "../runtime/channel.js";
 import { CHANNEL_VERBS, isChannelVerb } from "./command-groups.js";
 import * as groups from "./command-groups.js";
-import { defaultAddr, defaultUiPort, version } from "./cli-consts.js";
+import { defaultAddr, defaultUiPort, version } from "../runtime/cli-consts.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";
 import { runWeb } from "./web.js";

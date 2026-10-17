@@ -18,8 +18,8 @@ import {
   catalogCachePath,
   readCatalogCache,
   writeCatalogCache,
-} from "../dist/catalog-cache.js";
-import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
+} from "../dist/runtime/catalog-cache.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/runtime/channel.js";
 
 function useChannel(cid: string): void {
   const config: ChannelConfig = {

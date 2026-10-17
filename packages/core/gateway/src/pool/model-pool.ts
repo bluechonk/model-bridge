@@ -9,7 +9,7 @@
  * `DeepSeek-V4-Flash`，不认 `deepseek-v4-flash`）。
  */
 
-import type { Channel } from "./channel.js";
+import type { Channel } from "../runtime/channel.js";
 
 /** 把客户端发来的模型名解析为该渠道的上游模型名（大小写不敏感）。 */
 export function resolvePoolModel(channel: Channel, name: string): string {

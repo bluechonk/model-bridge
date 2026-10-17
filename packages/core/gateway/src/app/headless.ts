@@ -8,15 +8,15 @@
  * 渠道差异由注册的 `Channel` 提供。
  */
 
-import * as authFlow from "./auth-flow.js";
-import { startAutoSignin } from "./auto-signin.js";
-import { syncPool } from "./account-pool.js";
-import { runInChannel } from "./channel-context.js";
-import { channels, getChannel, type Channel } from "./channel.js";
-import * as console_ from "./console.js";
-import * as gateway from "./gateway.js";
-import { REPO_UI_PREFIX } from "./cli-consts.js";
-import { credentialsPath } from "./paths.js";
+import * as authFlow from "../auth/auth-flow.js";
+import { startAutoSignin } from "../auth/auto-signin.js";
+import { syncPool } from "../runtime/account-pool.js";
+import { runInChannel } from "../runtime/channel-context.js";
+import { channels, getChannel, type Channel } from "../runtime/channel.js";
+import * as console_ from "../http/console.js";
+import * as gateway from "../http/gateway.js";
+import { REPO_UI_PREFIX } from "../runtime/cli-consts.js";
+import { credentialsPath } from "../runtime/paths.js";
 
 /** 输出一行 JSON 事件。解析方应跳过无法解析的行（第三方库也可能打印 stdout）。 */
 function emit(event: Record<string, unknown>): void {

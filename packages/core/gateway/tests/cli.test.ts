@@ -18,10 +18,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
-import { credentialsPath } from "../dist/paths.js";
-import { main } from "../dist/cli.js";
-import { writeCatalogCache } from "../dist/catalog-cache.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/runtime/channel.js";
+import { credentialsPath } from "../dist/runtime/paths.js";
+import { main } from "../dist/app/cli.js";
+import { writeCatalogCache } from "../dist/runtime/catalog-cache.js";
 
 /** 跑一次 CLI，收 stdout/stderr 与退出码。 */
 async function run(argv: string[]): Promise<{ code: number; out: string; err: string }> {

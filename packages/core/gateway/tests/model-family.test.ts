@@ -20,7 +20,7 @@ import {
   filterAllowedFamily,
   isAllowedFamily,
   REQUIRED_ALLOWLIST,
-} from "../dist/model-family.js";
+} from "../dist/pool/model-family.js";
 
 /** 全模型池：全部放行。 */
 const ALLOWED: ReadonlyArray<readonly [string, string]> = [

@@ -22,10 +22,10 @@
 
 import { existsSync, readFileSync } from "node:fs";
 
-import { channels, type Channel } from "./channel.js";
-import { runInChannel } from "./channel-context.js";
-import { poolUsagePath } from "./paths.js";
-import { writeJsonSecret } from "./secret-file.js";
+import { channels, type Channel } from "../runtime/channel.js";
+import { runInChannel } from "../runtime/channel-context.js";
+import { poolUsagePath } from "../runtime/paths.js";
+import { writeJsonSecret } from "../runtime/secret-file.js";
 
 /** 账单缓存有效期：8 小时 ≈ 一天三次。 */
 export const BILLING_TTL_MS = 8 * 60 * 60 * 1000;

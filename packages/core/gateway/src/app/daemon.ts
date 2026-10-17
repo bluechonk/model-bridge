@@ -20,14 +20,14 @@ import {
   type Channel,
   type CreditPackage,
   type CreditsResult,
-} from "./channel.js";
-import { defaultAddr, defaultUiPort } from "./cli-consts.js";
-import { syncPool } from "./account-pool.js";
-import { claimedTodayPerLedger, ledgerExists } from "./signin-ledger.js";
-import { runInChannel } from "./channel-context.js";
-import * as gateway from "./gateway.js";
-import * as paths from "./paths.js";
-import { baseUrlOf, displayBase } from "./portfree.js";
+} from "../runtime/channel.js";
+import { defaultAddr, defaultUiPort } from "../runtime/cli-consts.js";
+import { syncPool } from "../runtime/account-pool.js";
+import { claimedTodayPerLedger, ledgerExists } from "../auth/signin-ledger.js";
+import { runInChannel } from "../runtime/channel-context.js";
+import * as gateway from "../http/gateway.js";
+import * as paths from "../runtime/paths.js";
+import { baseUrlOf, displayBase } from "../http/portfree.js";
 import { detectStaleBuild, staleBuildHint } from "./stale-build.js";
 
 /**

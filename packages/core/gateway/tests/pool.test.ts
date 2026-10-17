@@ -15,11 +15,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { channels, clearChannels, setChannel, type Channel } from "../dist/channel.js";
-import * as daemon from "../dist/daemon.js";
-import * as gateway from "../dist/gateway.js";
-import * as paths from "../dist/paths.js";
-import * as poolUsage from "../dist/pool-usage.js";
+import { channels, clearChannels, setChannel, type Channel } from "../dist/runtime/channel.js";
+import * as daemon from "../dist/app/daemon.js";
+import * as gateway from "../dist/http/gateway.js";
+import * as paths from "../dist/runtime/paths.js";
+import * as poolUsage from "../dist/pool/pool-usage.js";
 
 // ── 隔离存储根（账本会落 <root>/pool-usage.json） ─────────────────────────────
 

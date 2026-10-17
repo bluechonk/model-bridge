@@ -14,9 +14,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
-import * as gateway from "../dist/gateway.js";
-import * as paths from "../dist/paths.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/runtime/channel.js";
+import * as gateway from "../dist/http/gateway.js";
+import * as paths from "../dist/runtime/paths.js";
 
 const CID = "queuechan";
 

@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { readAppended } from "../dist/daemon.js";
+import { readAppended } from "../dist/app/daemon.js";
 
 describe("logs --follow：增量读取 readAppended", () => {
   let dir: string;

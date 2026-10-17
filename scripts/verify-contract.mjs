@@ -142,7 +142,7 @@ const gwDeps = Object.keys(JSON.parse(read("packages/core/gateway/package.json")
 check(gwDeps.length === 0, `packages/core/gateway: 共享包必须零运行依赖，当前 ${gwDeps.join(", ")}`);
 
 // 公共池模型动态化（全模型池）：不再断言固定 2 个 flash，改为检查动态收集函数存在
-const poolTargets = read("packages/core/gateway/src/pool-targets.ts");
+const poolTargets = read("packages/core/gateway/src/pool/pool-targets.ts");
 check(/export function poolModels\(\)/.test(poolTargets), "pool-targets.ts: 缺 poolModels()（全模型池动态收集）");
 check(/function asPoolModel\(/.test(poolTargets), "pool-targets.ts: 缺 asPoolModel()（动态匹配）");
 // 共享层代码不得硬编码厂商模型名（AGENTS.md §仓库结构：共享层不许出现渠道知识）。
@@ -156,7 +156,7 @@ check(
 );
 
 // 池白名单判据定义在共享层（渠道不得自行实现家族过滤，CONTRACT-TS §4）
-const modelFamily = read("packages/core/gateway/src/model-family.ts");
+const modelFamily = read("packages/core/gateway/src/pool/model-family.ts");
 check(/FAMILY_ALLOWLIST/.test(modelFamily), "model-family.ts: 缺 FAMILY_ALLOWLIST（池白名单必须在共享层）");
 check(/REQUIRED_ALLOWLIST/.test(modelFamily), "model-family.ts: 缺 REQUIRED_ALLOWLIST（型号闸门必须在共享层）");
 

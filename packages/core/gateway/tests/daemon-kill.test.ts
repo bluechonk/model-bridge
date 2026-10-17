@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { after, describe, it } from "node:test";
 
-import { killTree, pidAlive } from "../dist/daemon.js";
+import { killTree, pidAlive } from "../dist/app/daemon.js";
 
 /** 存活探测（与 daemon 内部同款判据）。 */
 function alive(pid: number): boolean {

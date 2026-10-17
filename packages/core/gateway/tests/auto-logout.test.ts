@@ -14,11 +14,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { listAccounts } from "../dist/account-pool.js";
-import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
-import * as gateway from "../dist/gateway.js";
-import * as paths from "../dist/paths.js";
-import * as poolUsage from "../dist/pool-usage.js";
+import { listAccounts } from "../dist/runtime/account-pool.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/runtime/channel.js";
+import * as gateway from "../dist/http/gateway.js";
+import * as paths from "../dist/runtime/paths.js";
+import * as poolUsage from "../dist/pool/pool-usage.js";
 
 /** 假上游：tok-dead 一律 401，其它 token 回 200 SSE。 */
 async function fakeUpstream(): Promise<{ server: Server; url: string; captured: string[] }> {

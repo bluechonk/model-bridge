@@ -16,8 +16,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { ServerResponse } from "node:http";
 
-import { getChannel } from "./channel.js";
-import { debugDir, noteOnce } from "./paths.js";
+import { getChannel } from "../runtime/channel.js";
+import { debugDir, noteOnce } from "../runtime/paths.js";
 
 const READ_CHUNK = 8192;
 

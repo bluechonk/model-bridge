@@ -12,8 +12,8 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { describe, it } from "node:test";
 
-import * as login from "../dist/login.js";
-import * as flow from "../dist/login-flow.js";
+import * as login from "../dist/auth/login.js";
+import * as flow from "../dist/auth/login-flow.js";
 
 // ── 假 JWT（不验签，只造 payload）──────────────────────────────────────────────
 

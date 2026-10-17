@@ -16,8 +16,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 
-import { ensureStateDir, stateDir } from "./paths.js";
-import { writeJsonSecret } from "./secret-file.js";
+import { ensureStateDir, stateDir } from "../runtime/paths.js";
+import { writeJsonSecret } from "../runtime/secret-file.js";
 
 /** 一次领取的记录。 */
 export interface ClaimRecord {

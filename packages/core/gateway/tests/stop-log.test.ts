@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { stop } from "../dist/daemon.js";
+import { stop } from "../dist/app/daemon.js";
 
 describe("stop：终止记录写入日志", () => {
   let root = "";

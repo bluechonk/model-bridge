@@ -20,10 +20,10 @@ import {
   readAccountCredential,
   removeAccount,
   syncPool,
-} from "../dist/account-pool.js";
-import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
-import { runLogin } from "../dist/headless.js";
-import * as paths from "../dist/paths.js";
+} from "../dist/runtime/account-pool.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/runtime/channel.js";
+import { runLogin } from "../dist/app/headless.js";
+import * as paths from "../dist/runtime/paths.js";
 
 /** 合成渠道：cred 只认 uid/domain/accessToken（契约字段），落盘在 credentials.json。 */
 function makeChannel(cid: string): Channel {

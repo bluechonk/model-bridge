@@ -5,7 +5,7 @@
  * 控制台 API 位于 `/web/api/*`。因此 Web 页面看到的状态永远来自真实网关进程。
  */
 
-import { REPO_DEFAULT_ADDR, REPO_UI_PREFIX } from "./cli-consts.js";
+import { REPO_DEFAULT_ADDR, REPO_UI_PREFIX } from "../runtime/cli-consts.js";
 import * as daemon from "./daemon.js";
 
 export interface WebOptions {

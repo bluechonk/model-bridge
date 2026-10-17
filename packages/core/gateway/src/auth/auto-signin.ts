@@ -18,12 +18,12 @@
  * 签到摘要对自动签到天然可见。
  */
 
-import { channels, type Channel, type SigninStatus } from "./channel.js";
-import { runInChannel } from "./channel-context.js";
+import { channels, type Channel, type SigninStatus } from "../runtime/channel.js";
+import { runInChannel } from "../runtime/channel-context.js";
 import { readFileSync } from "node:fs";
-import { ensureStateDir, stateDir } from "./paths.js";
+import { ensureStateDir, stateDir } from "../runtime/paths.js";
 import { claimedTodayPerLedger, recordClaim } from "./signin-ledger.js";
-import { writeJsonSecret } from "./secret-file.js";
+import { writeJsonSecret } from "../runtime/secret-file.js";
 
 /** 轮询间隔：签到是低频事件，30 分钟足够跨天补签（凌晨 0 点后 30 分钟内补上）。 */
 export const CHECK_INTERVAL_MS = 30 * 60 * 1000;

@@ -16,8 +16,8 @@
 
 import { unlinkSync } from "node:fs";
 
-import { getChannel, type LoginUi } from "./channel.js";
-import { credentialsPath } from "./paths.js";
+import { getChannel, type LoginUi } from "../runtime/channel.js";
+import { credentialsPath } from "../runtime/paths.js";
 
 export type { LoginUi };
 

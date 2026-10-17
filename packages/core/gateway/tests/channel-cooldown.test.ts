@@ -17,9 +17,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
-import * as gateway from "../dist/gateway.js";
-import * as poolUsage from "../dist/pool-usage.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/runtime/channel.js";
+import * as gateway from "../dist/http/gateway.js";
+import * as poolUsage from "../dist/pool/pool-usage.js";
 
 /** 假上游：tok-alpha 一律 500，其它 token 回 200 SSE。 */
 async function fakeUpstream(): Promise<{ server: Server; url: string; captured: string[] }> {

@@ -11,12 +11,12 @@
  *   旧的 `mx <cid> <动词>` 写法一律不采用。
  */
 
-import { channels, getChannel, hasChannel, type Channel } from "./channel.js";
-import { runInChannel } from "./channel-context.js";
-import { catalogCacheFetchedAt } from "./catalog-cache.js";
-import { asPoolModel, canonicalModelId, POOL_MODELS, poolCandidates } from "./pool-targets.js";
-import { ledgerSnapshot, refreshBilling, scoreOf } from "./pool-usage.js";
-import { poolUsagePath } from "./paths.js";
+import { channels, getChannel, hasChannel, type Channel } from "../runtime/channel.js";
+import { runInChannel } from "../runtime/channel-context.js";
+import { catalogCacheFetchedAt } from "../runtime/catalog-cache.js";
+import { asPoolModel, canonicalModelId, POOL_MODELS, poolCandidates } from "../pool/pool-targets.js";
+import { ledgerSnapshot, refreshBilling, scoreOf } from "../pool/pool-usage.js";
+import { poolUsagePath } from "../runtime/paths.js";
 import * as accountCli from "./account-cli.js";
 import * as daemon from "./daemon.js";
 import * as headless from "./headless.js";

@@ -26,9 +26,9 @@
  * 模型元数据从渠道 catalog 缓存中提取（contextWindow / name 等）。
  */
 
-import { channels, type Channel } from "./channel.js";
-import { runInChannel } from "./channel-context.js";
-import { readCatalogCache } from "./catalog-cache.js";
+import { channels, type Channel } from "../runtime/channel.js";
+import { runInChannel } from "../runtime/channel-context.js";
+import { readCatalogCache } from "../runtime/catalog-cache.js";
 
 /**
  * 对外暴露的模型池（动态收集：全部渠道 `exposedIds()` 归一化后去重）。

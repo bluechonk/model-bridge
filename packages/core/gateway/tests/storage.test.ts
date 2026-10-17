@@ -19,8 +19,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
-import * as paths from "../dist/paths.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/runtime/channel.js";
+import * as paths from "../dist/runtime/paths.js";
 
 /** 造一个只关心落点的假渠道（不注册 4 个模块 —— 本测试不走它们）。 */
 function useChannel(cid: string, extra: Partial<ChannelConfig> = {}): ChannelConfig {

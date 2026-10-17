@@ -11,8 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/channel.js";
-import * as paths from "../dist/paths.js";
+import { clearChannels, setChannel, type ChannelConfig, type Channel } from "../dist/runtime/channel.js";
+import * as paths from "../dist/runtime/paths.js";
 import {
   claimedTodayPerLedger,
   currentTimezone,
@@ -21,7 +21,7 @@ import {
   readLedger,
   recordClaim,
   HISTORY_LIMIT,
-} from "../dist/signin-ledger.js";
+} from "../dist/auth/signin-ledger.js";
 
 const CID = "alpha";
 

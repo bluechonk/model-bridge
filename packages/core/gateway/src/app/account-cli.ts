@@ -5,8 +5,8 @@
  * 在 `account-pool.ts`（见 docs/POOL-ARCHITECTURE.md §3）。
  */
 
-import { channels, getChannel, type Channel } from "./channel.js";
-import { runInChannel } from "./channel-context.js";
+import { channels, getChannel, type Channel } from "../runtime/channel.js";
+import { runInChannel } from "../runtime/channel-context.js";
 import {
   activateAccount,
   captureActive,
@@ -15,7 +15,7 @@ import {
   syncPool,
   type PoolAccount,
   type PoolIndex,
-} from "./account-pool.js";
+} from "../runtime/account-pool.js";
 import * as headless from "./headless.js";
 
 export interface AccountsOptions {
