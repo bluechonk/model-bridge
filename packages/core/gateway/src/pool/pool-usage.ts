@@ -53,6 +53,17 @@ export interface ChannelLedger {
   fail: number;
   /** 冷却截止（epoch ms）；0 = 未冷却。 */
   cooldown_until: number;
+  /**
+   * 按**生效账号**拆分的请求计数（ok / fail）。key 是账号池的 account key；
+   * 账本主维度仍是渠道（used/冷却），账号维度只做展示与排障。
+   */
+  accounts: Record<string, AccountCount>;
+}
+
+/** 单账号的请求计数。 */
+export interface AccountCount {
+  ok: number;
+  fail: number;
 }
 
 export interface PoolLedger {
@@ -72,11 +83,33 @@ function emptyChannel(): ChannelLedger {
     ok: 0,
     fail: 0,
     cooldown_until: 0,
+    accounts: {},
   };
+}
+
+/** 取（必要时创建）某账号的计数条目。 */
+function accountEntry(entry: ChannelLedger, key: string): AccountCount {
+  const existing = entry.accounts[key];
+  if (existing) return existing;
+  const created: AccountCount = { ok: 0, fail: 0 };
+  entry.accounts[key] = created;
+  return created;
 }
 
 function num(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/** 读盘容错：accounts 缺失/损坏一律退回空表。 */
+function readAccounts(raw: unknown): Record<string, AccountCount> {
+  const out: Record<string, AccountCount> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const rec = value as Record<string, unknown>;
+    out[key] = { ok: num(rec.ok), fail: num(rec.fail) };
+  }
+  return out;
 }
 
 function str(value: unknown): string {
@@ -109,6 +142,7 @@ function load(): PoolLedger {
             ok: num(rec.ok),
             fail: num(rec.fail),
             cooldown_until: num(rec.cooldown_until),
+            accounts: readAccounts(rec.accounts),
           };
         }
         ledger = { version: 1, channels: merged };
@@ -179,19 +213,26 @@ export function isCooling(cid: string, now = Date.now()): boolean {
   return entryOf(load(), cid).cooldown_until > now;
 }
 
-/** 一次成功转发：清冷却（失败计数不动）。 */
-export function noteSuccess(cid: string): void {
+/**
+ * 一次成功转发：清冷却（失败计数不动）。
+ *
+ * `accountKey` 非空时同步记到该生效账号名下（渠道 × 账号维度，展示用）。
+ */
+export function noteSuccess(cid: string, accountKey?: string): void {
   const entry = entryOf(load(), cid);
   entry.ok += 1;
   entry.cooldown_until = 0;
+  if (accountKey) accountEntry(entry, accountKey).ok += 1;
   scheduleSave();
 }
 
-/** 一次失败：进冷却（冷却期内得分当 0）。 */
-export function noteFailure(cid: string, cooldownMs = FAIL_COOLDOWN_MS): void {
+/** 一次失败：进冷却（冷却期内得分当 0）；`accountKey` 同上。 */
+export function noteFailure(cid: string, accountKey?: string | number, cooldownMs = FAIL_COOLDOWN_MS): void {
   const entry = entryOf(load(), cid);
   entry.fail += 1;
   entry.cooldown_until = Date.now() + cooldownMs;
+  const key = typeof accountKey === "string" ? accountKey : undefined;
+  if (key) accountEntry(entry, key).fail += 1;
   scheduleSave();
 }
 

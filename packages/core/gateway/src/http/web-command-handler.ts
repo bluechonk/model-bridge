@@ -12,7 +12,7 @@
 import { channels, getChannel, hasChannel } from "../runtime/channel.js";
 import { runInChannel } from "../runtime/channel-context.js";
 import { POOL_MODELS, canonicalModelId, poolModelId, poolCandidates } from "../pool/pool-targets.js";
-import { ledgerSnapshot, scoreOf } from "../pool/pool-usage.js";
+import { ledgerSnapshot, refreshBilling, scoreOf } from "../pool/pool-usage.js";
 import { listAccounts, activateAccount, removeAccount, syncPool } from "../runtime/account-pool.js";
 import { renderChannelPool } from "./web-types.js";
 import type { WebCommandBody, WebCommandResult, WebChannelStatus } from "./web-types.js";
@@ -91,9 +91,21 @@ export function createWebCommandHandler(deps: WebCommandDeps = {}): WebCommandHa
         return ok({ channels: rows });
       }
       case "billing": {
+        // args.refresh = true 时先重查一遍各渠道账单（前端「刷新」按钮用），
+        // 失败不阻塞快照返回 —— 快照里带 billing_at/billing_ok 供前端标注新鲜度。
+        if (args["refresh"] === true) {
+          await refreshBilling((m: string) => {
+            /* 静默：结果以快照为准 */
+          });
+        }
         const now = Date.now();
+        const wanted = cid !== undefined && hasChannel(cid) ? [getChannel(cid)] : channels();
+        const wantedSet = new Set(wanted.map((channel) => channel.config.cid));
         const ledger = ledgerSnapshot();
-        const rows = POOL_MODELS.map((model) => ({
+        const rows = POOL_MODELS.filter((model) => {
+          const prefix = model.split("/")[0] ?? "";
+          return wantedSet.has(prefix);
+        }).map((model) => ({
           model,
           candidates: poolCandidates(model).map((candidate) => {
             const entry = ledger.channels[candidate.cid];
@@ -105,8 +117,16 @@ export function createWebCommandHandler(deps: WebCommandDeps = {}): WebCommandHa
               used: entry?.used ?? 0,
               unit: entry?.unit ?? "",
               cooling: (entry?.cooldown_until ?? 0) > now,
+              billing_at: entry?.billing_at ?? null,
+              billing_ok: entry?.billing_ok ?? false,
               ok: entry?.ok ?? 0,
               fail: entry?.fail ?? 0,
+              // 渠道 × 账号拆分：每个生效过的账号各自的 ok / fail 计数
+              accounts: Object.entries(entry?.accounts ?? {}).map(([key, count]) => ({
+                key,
+                ok: count.ok,
+                fail: count.fail,
+              })),
             };
           }),
         }));
