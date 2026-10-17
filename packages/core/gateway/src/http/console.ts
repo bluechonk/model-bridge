@@ -8,7 +8,7 @@
  * 端点：
  *   GET  /                    静态 SPA 首页 (packages/core/gateway/dist/ui/index.html)
  *   GET  /assets/*            静态资产
- *   GET  /api/state           状态快照
+ *   GET  /web/api/state       状态快照
  *   POST /api/theme           主题
  *   POST /api/retry-login     重试登录
  *   POST /api/commands        服务动作分发（web-command-handler.ts）

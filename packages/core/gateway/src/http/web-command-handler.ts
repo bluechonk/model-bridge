@@ -129,10 +129,10 @@ export const handleWebCommand: WebCommandHandler = async (body) => {
 async function handleLogin(cid: string, force: boolean): Promise<WebCommandResult> {
   const channel = getChannel(cid);
   // 登录本质是交互流程（弹浏览器/扫码等）；HTTP handler 只触发它并把控制权交还用户
-  // ——真实完成态通过 `GET /api/state` 的 auth_url 轮询呈现。
+  // ——真实完成态通过 `GET /web/api/state` 的 auth_url 轮询呈现。
   void channel;
   void force;
-  // 真·登录流程走 headless.runLogin（异步、可能阻塞几十秒）。这里先返回 ok:true，等 /api/state 轮询。
+  // 真·登录流程走 headless.runLogin（异步、可能阻塞几十秒）。这里先返回 ok:true，等 /web/api/state 轮询。
   setImmediate(() => {
     void (async () => {
       try {
@@ -140,11 +140,11 @@ async function handleLogin(cid: string, force: boolean): Promise<WebCommandResul
         const { runLogin } = await import("../app/headless.js");
         await runLogin({ cid, force, json: true, realm: "auto" });
       } catch {
-        // 登录失败会反映在后续 /api/state 的 auth_url 或 gateway_error 上
+        // 登录失败会反映在后续 /web/api/state 的 auth_url 或 gateway_error 上
       }
     })();
   });
-  return ok({ started: true, message: "登录流程已启动，授权链接通过 /api/state 的 auth_url 轮询" });
+  return ok({ started: true, message: "登录流程已启动，授权链接通过 /web/api/state 的 auth_url 轮询" });
 }
 
 function ok(data: Record<string, unknown>): WebCommandResult {
