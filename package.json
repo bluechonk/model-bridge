@@ -16,7 +16,8 @@
     "verify:docs": "node scripts/verify-docs.mjs",
     "verify:commits": "node scripts/verify-commits.mjs",
     "verify:topology": "node scripts/verify-topology.mjs",
-    "test": "npm run build && npm run verify:contract && npm run verify:storage && npm run verify:docs && npm run verify:commits && npm run verify:topology && npm run test --workspaces --if-present"
+    "verify:layering": "node scripts/verify-layering.mjs",
+    "test": "npm run build && npm run verify:contract && npm run verify:storage && npm run verify:docs && npm run verify:commits && npm run verify:topology && npm run verify:layering && npm run test --workspaces --if-present"
   },
   "engines": {
     "node": ">=22.6"
