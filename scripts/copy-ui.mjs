@@ -16,7 +16,7 @@ import { cpSync, existsSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = dirname(fileURLToPath(import.meta.url)); // tools/
+const root = dirname(fileURLToPath(import.meta.url)); // scripts/
 const repo = dirname(root);
 const src = join(repo, "packages", "ui", "dist");
 

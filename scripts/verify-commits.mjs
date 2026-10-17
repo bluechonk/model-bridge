@@ -3,26 +3,27 @@
  *
  * 规范遵循 Conventional Commits 并改中文（见 AGENTS.md §提交信息规范），与 github 插件的
  * `$commit` 技能一致：
- * - type 只允许 feat / fix / docs / style / refactor / perf / test / chore；
+ * - type 允许 feat / fix / docs / style / refactor / perf / test / chore / merge
+ *   （`merge` 专供 merge commit）；
  * - scope（`(git事件)`）**必填**，为变更涉及的模块或对象名；
  * - 描述为简体中文，**结尾不加句号**；
  * - 破坏性变更可加 `!`（如 `refactor(repo)!:`）。
  *
  * **merge commit 一并校验**：GitHub 默认生成的 `Merge pull request #N from …`
  * 不含 type/scope/中文，属违规。仓库设置已改为 `merge_commit_title=PR_TITLE`
- * （见 AGENTS.md §提交信息规范），合并前本地 `git merge -m "merge(scope): 中文"` 也必须合规。
+ * （见 AGENTS.md §提交信息规范），本地合并写 `git merge -m "merge(repo): 中文描述"`。
  *
  * **跳过 GitHub 的合成提交**：GitHub Actions 在 `pull_request` 事件里会构造一个
  * 临时合并提交（标题形如 `Merge <sha> into <sha>`），它不在任何人的 git 历史里、
  * 也不可修改 —— 校验它只会让 PR 检查必然变红（历史事故：PR #5 / #6 的检查全红）。
  * 这类提交按固定标题模式识别并跳过，`Merge pull request #N from …` 仍照常拦截。
  *
- * 用法：`node tools/verify-commits.mjs [<range>]`，默认校验「本地领先 origin/main 的提交」。
+ * 用法：`node scripts/verify-commits.mjs [<range>]`，默认校验「本地领先 origin/main 的提交」。
  * range 例：`HEAD~5..HEAD`、`origin/main..HEAD`。
  */
 import { execFileSync } from "node:child_process";
 
-const TYPES = new Set(["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore"]);
+const TYPES = new Set(["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore", "merge"]);
 const SUBJECT = /^([a-z]+)(\(([^)]*)\))?(!)?: (.+)$/;
 const CJK = /[\u3400-\u9fff]/;
 

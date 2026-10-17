@@ -9,12 +9,12 @@
     "packages/core/channels/*"
   ],
   "scripts": {
-    "build": "tsc -b && npm run build --workspace=packages/ui && npm run build --workspace=packages/cli && node tools/copy-ui.mjs",
+    "build": "tsc -b && npm run build --workspace=packages/ui && npm run build --workspace=packages/cli && node scripts/copy-ui.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "verify:contract": "node tools/verify-contract.mjs",
-    "verify:storage": "node tools/verify-storage.mjs",
-    "verify:docs": "node tools/verify-docs.mjs",
-    "verify:commits": "node tools/verify-commits.mjs",
+    "verify:contract": "node scripts/verify-contract.mjs",
+    "verify:storage": "node scripts/verify-storage.mjs",
+    "verify:docs": "node scripts/verify-docs.mjs",
+    "verify:commits": "node scripts/verify-commits.mjs",
     "test": "npm run build && npm run verify:contract && npm run verify:storage && npm run verify:docs && npm run verify:commits && npm run test --workspaces --if-present"
   },
   "engines": {

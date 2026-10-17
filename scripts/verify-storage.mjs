@@ -7,7 +7,7 @@
  *
  * 这是把「统一统计」固化成回归测试的那一步 —— 任何渠道的落点跑偏都会在这里失败。
  *
- * 用法：node tools/verify-storage.mjs
+ * 用法：node scripts/verify-storage.mjs
  * 前置：先 `npm run build --workspaces`（本脚本读各包的 dist/channel.js）。
  */
 

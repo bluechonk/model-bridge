@@ -38,7 +38,7 @@ modelmux/                     ← 仓库根 = 工作区根
 │       ├── channels.ts           ← import 全部渠道包（副作用 = setChannel）
 │       └── cli.ts                ← bin 入口：注册全部渠道后调共享 `main()`
 ├── docs/                         ← 契约与规范（渠道文档在各包 packages/core/channels/<cid>/docs/）
-└── tools/                        ← 仓库级校验器（verify-contract / verify-storage / verify-docs）
+└── scripts/                        ← 仓库级校验器（verify-contract / verify-storage / verify-docs）
 ```
 
 `packages/core/channels/<cid>/` 内部（= 一个**池子**）：

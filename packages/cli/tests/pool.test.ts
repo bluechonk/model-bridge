@@ -17,7 +17,7 @@ process.env["MODELMUX_HOME"] = HOME;
 
 /**
  * 渠道清单的**来源真相**：`packages/core/channels/<cid>/package.json` 存在即算一个渠道
- * （与 `tools/verify-contract.mjs` 同口径）。
+ * （与 `scripts/verify-contract.mjs` 同口径）。
  *
  * 刻意**不写死数量** —— 写死就要求「每加一个渠道都回来改测试」，而这里真正要
  * 断言的是「目录里的渠道都注册上了」，数量本身不是被测对象。

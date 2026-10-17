@@ -62,7 +62,7 @@ docs/                         契约与规范（唯一的仓库级文档层）
    | 渠道说明 | `packages/core/channels/<cid>/docs/README.md` | 用法 / 存储 / 测试 |
    | 渠道协议规格 | `packages/core/channels/<cid>/docs/PROTOCOL.md` | 实测协议（实现的依据） |
 
-3. `.md` **只允许**落在以下位置（`tools/verify-docs.mjs` 在 `npm test` 里强制）：
+3. `.md` **只允许**落在以下位置（`scripts/verify-docs.mjs` 在 `npm test` 里强制）：
    - `docs/` —— 契约与规范 + 文档总入口 `docs/README.md`
    - `README.md`（**仓库根**）—— 仓库门面，GitHub 只渲染根 README
    - `packages/core/channels/<cid>/docs/` —— 该渠道自己的文档（说明 + 协议规格 + 逆向结论层）
@@ -73,7 +73,7 @@ docs/                         契约与规范（唯一的仓库级文档层）
    - 同步更新 `docs/README.md`（文档总入口）。
    - markdown 链接用**相对路径**；源码注释里的引用用**仓库根相对路径**
      （如 `packages/core/channels/catpaw/docs/PROTOCOL.md`）。
-   - 跑 `npm test`：`tools/verify-docs.mjs` 拦住落错位置的 md，`tools/verify-storage.mjs` 校验落点规范。
+   - 跑 `npm test`：`scripts/verify-docs.mjs` 拦住落错位置的 md，`scripts/verify-storage.mjs` 校验落点规范。
 5. 完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
    需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
 
@@ -125,7 +125,7 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
    产物落在各包 `dist/`，增量状态在 `dist/tsconfig.tsbuildinfo`。
 8. `npm run build` 末尾追加 `packages/cli` 的 bundle 步骤（esbuild 内联成 `dist/cli.bundle.js`）。
    **这一步不能省**：全局 `mx` / `modelmux` 的 `bin` 指向该 bundle。
-9. `npm run build` 末尾还要跑 `tools/copy-ui.mjs`，把 UI 产物拷到**两个**落点
+9. `npm run build` 末尾还要跑 `scripts/copy-ui.mjs`，把 UI 产物拷到**两个**落点
    （`packages/core/gateway/dist/ui` 与 `packages/cli/dist/ui`）—— 少拷一份，全局 `mx web` 就报「UI 未构建」。
 
 ## 提交前检查
@@ -183,9 +183,12 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
 
 ## 提交信息规范
 
-格式 `type(scope): 中文描述`，即 Conventional Commits 的中文版（`tools/verify-commits.mjs` 已接入 `npm test`）。
+格式 `type(scope): 中文描述`，即 Conventional Commits 的中文版（`scripts/verify-commits.mjs` 已接入 `npm test`）。
 
-1. `type` 只允许：`feat` / `fix` / `docs` / `style` / `refactor` / `perf` / `test` / `chore`。
+1. `type` 可取：`feat` / `fix` / `docs` / `style` / `refactor` / `perf` / `test` / `chore`，以及专供合并提交的 `merge`。
+   - 语义提示：`feat` 新功能、`fix` 缺陷修复、`docs` 文档、`style` 格式、`refactor` 重构、
+     `perf` 性能、`test` 测试、`chore` 杂项、`merge` 合并其他分支。
+   - 不确定时按「改动的主要意图」选，不要为凑 type 拆提交。
 2. `scope` **必填**，填变更涉及的模块或对象名（如 `cli` / `gateway` / `repo`）。
 3. 描述为简体中文，一句话说清改了什么，**结尾不加句号**。
 4. 正文可选，与主题空一行；不要求解释「为什么」。
@@ -194,7 +197,9 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
 
 **merge commit 同样适用**（校验器不过滤 merge）：
 
-1. 本地合并必须显式给标题：`git merge --no-ff -m "merge(scope): 中文描述"`。
+1. 本地合并写：`git merge --no-ff -m "merge(scope): 中文描述"`。
 2. **禁止** `Merge pull request #N from …` 这类 GitHub 默认标题（无 type / scope / 中文）。
 3. 仓库设置已固定为 `merge_commit_title=PR_TITLE`，故建 PR 时**PR 标题本身**必须是
    `type(scope): 中文描述` —— 它会被直接用作 merge commit 标题。
+4. GitHub Actions 在 `pull_request` 事件里构造的临时合并提交（`Merge <sha> into <sha>`）
+   不由人编写、也不可修改，校验器会**自动跳过**，无需处理。

@@ -11,7 +11,7 @@
  * 这个检查把「文档各归其位」从口头约定变成会失败的测试 —— 有 md 落在别处时
  * `npm test` 直接红，而不是等人发现。
  *
- * 用法：node tools/verify-docs.mjs
+ * 用法：node scripts/verify-docs.mjs
  */
 
 import { execFileSync } from "node:child_process";

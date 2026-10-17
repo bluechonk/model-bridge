@@ -5,14 +5,14 @@
  * 把「渠道包形态、依赖白名单、池模型恒定」这类**机器可查**的契约从文档搬进会失败的
  * 测试 —— 文档只保留编译器与本校验器都管不到的语义约定。
  *
- * 用法：node tools/verify-contract.mjs（由 npm test 自动执行）
+ * 用法：node scripts/verify-contract.mjs（由 npm test 自动执行）
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = dirname(fileURLToPath(import.meta.url)); // tools/
+const root = dirname(fileURLToPath(import.meta.url)); // scripts/
 const repo = dirname(root);
 const read = (p) => readFileSync(join(repo, p), "utf8");
 
