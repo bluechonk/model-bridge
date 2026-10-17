@@ -88,7 +88,16 @@ docs/                         契约与规范（唯一的仓库级文档层）
 5. 对外模型 id 是**动态模型池**（各渠道 `catalog.exposedIds()` 归一化去重），恒小写、不带渠道前缀；
    客户端请求名不剥路径段（`<cid>/<模型>` 旧形态一律 400）。
    模型收集见 `pool-targets.ts`，匹配与排序见 `docs/POOL-ARCHITECTURE.md`。
-6. **测试只做端到端真实测试**：跑真实网关、真实上游、真实登录链路，以「用户视角能跑通」为准；
+6. **共享层内部单向分层**（`scripts/verify-layering.mjs` 在 `npm test` 里强制）：
+   `runtime(0) < pool(1) / auth(1) < http(2) < app(3)` —— **只能 import 层级 ≤ 自己的目录**，
+   向上依赖一律失败。`index.ts` 是桶导出，不受限。
+   - `runtime/` = 渠道 SDK（channel / paths / account-pool / secret-file / catalog-cache / cli-consts）
+   - `pool/` = 模型池与账本；`auth/` = 登录链路
+   - `http/` = 网关与转发；`app/` = 进程编排（cli / daemon / headless / supervisor…）
+   - 需要跨层动作时**下沉或经回调注入**，不要直接向上 import。
+   - 极少数必要例外列在脚本的 `ALLOWLIST`（必须写理由）；新增例外要慎重，
+     且条目失效时（不再向上）脚本会报错要求删除。
+7. **测试只做端到端真实测试**：跑真实网关、真实上游、真实登录链路，以「用户视角能跑通」为准；
    **不写单元测试、不写集成测试**，也不再要求测试「完全离线」。
 
 ## 命令
