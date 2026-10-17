@@ -100,6 +100,16 @@ function isCustomWire(channel: Channel): boolean {
   return String(channel.upstream.WIRE) !== "openai";
 }
 
+/** 当前生效账号的 key（账本按「渠道 × 账号」记账用；读不到返回 undefined）。 */
+
+function activeKeyOf(cid: string): string | undefined {
+  try {
+    return readIndex(cid).active ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 池路由一次请求最多尝试几个候选渠道。
  *
@@ -470,6 +480,7 @@ async function callUpstream(
     try {
       refreshed = await inChannel(channel, () => cred.refresh(credential));
     } catch (err) {
+      noteFailure(cid, activeKeyOf(cid));
       logger(`refresh failed: ${String(err)}`);
     }
     if (refreshed) {
@@ -626,7 +637,7 @@ export async function handleChat(
       resolvedModel = inChannel(channel, () => resolvePoolModel(channel, candidate.exposedId));
     } catch (err) {
       opts.logger(`model name unresolved (channel ${cid}): ${String(err)}`);
-      noteFailure(cid);
+      noteFailure(cid, activeKeyOf(cid));
       lastError = {
         status: 400,
         code: "unknown_model",
@@ -659,7 +670,7 @@ export async function handleChat(
         await inChannel(channel, () => upstream.prepareChat!(body));
       } catch (err) {
         opts.logger(`upstream prepare failed (channel ${cid}): ${String(err)}`);
-        noteFailure(cid);
+        noteFailure(cid, activeKeyOf(cid));
         lastError = {
           status: 502,
           code: "upstream_error",
@@ -679,12 +690,12 @@ export async function handleChat(
     const outcome = await callUpstream(channel, sendBody, opts.logger);
     if (outcome.kind === "not_authenticated") {
       opts.logger(`channel ${cid} not logged in: ${outcome.error}`);
-      noteFailure(cid);
+      noteFailure(cid, activeKeyOf(cid));
       lastError = { status: 503, code: "not_authenticated", message: `not logged in: ${outcome.error}` };
       continue;
     }
     if (outcome.kind === "auth_exhausted") {
-      noteFailure(cid);
+      noteFailure(cid, activeKeyOf(cid));
       lastError = { status: 502, code: "upstream_unauthenticated", message: outcome.error };
       continue;
     }
@@ -742,13 +753,13 @@ export async function handleChat(
       // 上游错误体只进本地日志，不回传客户端（可能含内部信息）
       if (call.connectFailed) opts.logger(`upstream request failed (channel ${cid}): ${String(call.error)}`);
       else opts.logger(`upstream returned non-200 (channel ${cid}): ${String(call.error?.message ?? "")}`);
-      noteFailure(cid);
+      noteFailure(cid, activeKeyOf(cid));
       lastError = { status: 502, code: "upstream_error", message: "upstream request failed; see gateway logs" };
       continue;
     }
 
     // 上游收下了这次请求 → 该渠道可用（清冷却）→ 交给转发层，池路由到此为止。
-    noteSuccess(cid);
+    noteSuccess(cid, activeKeyOf(cid));
     markActiveHealth("ok", cid);
     await relayUpstream(res, channel, cid, call, wantStream, opts.logger, pendingFrames, queuedOut, probeTranslator);
     return;
