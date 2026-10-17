@@ -1316,9 +1316,9 @@ describe("10. 端到端网关（假上游）", () => {
     };
     // 全模型池：不再限制只有两个池模型，而是动态返回渠道能提供的全部模型
     const ids = models.data.map((m) => m.id);
-    assert.ok(ids.includes("glm-5.3-flash"), "应包含 glm-5.3-flash");
-    assert.ok(ids.includes("deepseek-v4-flash"), "应包含 deepseek-v4-flash");
-    assert.ok(!ids.some((id) => id.includes("/")), "不带渠道前缀");
+    assert.ok(ids.includes("codearts/glm-5.3-flash"), "应包含 codearts/glm-5.3-flash");
+    assert.ok(ids.includes("codearts/deepseek-v4-flash"), "应包含 codearts/deepseek-v4-flash");
+    assert.ok(ids.every((id) => /^[a-z0-9-]+\//.test(id)), "id 挂渠道前缀");
     const health = (await (await fetch(`http://${gw.addr}/health`)).json()) as Record<string, unknown>;
     assert.equal(health["logged_in"], true);
   });
@@ -1327,7 +1327,7 @@ describe("10. 端到端网关（假上游）", () => {
     const fake = holder.fake!;
     fake.captured.length = 0;
     const text = await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "glm-5.3-flash",
+      model: "codearts/glm-5.3-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
@@ -1355,7 +1355,7 @@ describe("10. 端到端网关（假上游）", () => {
     fake.captured.length = 0;
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "codearts/glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -1377,7 +1377,7 @@ describe("10. 端到端网关（假上游）", () => {
     try {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
-        body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
+        body: JSON.stringify({ model: "codearts/glm-5.3-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
         headers: { "Content-Type": "application/json" },
       });
       assert.equal(resp.status, 502);

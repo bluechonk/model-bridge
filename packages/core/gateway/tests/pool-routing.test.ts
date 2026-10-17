@@ -77,59 +77,70 @@ describe("1. 归一化：各渠道实测写法都能收敛", () => {
       assert.equal(canonicalModelId(input), expected);
     });
   }
+});
 
-  it("幂等：规范名再归一化不变", () => {
-    for (const id of POOL_MODELS) assert.equal(canonicalModelId(id), id);
+describe("2. asPoolModel：`<cid>/<模型>` 形态", () => {
+  it("带渠道前缀的请求名：渠道段小写化，模型段归一化", () => {
+    assert.equal(asPoolModel("loomy/kimi-k2.6"), "loomy/kimi-k2.6");
+    assert.equal(asPoolModel("Loomy/Kimi-k2.6"), "loomy/kimi-k2.6");
+    assert.equal(asPoolModel("qodercn/DeepSeek-V4-Flash-Official"), "qodercn/deepseek-v4-flash");
+    assert.equal(asPoolModel("alpha/sn-deepseek-v4-1-flash"), "alpha/deepseek-v4.1-flash");
+    // 模型段内部的厂商路径也剥（渠道归属已由第一个 / 声明，不会串渠道）
+    assert.equal(asPoolModel("loomy/deepseek/deepseek-v4.1-flash"), "loomy/deepseek-v4.1-flash");
+  });
+
+  it("裸模型名（无渠道前缀）判 null —— 渠道由请求方指定", () => {
+    assert.equal(asPoolModel("deepseek-v4.1-flash"), null);
+    assert.equal(asPoolModel("GLM-5.3-Flash"), null);
+  });
+
+  it("畸形形态判 null", () => {
+    assert.equal(asPoolModel("loomy/"), null);
+    assert.equal(asPoolModel("/kimi-k2.6"), null);
   });
 });
 
-describe("2. asPoolModel：命中/不命中", () => {
-  it("全模型池：动态匹配（依赖渠道目录）", () => {
-    // 全模型池：asPoolModel 依赖渠道 exposedIds，测试桩渠道注册后动态计算
-    // 这里只验证归一化逻辑本身（不依赖渠道注册）
-    assert.equal(asPoolModel("deepseek-v4.1-flash"), "deepseek-v4.1-flash");
-    assert.equal(asPoolModel("DEEPSEEK-V4.1-FLASH"), "deepseek-v4.1-flash");
-    assert.equal(asPoolModel("Glm-5.3-Flash"), "glm-5.3-flash");
-    // 全模型池：4.0 也进池（不再限制 flash-only）
-    assert.equal(asPoolModel("deepseek-v4-flash"), "deepseek-v4-flash");
-    assert.equal(asPoolModel("DEEPSEEK-V4-FLASH"), "deepseek-v4-flash");
-  });
-
-  it("近亲不命中（4.0 vs 4.1、flashx、vision-exp、无版本）", () => {
-    assert.equal(asPoolModel("deepseek-v4-flashx"), "deepseek-v4-flashx");
-    assert.equal(asPoolModel("glm-5.3-flashx"), "glm-5.3-flashx");
-    assert.equal(asPoolModel("deepseek-v4-flash-vision-exp"), "deepseek-v4-flash-vision-exp");
-    assert.equal(asPoolModel("deepseek-flash"), "deepseek-flash");
-    assert.equal(asPoolModel("alpha/deepseek-v4-flash"), null, "渠道前缀形态不再被接受");
-  });
-});
-
-describe("3. poolCandidates：渠道目录 → 候选", () => {
-  it("归一化命中才算候选，顺序 = 注册顺序", () => {
+describe("3. poolCandidates：渠道由请求方指定，候选至多一条", () => {
+  it("只有前缀指向的渠道参与匹配", () => {
     clearChannels();
     setChannel(stubChannel("alpha", ["DeepSeek-V4.1-Flash", "glm-5.3-flashx"]));
     setChannel(stubChannel("beta", ["sn-deepseek-v4-1-flash", "deepseek-v4.1-flash"]));
     setChannel(stubChannel("gamma", ["qwen3.8-flash"]));
 
     assert.deepEqual(
-      poolCandidates("deepseek-v4.1-flash").map((c) => [c.cid, c.exposedId]),
-      [
-        ["alpha", "DeepSeek-V4.1-Flash"],
-        ["beta", "sn-deepseek-v4-1-flash"],
-      ],
+      poolCandidates("alpha/deepseek-v4.1-flash").map((c) => [c.cid, c.exposedId]),
+      [["alpha", "DeepSeek-V4.1-Flash"]],
       "exposedId 保留目录里的原始写法（上游 slug 可能大小写敏感）",
     );
-    assert.deepEqual(poolCandidates("glm-5.3-flash"), [], "flashx 不算");
-    clearChannels();
-  });
-
-  it("同一渠道多条命中同一目标时取目录里第一条", () => {
-    clearChannels();
-    setChannel(stubChannel("alpha", ["sn-deepseek-v4-1-flash", "deepseek-v4.1-flash"]));
+    // 同一渠道多条命中同一目标时取目录里第一条
     assert.deepEqual(
-      poolCandidates("deepseek-v4.1-flash").map((c) => c.exposedId),
+      poolCandidates("beta/deepseek-v4.1-flash").map((c) => c.exposedId),
       ["sn-deepseek-v4-1-flash"],
     );
+    // 渠道段大小写不敏感
+    assert.equal(poolCandidates("ALPHA/deepseek-v4.1-flash").length, 1);
+    // 渠道没这个模型 / 渠道未注册 / 近亲不命中
+    assert.deepEqual(poolCandidates("gamma/deepseek-v4.1-flash"), []);
+    assert.deepEqual(poolCandidates("delta/deepseek-v4.1-flash"), []);
+    assert.deepEqual(poolCandidates("alpha/glm-5.3-flash"), []);
+  });
+
+  it("池视图：对外 id 挂渠道前缀，且每个 id 都能反查回自己的渠道", () => {
+    clearChannels();
+    setChannel(stubChannel("alpha", ["DeepSeek-V4.1-Flash", "glm-5.3-flashx"]));
+    setChannel(stubChannel("beta", ["sn-deepseek-v4-1-flash", "deepseek-v4.1-flash"]));
+    setChannel(stubChannel("gamma", ["qwen3.8-flash"]));
+    const pool = [...POOL_MODELS];
+    assert.ok(pool.includes("alpha/deepseek-v4.1-flash"), "alpha 应贡献 4.1");
+    assert.ok(pool.includes("beta/deepseek-v4.1-flash"), "beta 应贡献 4.1（不同渠道不互相去重）");
+    assert.ok(pool.includes("gamma/qwen3.8-flash"));
+    assert.ok(!pool.includes("deepseek-v4.1-flash"), "不再暴露裸模型名");
+    for (const id of pool) {
+      assert.equal(asPoolModel(id), id, "池 id 归一化后不变（自洽）");
+      const cands = poolCandidates(id);
+      assert.equal(cands.length, 1, `候选至多一条: ${id}`);
+      assert.equal(cands[0]!.cid, id.split("/")[0], "候选渠道就是 id 前缀");
+    }
     clearChannels();
   });
 });

@@ -994,7 +994,7 @@ describe("12. 端到端网关（假上游 + 真实网关）", () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "glm-5.3-flash",
+        model: "raccoon/glm-5.3-flash",
         messages: [{ role: "user", content: "hi" }],
         stream: true,
         reasoning_effort: "off",
@@ -1035,7 +1035,7 @@ describe("12. 端到端网关（假上游 + 真实网关）", () => {
   it("非流式：本层聚合成 chat.completion（带 usage）", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "raccoon/glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -1080,7 +1080,7 @@ describe("13. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "glm-5.3-flash",
+          model: "raccoon/glm-5.3-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),
