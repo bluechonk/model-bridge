@@ -30,7 +30,7 @@ export function LoginForm({
           <option value="" disabled>请选择…</option>
           {channels.map((c) => (
             <option key={c.cid} value={c.cid}>
-              {c.display}（{c.logged_in ? "已登录" : "未登录"}）
+              {c.display}（{c.present ? "已登录" : "未登录"}）
             </option>
           ))}
         </select>

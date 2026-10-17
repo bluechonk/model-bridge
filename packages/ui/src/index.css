@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* 全局基础：铺满视口，供 Layout 的 flex 布局使用 */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}

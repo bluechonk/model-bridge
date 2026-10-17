@@ -11,16 +11,17 @@ export function Channels(): ReactElement {
   const logins = useQuery({
     queryKey: ["logins"],
     queryFn: async () => {
-      const res = await api.commands.status() as { channels?: Array<{ cid: string; display?: string; present?: boolean; error?: string }> };
-      return res;
+      const res = await api.commands.status();
+      return res as { channels?: Array<{ cid: string; display?: string; present?: boolean }> };
     },
     refetchInterval: 10_000,
   });
   const models = useQuery({
     queryKey: ["models"],
     queryFn: async () => {
-      const res = await api.commands.models() as { rows?: Array<Record<string, unknown>> };
-      return res;
+      // 后端 models 返回每渠道一条（含 catalog / pool 数组），不是每模型一条
+      const res = await api.commands.models();
+      return res as { channels?: Array<{ cid: string; display?: string; catalog: string[]; pool: string[]; out_of_pool: number }> };
     },
     refetchInterval: 30_000,
     enabled: tab === "models",
@@ -28,8 +29,9 @@ export function Channels(): ReactElement {
   const billing = useQuery({
     queryKey: ["billing"],
     queryFn: async () => {
-      const res = await api.commands.billing() as { rows?: Array<Record<string, unknown>> };
-      return res;
+      // 后端 billing 返回每模型一条（含 candidates 数组）
+      const res = await api.commands.billing();
+      return res as { rows?: Array<{ model: string; candidates: Array<{ cid: string; display?: string; exposed_id?: string; used?: number; unit?: string; cooling?: boolean; ok?: number; fail?: number }> }> };
     },
     refetchInterval: 60_000,
     enabled: tab === "billing",
@@ -42,7 +44,9 @@ export function Channels(): ReactElement {
     },
   });
 
-  const loginRows = (logins.data as { channels?: Array<{ cid: string; error?: string }> } | undefined)?.channels ?? [];
+  const loginRows = (logins.data as { channels?: Array<{ cid: string; display?: string; present?: boolean }> } | undefined)?.channels ?? [];
+  const modelRows = (models.data?.channels ?? []).slice().sort((a, b) => a.cid.localeCompare(b.cid));
+  const billingRows = billing.data?.rows ?? [];
 
   return (
     <div className="space-y-4">
@@ -66,9 +70,11 @@ export function Channels(): ReactElement {
             <div key={row.cid} className="rounded-lg border border-gray-200 p-4">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{row.cid}</span>
-                <StatusBadge state={row.error ? "error" : "ok"} />
+                {/* 状态看**凭证是否存在**（后端返回 present）；不是 HTTP 层错误 */}
+                <StatusBadge state={row.present ? "ok" : "warning"} />
               </div>
-              {row.error && <div className="mt-1 text-xs text-red-600">{row.error}</div>}
+              {row.display && <div className="mt-1 text-xs text-gray-500">{row.display}</div>}
+              {!row.present && <div className="mt-1 text-xs text-yellow-800">未登录（该渠道不参与池路由）</div>}
             </div>
           ))}
         </div>
@@ -76,38 +82,55 @@ export function Channels(): ReactElement {
 
       {tab === "models" && (
         <div className="space-y-3">
-          {(models.data as { rows?: Array<{ model?: string; cid?: string; exposed_id?: string; used?: number; cooling?: boolean }> } | undefined)?.rows?.map((r, i) => (
-            <div key={i} className="rounded border border-gray-200 p-3 text-sm">
-              <div className="font-medium">{r.model}</div>
-              <div className="text-xs text-gray-600">
-                {r.cid} —— 暴露 id：{r.exposed_id ?? "—"} {r.cooling ? "（冷却中）" : ""}
+          {models.isLoading && <div className="text-gray-500">加载中…</div>}
+          {!models.isLoading && modelRows.length === 0 && <div className="text-gray-500">（无数据）</div>}
+          {modelRows.map((row) => (
+            <div key={row.cid} className="rounded border border-gray-200 p-3 text-sm">
+              <div className="font-medium">
+                {row.cid}
+                {row.display && <span className="ml-2 text-xs text-gray-500">{row.display}</span>}
+              </div>
+              <div className="mt-1 text-xs text-gray-600">
+                池内 {row.pool.length} / 目录 {row.catalog.length}
+                {row.out_of_pool > 0 ? `（目录里有 ${row.out_of_pool} 条未进池）` : ""}
+              </div>
+              <div className="mt-1 break-all text-xs text-gray-500">
+                {row.pool.length > 0 ? row.pool.join("、") : "（该渠道没有池内模型）"}
               </div>
             </div>
           ))}
-          {models.data === undefined && <div className="text-gray-500">{models.isLoading ? "加载中…" : "（无数据）"}</div>}
         </div>
       )}
 
       {tab === "billing" && (
         <div className="space-y-3">
           <button
-            className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700"
+            className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50"
             disabled={refreshBilling.isPending}
             onClick={() => refreshBilling.mutate()}
           >
             {refreshBilling.isPending ? "刷新中…" : "刷新账单"}
           </button>
-          {(billing.data as { rows?: Array<{ cid?: string; used?: number; unit?: string; ok?: number; fail?: number }> } | undefined)?.rows?.map((r, i) => (
-            <div key={i} className="rounded border border-gray-200 p-3 text-sm">
-              <div className="font-medium">{r.cid}</div>
-              <div className="text-xs text-gray-600">
-                used={r.used ?? 0} {r.unit ?? ""}
-                {r.ok !== undefined ? ` ok=${r.ok}` : ""}
-                {r.fail !== undefined ? ` fail=${r.fail}` : ""}
-              </div>
+          {billing.isLoading && <div className="text-gray-500">加载中…</div>}
+          {!billing.isLoading && billingRows.length === 0 && <div className="text-gray-500">（无数据）</div>}
+          {billingRows.map((row) => (
+            <div key={row.model} className="rounded border border-gray-200 p-3 text-sm">
+              <div className="font-medium">{row.model}</div>
+              <ul className="mt-1 space-y-0.5 text-xs text-gray-600">
+                {row.candidates.map((c) => (
+                  <li key={c.cid} className={c.cooling ? "text-yellow-800" : ""}>
+                    {c.cid}
+                    {c.display && <span className="text-gray-400">（{c.display}）</span>}
+                    {" —— "}
+                    used={c.used ?? 0} {c.unit ?? ""}
+                    {c.ok !== undefined ? ` ok=${c.ok}` : ""}
+                    {c.fail !== undefined ? ` fail=${c.fail}` : ""}
+                    {c.cooling ? "（冷却中）" : ""}
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
-          {billing.data === undefined && <div className="text-gray-500">{billing.isLoading ? "加载中…" : "（无数据）"}</div>}
         </div>
       )}
     </div>

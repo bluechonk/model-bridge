@@ -5,6 +5,7 @@ export function StatusBadge({ state }: { state: string }): ReactElement {
     running: "bg-green-100 text-green-800",
     ok: "bg-green-100 text-green-800",
     login: "bg-yellow-100 text-yellow-800",
+    warning: "bg-yellow-100 text-yellow-800",
     probing: "bg-gray-100 text-gray-600",
     error: "bg-red-100 text-red-800",
   };

@@ -43,15 +43,23 @@ export interface WebApi {
   setTheme(mode: string): Promise<{ ok: boolean }>;
   retryLogin(): Promise<{ ok: boolean }>;
   readonly commands: {
-    login(cid: string, force: boolean): Promise<CommandResult>;
-    status(cid?: string): Promise<CommandResult>;
-    models(cid?: string): Promise<CommandResult>;
-    billing(cid?: string): Promise<CommandResult>;
-    accounts(cid?: string): Promise<CommandResult>;
-    activateAccount(cid: string, key: string): Promise<CommandResult>;
-    removeAccount(cid: string, key: string): Promise<CommandResult>;
-    syncPool(cid: string): Promise<CommandResult>;
+    /** 各方法返回**已解包 data 的扁平对象**（含 ok / message / error）。 */
+    login(cid: string, force: boolean): Promise<CommandData>;
+    status(cid?: string): Promise<CommandData>;
+    models(cid?: string): Promise<CommandData>;
+    billing(cid?: string): Promise<CommandData>;
+    accounts(cid?: string): Promise<CommandData>;
+    activateAccount(cid: string, key: string): Promise<CommandData>;
+    removeAccount(cid: string, key: string): Promise<CommandData>;
+    syncPool(cid: string): Promise<CommandData>;
   };
+}
+
+/** 命令返回值：后端 `data` 的字段与 `ok` / `message` / `error` 平级。 */
+export interface CommandData extends Record<string, unknown> {
+  ok: boolean;
+  message?: string;
+  error?: string;
 }
 
 /**
@@ -59,11 +67,31 @@ export interface WebApi {
  *
  * ⚠ `args` 必须是**独立字段** —— 后端 `console.ts` 只取顶层的 `action` / `cid` / `args`，
  * 把参数字段扁平拼到顶层会被静默丢弃（登录 force、账号 key 都传不到）。
+ *
+ * ⚠ **返回值会自动解包 `data`** —— 后端统一信封是 `{ ok, data?, message?, error? }`，
+ * 调用方拿到的就是 `data`。早期版本把整个信封返回，导致各页面按 `res.channels` 读取
+ * 而实际在 `res.data.channels`，表现为「（无渠道）」「（无数据）」（实测踩过）。
  */
-function command(action: string, cid: string | undefined, args: Record<string, unknown> = {}): Promise<CommandResult> {
+async function command(
+  action: string,
+  cid: string | undefined,
+  args: Record<string, unknown> = {},
+): Promise<Record<string, unknown>> {
   const body: Record<string, unknown> = { action, args };
   if (cid !== undefined) body["cid"] = cid;
-  return post("/api/commands", body) as Promise<CommandResult>;
+  const envelope = (await post("/api/commands", body)) as {
+    ok: boolean;
+    data?: unknown;
+    message?: string;
+    error?: string;
+  };
+  const data = envelope.data;
+  const merged =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : {};
+  // 保留 ok / message / error，便于调用方按需读取（data 的字段与它们平级）
+  return { ...merged, ok: envelope.ok, ...(envelope.message ? { message: envelope.message } : {}), ...(envelope.error ? { error: envelope.error } : {}) };
 }
 
 export const api: WebApi = {

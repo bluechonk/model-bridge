@@ -54,7 +54,8 @@ export interface PoolRow {
 export interface ChannelInfo {
   cid: string;
   display: string;
-  logged_in: boolean;
+  /** 凭证是否存在（后端 `status` action 的字段名是 `present`）。 */
+  present: boolean;
   uid?: string;
 }
 
