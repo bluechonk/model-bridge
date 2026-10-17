@@ -2,7 +2,7 @@
   "name": "modelmux",
   "version": "0.1.0",
   "type": "module",
-  "description": "多渠道本地模型池网关 CLI：多个渠道汇成一个 OpenAI 兼容端点，只对外暴露两个池内模型",
+  "description": "多渠道本地模型池网关 CLI：多个渠道汇成一个 OpenAI 兼容端点，对外暴露各渠道真实模型",
   "engines": {
     "node": ">=22.6"
   },
@@ -11,7 +11,8 @@
     "mx": "./dist/cli.bundle.js"
   },
   "files": [
-    "dist/cli.bundle.js"
+    "dist/cli.bundle.js",
+    "dist/ui"
   ],
   "scripts": {
     "build": "tsc -b tsconfig.json && node scripts/bundle.mjs",

@@ -25,8 +25,32 @@ export const DEFAULT_UI_HOST = "127.0.0.1";
 
 const THEME_MODES = new Set(["system", "dark", "light"]);
 
-/** UI 静态产物根：与 dist/*.js 平级。 */
-const WEB_UI_ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "ui");
+/**
+ * UI 静态产物根：按**候选顺序**探测，取第一个含 index.html 的目录。
+ *
+ * 两种运行形态的 `import.meta.url` 落点不同：
+ * - 编译后独立运行：`core/gateway/dist/console.js` → 平级取 `dist/ui`
+ * - bundle 后（`npm i -g` 的 mx）：整包内联进 `cli/dist/cli.bundle.js` → 平级取 `cli/dist/ui`
+ *
+ * 环境变量 `MODELMUX_WEB_UI_ROOT` 可显式覆盖（排查 / 自定义部署用）。
+ */
+function resolveWebUiRoot(): string {
+  const override = process.env["MODELMUX_WEB_UI_ROOT"];
+  if (override) return resolve(override);
+  const here = fileURLToPath(new URL(".", import.meta.url));
+  const candidates = [
+    resolve(here, "ui"), // gateway/dist/console.js → dist/ui
+    resolve(here, "..", "..", "..", "core", "gateway", "dist", "ui"), // cli/dist/cli.bundle.js → core/gateway/dist/ui
+    resolve(here, "..", "ui"), // 兜底：上一层
+  ];
+  for (const dir of candidates) {
+    if (existsSync(join(dir, "index.html"))) return dir;
+  }
+  // 都不存在时返回首选，让 404 提示带上一个可诊断的路径
+  return candidates[0]!;
+}
+
+const WEB_UI_ROOT = resolveWebUiRoot();
 const WEB_UI_INDEX = join(WEB_UI_ROOT, "index.html");
 
 const MIME: Record<string, string> = {
@@ -166,12 +190,19 @@ export async function start(
     // —— 静态（GET） ——
     if (path === "/" && (req.method === "GET" || req.method === "HEAD")) {
       if (existsSync(WEB_UI_INDEX)) serveStatic(res, "index.html");
-      else text(res, 404, "UI 未构建。请运行 npm run build 后再试 mx web。");
+      else
+        text(
+          res,
+          404,
+          `UI 未构建。请运行 npm run build 后再试 mx web。（查找路径：${WEB_UI_ROOT}）`,
+        );
       return;
     }
     const assetsPrefix = "/assets/";
-    if (req.method === "GET" && path.startsWith(assetsPrefix)) {
-      serveStatic(res, path.slice(assetsPrefix.length));
+    if ((req.method === "GET" || req.method === "HEAD") && path.startsWith(assetsPrefix)) {
+      // 只去掉开头的 `/`，**保留 `assets/` 目录段** ——
+      // 用 slice(assetsPrefix.length) 会把目录段一起剥掉，导致查 ui/index-*.js（不存在）而 404。
+      serveStatic(res, path.slice(1));
       return;
     }
 
