@@ -1,8 +1,12 @@
 /**
- * Web 命令分发：把前端 `/api/commands` 的 action 翻译到共享服务函数上。
+ * Web 命令分发：把前端 `/web/api/commands` 的 action 翻译到共享服务函数上。
  *
  * 独立模式下进程就在手边，直接调函数，不走进程外 CLI 探测。
  * 所有 handler 输出 JSON 对象（不是 `console.log`），与 CLI 的进程退出码语义解耦。
+ *
+ * ⚠ **登录的触发经 `WebCommandDeps.triggerLogin` 注入**，不在本层 import app 层的
+ * `headless`（那会造成 http → app 的层级违例，见 `scripts/verify-layering.mjs`）。
+ * 调用方（headless 的 bridge）负责提供实现。
  */
 
 import { channels, getChannel, hasChannel } from "../runtime/channel.js";
@@ -13,20 +17,32 @@ import { listAccounts, activateAccount, removeAccount, syncPool } from "../runti
 import { renderChannelPool } from "./web-types.js";
 import type { WebCommandBody, WebCommandResult, WebChannelStatus } from "./web-types.js";
 
+/**
+ * 命令分发的外部依赖（由调用方注入）。
+ *
+ * `triggerLogin` 省略时登录动作返回「未就绪」——纯 API 形态的网关不挂控制台，
+ * 自然也没有交互式登录可用。
+ */
+export interface WebCommandDeps {
+  /** 触发某渠道的交互式登录（浏览器授权等）。实现方负责异步执行与错误上报。 */
+  triggerLogin?: (cid: string, force: boolean) => void;
+}
+
 export type WebCommandHandler = (body: WebCommandBody) => Promise<WebCommandResult>;
 
 /** /api/commands 的统一入口。 */
-export const handleWebCommand: WebCommandHandler = async (body) => {
-  const { action, cid, args = {} } = body;
-  try {
-    switch (action) {
-      case "login": {
-        if (cid === undefined || !hasChannel(cid)) {
-          return err("参数 cid 必须是已注册渠道");
+export function createWebCommandHandler(deps: WebCommandDeps = {}): WebCommandHandler {
+  return async (body) => {
+    const { action, cid, args = {} } = body;
+    try {
+      switch (action) {
+        case "login": {
+          if (cid === undefined || !hasChannel(cid)) {
+            return err("参数 cid 必须是已注册渠道");
+          }
+          const force = typeof args["force"] === "boolean" ? args["force"] : false;
+          return handleLogin(cid, force, deps);
         }
-        const force = typeof args["force"] === "boolean" ? args["force"] : false;
-        return await handleLogin(cid, force);
-      }
       case "status": {
         const list = cid !== undefined && hasChannel(cid) ? [getChannel(cid)] : channels();
         const rows: WebChannelStatus[] = list.map((channel) => {
@@ -123,26 +139,23 @@ export const handleWebCommand: WebCommandHandler = async (body) => {
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, error: message };
   }
-};
+  };
+}
 
-/** login：走通道自己的登录流程（浏览器授权）。 */
-async function handleLogin(cid: string, force: boolean): Promise<WebCommandResult> {
-  const channel = getChannel(cid);
+/** login：经注入的回调触发渠道的登录流程（浏览器授权）。 */
+function handleLogin(cid: string, force: boolean, deps: WebCommandDeps): WebCommandResult {
   // 登录本质是交互流程（弹浏览器/扫码等）；HTTP handler 只触发它并把控制权交还用户
   // ——真实完成态通过 `GET /web/api/state` 的 auth_url 轮询呈现。
-  void channel;
-  void force;
-  // 真·登录流程走 headless.runLogin（异步、可能阻塞几十秒）。这里先返回 ok:true，等 /web/api/state 轮询。
+  if (!deps.triggerLogin) {
+    return err("当前运行形态不支持交互式登录（未注入 triggerLogin）");
+  }
+  // 回调实现方负责异步执行（可能阻塞几十秒）；这里立即返回，等 /web/api/state 轮询。
   setImmediate(() => {
-    void (async () => {
-      try {
-        // 动态 import 避免 web-command-handler 在启动时强依赖 headless（重依赖网络）
-        const { runLogin } = await import("../app/headless.js");
-        await runLogin({ cid, force, json: true, realm: "auto" });
-      } catch {
-        // 登录失败会反映在后续 /web/api/state 的 auth_url 或 gateway_error 上
-      }
-    })();
+    try {
+      deps.triggerLogin!(cid, force);
+    } catch {
+      // 登录失败会反映在后续 /web/api/state 的 auth_url 或 gateway_error 上
+    }
   });
   return ok({ started: true, message: "登录流程已启动，授权链接通过 /web/api/state 的 auth_url 轮询" });
 }

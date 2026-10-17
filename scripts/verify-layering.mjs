@@ -22,8 +22,11 @@
  *
  * ## 已知违例（白名单）
  *
- * 极少数跨层引用有正当理由，列入 `ALLOWLIST`（**必须写理由**）。新增条目要慎重：
+ * 极少数跨层引用有正当理由时列入 `ALLOWLIST`（**必须写理由**）。新增条目要慎重：
  * 白名单是例外，不是绕过规则的后门。
+ *
+ * **当前为空** —— 历史上唯一一条（`web-command-handler` 动态 import `headless`）
+ * 已改为经 `ControlBridge.triggerLogin` 回调注入，层级违例彻底消除。
  *
  * 用法：`node scripts/verify-layering.mjs`
  */
@@ -50,21 +53,12 @@ const LAYER_NOTE = {
 };
 
 /**
- * 已知违例白名单：`<from 相对路径> -> <to 相对路径>` → 理由。
+ * 已知违例白名单：`<from 相对路径> -> <to 相对路径>` → 理由。**当前为空**（见文件头说明）。
  *
  * 只允许「有真实技术约束且短期无法消除」的条目。每一条都要在代码里留注释说明。
  */
-const ALLOWLIST = new Map([
-  [
-    "http/web-command-handler.ts -> app/headless.ts",
-    [
-      "web 控制台的「登录」按钮要触发交互式登录流程（headless.runLogin），",
-      "而登录实现在 app 层。当前用**动态 import**（`await import(\"../app/headless.js\")`）",
-      "延迟到点击时才加载，避免 http 层在启动时强依赖 app 层（网络重依赖）。",
-      "收敛方向：改为经 ControlBridge 注入回调（bridge.triggerLogin），让 http 层不认识 headless。",
-    ].join(" "),
-  ],
-]);
+const ALLOWLIST = new Map();
+
 
 /** 递归收集 src 下的 .ts 文件（相对 SRC 的 posix 路径）。 */
 function collect(dir, base = SRC, out = []) {
