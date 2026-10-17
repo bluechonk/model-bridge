@@ -19,10 +19,45 @@
 
 import { readFileSync } from "node:fs";
 import { writeFile, rename, chmod } from "node:fs/promises";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { upstreamPath, ensureDir } from "@modelmux/gateway";
 
 export const DEFAULT_BASE_URL = "https://www.codebuddy.ai";
+
+/** 国内版桌面端身分取值（5.5.6；与 workbuddyai 共用同一套头族，见其 PROTOCOL.md §2）。 */
+const DESKTOP_UA_CN = "WorkBuddy/5.5.6 WorkBuddy/5.5.6 CLI/2.137.1";
+const DESKTOP_IDE_VERSION_CN = "5.5.6";
+
+/** 每轮新生的会话 id（带连字符 UUID）。 */
+function newConversationId(): string {
+  return randomUUID();
+}
+
+/** 每条消息新生的请求 id（UUIDv7 形态：32 位无连字符 hex）。 */
+function newMessageId(): string {
+  const bytes = randomBytes(16);
+  const ts = BigInt(Date.now());
+  for (let i = 0; i < 6; i += 1) {
+    bytes[i] = Number((ts >> BigInt(40 - 8 * i)) & 0xffn);
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  return bytes.toString("hex");
+}
+
+/** W3C traceparent + b3 链路族（X-B3-ParentSpanId 需要真实父子关系，不伪造）。 */
+function traceHeaders(): Record<string, string> {
+  const trace = randomBytes(16).toString("hex");
+  const span = randomBytes(8).toString("hex");
+  return {
+    traceparent: `00-${trace}-${span}-01`,
+    b3: `${trace}-${span}-1`,
+    "X-B3-TraceId": trace,
+    "X-B3-SpanId": span,
+    "X-B3-Sampled": "1",
+  };
+}
 
 /** 展示名（状态页与错误文案用）。 */
 export const DISPLAY_NAME = "WorkBuddy";
@@ -159,7 +194,8 @@ export function buildHeaders(credential: AuthLike, cfg?: Config): Record<string,
   const domain = credential.domain || hostOf(resolved.baseUrl);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "CodeBuddyCode/1.0",
+    // 官方桌面端 UA：渠道校验与用量归因都看它（参考实现 injectAttribution 同口径）
+    "User-Agent": DESKTOP_UA_CN,
     "X-Domain": domain,
   };
   const headerName = resolved.tokenHeader || "Authorization";
@@ -168,6 +204,31 @@ export function buildHeaders(credential: AuthLike, cfg?: Config): Record<string,
     headers[resolved.usernameHeader] = credential.uid;
   }
   return headers;
+}
+
+/**
+ * 对话请求的身分头族：基础头 + X-Agent-* / X-IDE-* / 会话与请求 ID / 链路族
+ * （渠道校验要求 X-Conversation-ID 恒发，缺头判非官方拒收，见 docs/PROTOCOL.md §2）。
+ */
+export function buildChatHeaders(credential: AuthLike, cfg?: Config): Record<string, string> {
+  const convReqId = newMessageId();
+  const messageId = newMessageId();
+  return {
+    ...buildHeaders(credential, cfg),
+    "X-Agent-Intent": "craft",
+    "X-Agent-Purpose": "conversation",
+    "X-Agent-Type": "main",
+    "X-IDE-Name": "WorkBuddy",
+    "X-IDE-Type": "WorkBuddy",
+    "X-IDE-Version": DESKTOP_IDE_VERSION_CN,
+    "X-Product": "WorkBuddy",
+    "X-Conversation-ID": newConversationId(),
+    "X-Conversation-Request-ID": convReqId,
+    "X-Root-Request-ID": convReqId,
+    "X-Conversation-Message-ID": messageId,
+    "X-Request-ID": messageId,
+    ...traceHeaders(),
+  };
 }
 
 /** 兼容旧调用形态：把鉴权头就地合并进 `headers`。 */

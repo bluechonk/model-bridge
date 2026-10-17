@@ -231,14 +231,65 @@ describe("4. 上游配置", () => {
     );
   });
 
-  it("applyAuth 设置鉴权头与归属头", () => {
+  it("applyAuth 设置鉴权头与官方端 UA（按归因域选 realm）", () => {
     const headers: Record<string, string> = {};
     upstream.applyAuth(headers, upstream.defaultConfig(), "tok", "uid-1");
     assert.equal(headers["Authorization"], "Bearer tok");
     assert.equal(headers["X-User-Id"], "uid-1");
     assert.equal(headers["X-Domain"], "www.workbuddy.ai");
-    // 上游按 UA 归因「使用端」，缺品牌字样会让账单显示为 `-`
-    assert.equal(headers["User-Agent"], "CodeBuddyCode/1.0");
+    // 上游按 UA 归因「使用端」并参与渠道校验 —— 用官方桌面端 UA，不用旧伪 UA
+    assert.equal(headers["User-Agent"], "WorkBuddy/5.8.4 workbuddy-ai/5.8.4 CLI/2.161.0");
+  });
+
+  it("buildChatHeaders 补齐官方身分头族（ID 每轮新生、形态合规）", () => {
+    const cred = { accessToken: "tok", uid: "uid-1", domain: "www.workbuddy.ai" };
+    const a = upstream.buildChatHeaders(cred);
+    const b = upstream.buildChatHeaders(cred);
+    // 整组头缺任一员都会被 11128 拒绝（docs/PROTOCOL.md §2）
+    for (const name of [
+      "X-Agent-Intent", "X-Agent-Purpose", "X-Agent-Type",
+      "X-IDE-Name", "X-IDE-Type", "X-IDE-Version",
+      "X-Private-Data", "X-Product",
+      "X-Conversation-ID", "X-Conversation-Request-ID", "X-Root-Request-ID",
+      "X-Conversation-Message-ID", "X-Request-ID",
+      "traceparent", "b3", "X-B3-TraceId", "X-B3-SpanId", "X-B3-Sampled",
+    ]) {
+      assert.ok(a[name], `缺身分头 ${name}`);
+    }
+    assert.equal(a["X-IDE-Version"], "5.8.4");
+    assert.equal(a["X-Conversation-Request-ID"], a["X-Root-Request-ID"], "两者同值");
+    assert.equal(a["X-Conversation-Message-ID"], a["X-Request-ID"], "两者同值");
+    // ID 形态：会话 id 带连字符；消息 id = 32 位无连字符 hex（UUIDv7 形态）
+    assert.match(a["X-Conversation-ID"] as string, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.match(a["X-Request-ID"] as string, /^[0-9a-f]{32}$/);
+    assert.match(a["traceparent"] as string, /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
+    // 每轮新生：两次构造的 ID 不同
+    assert.notEqual(a["X-Conversation-ID"], b["X-Conversation-ID"]);
+    assert.notEqual(a["X-Request-ID"], b["X-Request-ID"]);
+  });
+
+  it("realm 推导：cn 凭据换国内端点、UA 与版本；intl 默认", () => {
+    const cred = { accessToken: "tok", uid: "u", domain: "copilot.tencent.com" };
+    const h = upstream.buildChatHeaders(cred);
+    assert.equal(h["X-Domain"], "copilot.tencent.com");
+    assert.equal(h["X-IDE-Version"], "5.5.6");
+    assert.equal(h["User-Agent"], "WorkBuddy/5.5.6 WorkBuddy/5.5.6 CLI/2.137.1");
+  });
+
+  it("loadConfig：遗留 www.codebuddy.ai（DNS 沉洞）归一到国际版上游", async () => {
+    const saved = upstream.loadConfig();
+    try {
+      await upstream.saveConfig({
+        baseUrl: "https://www.codebuddy.ai",
+        chatPath: "/v2/chat/completions",
+        tokenHeader: "Authorization",
+        tokenType: "bearerToken",
+        usernameHeader: "X-User-Id",
+      });
+      assert.equal(upstream.loadConfig()[0].baseUrl, "https://www.workbuddy.ai");
+    } finally {
+      await upstream.saveConfig(saved[0]);
+    }
   });
 
   it("resolveConfig 取 endpoint 与鉴权属性", () => {

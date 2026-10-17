@@ -147,7 +147,8 @@ interface UpstreamCall {
 
 async function openStream(channel: Channel, c: Credential, body: Buffer): Promise<UpstreamCall> {
   const { upstream } = channel;
-  const headers = upstream.buildHeaders(c);
+  // 渠道声明了对话专用头族（如 workbuddyai 的官方身分头）就用它，否则回退基础头
+  const headers = upstream.buildChatHeaders ? upstream.buildChatHeaders(c) : upstream.buildHeaders(c);
   if (!Object.keys(headers).some((k) => k.toLowerCase() === "accept")) {
     headers["Accept"] = "text/event-stream";
   }

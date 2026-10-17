@@ -217,8 +217,29 @@ describe("4. 上游配置", () => {
     assert.equal(headers["Authorization"], "Bearer tok");
     assert.equal(headers["X-User-Id"], "uid-1");
     assert.equal(headers["X-Domain"], "www.codebuddy.ai");
-    // 上游按 UA 归因「使用端」，缺品牌字样会让账单显示为 `-`
-    assert.equal(headers["User-Agent"], "CodeBuddyCode/1.0");
+    // 上游按 UA 归因「使用端」并参与渠道校验 —— 用官方桌面端 UA（5.5.6）
+    assert.equal(headers["User-Agent"], "WorkBuddy/5.5.6 WorkBuddy/5.5.6 CLI/2.137.1");
+  });
+
+  it("buildChatHeaders 补齐身分头族（X-Conversation-ID 恒发、ID 形态合规）", () => {
+    const cred = { accessToken: "tok", uid: "uid-1", domain: "www.codebuddy.ai" };
+    const a = upstream.buildChatHeaders(cred);
+    const b = upstream.buildChatHeaders(cred);
+    for (const name of [
+      "X-Agent-Intent", "X-Agent-Purpose", "X-Agent-Type",
+      "X-IDE-Name", "X-IDE-Type", "X-IDE-Version",
+      "X-Conversation-ID", "X-Conversation-Request-ID", "X-Root-Request-ID",
+      "X-Conversation-Message-ID", "X-Request-ID",
+      "traceparent", "b3", "X-B3-TraceId", "X-B3-SpanId", "X-B3-Sampled",
+    ]) {
+      assert.ok(a[name], `缺身分头 ${name}`);
+    }
+    assert.equal(a["X-IDE-Version"], "5.5.6");
+    assert.equal(a["X-Conversation-Request-ID"], a["X-Root-Request-ID"], "两者同值");
+    assert.equal(a["X-Conversation-Message-ID"], a["X-Request-ID"], "两者同值");
+    assert.match(a["X-Conversation-ID"] as string, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.match(a["X-Request-ID"] as string, /^[0-9a-f]{32}$/);
+    assert.notEqual(a["X-Conversation-ID"], b["X-Conversation-ID"], "ID 每轮新生");
   });
 
   it("resolveConfig 取 endpoint 与鉴权属性", () => {
