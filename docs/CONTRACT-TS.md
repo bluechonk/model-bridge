@@ -56,8 +56,8 @@ packages/core/channels/<cid>/
    └── billing.ts                ← **渠道特有**
 ```
 
-> **一个渠道 = 一个池子**：渠道 `catalog` 提供模型，共享层的**公共模型池**把它们归并成
-> 两个跨渠道的对外模型（见 §4 与 [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md)）。
+> **一个渠道 = 一个池子**：渠道 `catalog` 提供模型，共享层的**公共模型池**把它们以
+> `<cid>/<模型>` 池 id 对外暴露（见 §4 与 [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md)）。
 > 账号池见同文档 §3。
 
 **每个 `packages/core/channels/<cid>/` 的 `src/` 只有 7 个文件。** 任何不在上表里的 `src/*.ts`
@@ -164,15 +164,20 @@ interface Channel {
 
 ### 4.1 对外 id：动态模型池（`pool-targets.ts`）
 
-网关对外是**动态模型池** —— 全部渠道 `catalog` 归一化后的并集，**不带渠道前缀**。请求落到哪家由账本决定（`pool-usage.ts`：账单已用量降序、失败当 0、
-冷却期内当 0）。匹配是「归一化 + **精确相等**」，且客户端请求名不剥路径段 ——
-带 `/` 的旧 `<cid>/<模型>` 形态一律 `400 unknown_model`（破坏性更新）。
+网关对外是**动态模型池**，id 形态为 `<cid>/<规范模型名>`（如 `loomy/kimi-k2.6`）——
+渠道由请求方通过前缀**显式指定**；模型段是各渠道 `catalog` 归一化后的结果，
+**渠道内去重、跨渠道不合并**。匹配是「归一化 + **精确相等**」；裸模型名（无 `/`）
+与未注册渠道前缀一律 `400 unknown_model`（2026-10-17 破坏性更新，取代「无前缀 + 账本路由」）。
 完整规则、账本落点与刷新节奏见 [`POOL-ARCHITECTURE.md` §2](./POOL-ARCHITECTURE.md)。
 
->  客户端请求名与渠道目录 id 走**两条归一化路径**（前者不剥厂商路径段），
-> 否则 `随便什么前缀/deepseek-v4.1-flash` 会被剥成池内 id 蒙混命中。
+>  请求名按**第一个 `/`** 切出渠道段，模型段走归一化路径（剥厂商路径段）——
+> 渠道归属已由前缀声明，模型段再剥不会串渠道。
 
 ### 4.2 白名单：`(deepseek|glm) && flash`（`model-family.ts`）
+
+>  **历史模块**：池路径已不再调用它（现为全模型池，见 §4.1 与
+>  [POOL-ARCHITECTURE.md](./POOL-ARCHITECTURE.md) §2）；导出保留，供未来需要
+>  网关级过滤策略时复用。以下为当时的判据设计，留作参考。
 
 **目录（数据层）与池子（呈现层）是两件事**：
 
@@ -368,8 +373,15 @@ Ctrl+点击 / 复制），用户自行在浏览器打开，再轮询/回调拿�
 每个渠道要有 `tests/selftest.test.ts`，用 `node:test`，**照已有渠道写**：
 
 1. **完全离线**：所有上游调用指向本机假服务（`node:http` 起）
-2. **不需要真实凭据**：`cred.save()` 写假凭据，存储根用 `MODELMUX_HOME` 指向
-  `mkdtempSync()` 的临时目录
+2. **红线：不碰用户真实凭证**（违反 = 拿用户真实账号去撞上游风控，先警告后封号）：
+   - 存储根**必须**用 `MODELMUX_HOME` 指向 `mkdtempSync()` 的临时目录。
+     `paths.ts` 对该变量**惰性解析**（每次调用时读取），所以测试里任何 `cred.load()` /
+     账本 / 目录缓存读到的都是沙箱，`~/.modelmux/` 永不被测试进程打开；
+   - `cred.save()` 只写**假凭据**；fixture 与断言里禁止出现真实 uid、label、token ——
+     一律用明显虚构的占位值（文档示例同理，见 `POOL-ARCHITECTURE.md` §3.4 的占位写法）；
+   - 测试代码**禁止**对真实上游发任何请求（对话、签到、账单、登录轮询都算）；
+   - CI（GitHub Actions / pre-push 的 WSL 全新 clone）上没有 `~/.modelmux`，
+     靠这套隔离保证 `npm test` 无凭据可跑、可重复。
 3. **import 顺序**：先 `await import("@modelmux/gateway")`，再
   `await import("../dist/channel.js")`（触发注册），最后引渠道模块
 4. **覆盖**：
