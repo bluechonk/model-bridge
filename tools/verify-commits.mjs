@@ -12,14 +12,25 @@
  * 不含 type/scope/中文，属违规。仓库设置已改为 `merge_commit_title=PR_TITLE`
  * （见 AGENTS.md §提交信息规范），合并前本地 `git merge -m "merge(scope): 中文"` 也必须合规。
  *
- * 用法：`node tools/verify-commits.mjs [<range>]`，默认校验 HEAD 可达的全部提交
- * （含 merge）。range 例：`HEAD~5..HEAD`、`origin/main..HEAD`。
+ * **跳过 GitHub 的合成提交**：GitHub Actions 在 `pull_request` 事件里会构造一个
+ * 临时合并提交（标题形如 `Merge <sha> into <sha>`），它不在任何人的 git 历史里、
+ * 也不可修改 —— 校验它只会让 PR 检查必然变红（历史事故：PR #5 / #6 的检查全红）。
+ * 这类提交按固定标题模式识别并跳过，`Merge pull request #N from …` 仍照常拦截。
+ *
+ * 用法：`node tools/verify-commits.mjs [<range>]`，默认校验「本地领先 origin/main 的提交」。
+ * range 例：`HEAD~5..HEAD`、`origin/main..HEAD`。
  */
 import { execFileSync } from "node:child_process";
 
 const TYPES = new Set(["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore"]);
 const SUBJECT = /^([a-z]+)(\(([^)]*)\))?(!)?: (.+)$/;
 const CJK = /[\u3400-\u9fff]/;
+
+/**
+ * GitHub 生成的合成合并提交：`Merge <40位sha> into <40位sha>`。
+ * 仅此模式跳过 —— 人工写的 `Merge pull request #N from xxx` 仍会被拦下。
+ */
+const SYNTHETIC_MERGE = /^Merge [0-9a-f]{40} into [0-9a-f]{40}$/;
 
 const range = process.argv[2] ?? defaultRange();
 // 不过滤 merge（--no-merges 会让 GitHub 生成的英文 merge 标题漏网）
@@ -52,11 +63,17 @@ try {
 
 const lines = out.split("\n").filter((l) => l.trim() !== "");
 const problems = [];
+let skipped = 0;
 
 for (const line of lines) {
   const tab = line.indexOf("\t");
   const hash = tab === -1 ? line : line.slice(0, tab);
   const subject = tab === -1 ? "" : line.slice(tab + 1);
+  // GitHub Actions 构造的临时合并提交：不在任何人历史里、不可修改，跳过
+  if (SYNTHETIC_MERGE.test(subject)) {
+    skipped++;
+    continue;
+  }
   const m = subject.match(SUBJECT);
   if (!m) {
     problems.push(`${hash}  格式不符（应为 type(scope): 中文描述）：${subject}`);
@@ -75,4 +92,7 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`提交信息校验通过：${lines.length} 条提交全部符合 type(scope): 中文描述${range ? `（范围 ${range}）` : ""}`);
+const skipNote = skipped > 0 ? `（跳过 ${skipped} 条 GitHub 合成合并提交）` : "";
+console.log(
+  `提交信息校验通过：${lines.length - skipped} 条提交全部符合 type(scope): 中文描述${skipNote}${range ? `（范围 ${range}）` : ""}`,
+);
