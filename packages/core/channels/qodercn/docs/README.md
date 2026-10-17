@@ -22,3 +22,5 @@ clone 到 `reference/` 的学习材料（不入库）；协议结论与 [`qoder/
 | 仓库 | 用途 |
 | --- | --- |
 | [shuishuipingan/qoder2api-hub](https://github.com/shuishuipingan/qoder2api-hub) | 主参照（191★）：**国际国内双区**多账号网关中枢 —— COSY 签名、设备指纹防风控、OAuth 设备授权，国内版（qoder.com.cn）行为包含其中 |
+| [Zhengyuuuui/qoder2api](https://github.com/Zhengyuuuui/qoder2api) | OpenAI / Claude / Codex 三格式兼容，含每日签到领 credit（72★） |
+| [EchoPing07/Qoder-2API-Go](https://github.com/EchoPing07/Qoder-2API-Go) | Go 实现的对照样本（60★） |

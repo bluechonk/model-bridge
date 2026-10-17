@@ -66,3 +66,5 @@ clone 到 `reference/` 的学习材料（不入库）。
 | 仓库 | 用途 |
 | --- | --- |
 | [hey7195/orcaterm_proxy](https://github.com/hey7195/orcaterm_proxy) | 当前唯一的上游协议参照 —— 本渠道的对话上游尚未实现，协议路径只能从 WebView2 缓存观测，实现 `upstream` 时以该仓库为起点 |
+| [ZFXing-lite/orcaterm2api](https://github.com/ZFXing-lite/orcaterm2api) | 上游协议的补充参照 |
+| [JackieLiu1/orcaterminal-releases](https://github.com/JackieLiu1/orcaterminal-releases) | 官方发行包存档 —— 桌面端逆向（asar / 二进制）与版本对照的一手材料 |
