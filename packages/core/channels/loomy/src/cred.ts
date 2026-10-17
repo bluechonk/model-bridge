@@ -16,6 +16,12 @@
  *    早期实现恰好读反，后果是用户确认后流程永久卡在「已扫码」。
  * 7. **微信 code 只在第 1 步用一次**，后续三步只用 `rcode`；`bind` 缺失时**归为 0**
  *    （走绑定流程，保守方向）；`rcode` 缺失必须明确报错。
+ * 8. **扫码必须扫「本进程 uuid」那张二维码**：授权页每次加载都生成新 uuid
+ *    （实测同一 state 连开 3 次得 3 个不同 uuid），轮询的却是本进程这一次的 uuid。
+ *    让用户去授权页扫会扫到另一次会话的码 —— 轮询永远等不到「已确认」。
+ * 9. **回调页线上是 404，这是正常的**：微信只校验 `redirect_uri` 域名不校验路径；
+ *    官方 Electron 客户端在内嵌窗口里拦跳转，我们没有浏览器，故 `code` 只能由
+ *    用户从地址栏粘回（`parseWechatCallback`）。
  */
 
 import { createHash, createHmac, randomUUID } from "node:crypto";
@@ -327,6 +333,57 @@ export function wechatAuthorizeUrl(state: string): string {
 
 const UUID_PATTERN = /^[A-Za-z0-9_\-=+/]{6,64}$/;
 
+/** 微信回调里 `code` 的合法形态（一次性授权码，字母数字与 `-` `_`）。 */
+const CALLBACK_CODE_PATTERN = /^[A-Za-z0-9_-]{1,512}$/;
+
+/**
+ * 从用户粘回来的内容解析出 `code`。
+ *
+ * 为什么需要这条路径：微信只校验 `redirect_uri` 的**域名**（已登记
+ * `loomy.xunfei.cn`），不校验路径；而 `https://loomy.xunfei.cn/oauth/wechat/callback`
+ * 线上是 **404**（官方 Electron 客户端在内嵌窗口里 `preventDefault()` 拦下跳转，
+ * 从不需要这个页面）。我们没有浏览器，`code` 只出现在用户浏览器地址栏里 ——
+ * 所以让用户 Ctrl+L / Ctrl+C 把那条链接粘回来。
+ *
+ * 容错三种形态：整条 URL / 只有 query / 只有 code 本身。
+ */
+export function parseWechatCallback(raw: string): string {
+  const text = raw.trim().replace(/^["']|["']$/g, "");
+  if (!text) throw new Error("no callback link provided");
+
+  // 带 `?` 或 `=` 就按 query 解析：这样微信回 `errmsg=access_denied`（无 code）
+  // 时能报出准确原因，而不是误报「code 格式不对」。
+  const looksLikeUrl = text.includes("?") || text.includes("=") || /^https?/i.test(text);
+  let code = "";
+  if (looksLikeUrl) {
+    const query = (text.includes("?") ? text.slice(text.indexOf("?") + 1) : text).split("#")[0]!;
+    const params = new URLSearchParams(query);
+    code = params.get("code") ?? "";
+    if (!code) {
+      const reason = params.get("errmsg") ?? params.get("error") ?? "WeChat did not return a code";
+      throw new Error(`WeChat authorization failed: ${reason}`);
+    }
+  } else {
+    code = text;
+  }
+
+  if (!CALLBACK_CODE_PATTERN.test(code)) {
+    throw new Error(
+      "the pasted value does not contain a valid WeChat code; " +
+        "copy the whole URL from the browser address bar after scanning",
+    );
+  }
+  // 裸 code 太短几乎必然是「用户没复制对」：实测踩过粘进 4 个字符却被
+  // 当成 code 的情况，最后报「code 不合法」让人一头雾水。长度下限拦在解析层。
+  if (!looksLikeUrl && code.length < 8) {
+    throw new Error(
+      `the pasted value has only ${code.length} characters, which is not a WeChat code; ` +
+        "copy the whole URL from the browser address bar after scanning",
+    );
+  }
+  return code;
+}
+
 /** 从授权页 HTML 提取 uuid（两条路径互为兜底，无需执行 JS）。 */
 export function extractWechatUuid(html: string): string {
   const primary = /\/connect\/qrcode\/([A-Za-z0-9_\-=+/]+)/.exec(html);
@@ -334,33 +391,6 @@ export function extractWechatUuid(html: string): string {
   const fallback = /l\/qrconnect\?uuid=([A-Za-z0-9_\-=+/]+)/.exec(html);
   if (fallback?.[1] && UUID_PATTERN.test(fallback[1])) return fallback[1];
   return "";
-}
-
-/** PNG / JPEG / GIF 三种魔数都认（实测二维码是 **JPEG**，早期只判 PNG 会误报）。 */
-export function looksLikeImage(bytes: Buffer): boolean {
-  if (bytes.length < 4) return false;
-  const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
-  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const gif = bytes.subarray(0, 4).toString("latin1") === "GIF8";
-  return png || jpeg || gif;
-}
-
-/** 拉二维码图片。⚠ **字节数 < 200 视为错误页**（实测正常图约 47KB）。 */
-export async function fetchWechatQr(uuid: string): Promise<Buffer> {
-  let resp: Response;
-  try {
-    resp = await fetch(`${wechatBase()}/connect/qrcode/${uuid}`, {
-      headers: wechatHeaders(),
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-    });
-  } catch (err) {
-    throw new Error(`fetching QR code failed: ${String(err)}`);
-  }
-  if (!resp.ok) throw new Error(`fetching QR code failed: HTTP ${resp.status}`);
-  const bytes = Buffer.from(await resp.arrayBuffer());
-  if (bytes.length < 200) throw new Error(`QR response too small (${bytes.length} bytes), treating as an error page`);
-  if (!looksLikeImage(bytes)) throw new Error("QR response is not an image (no PNG/JPEG/GIF magic)");
-  return bytes;
 }
 
 export type WechatPollStatus = "waiting" | "scanned" | "confirmed" | "cancelled" | "expired" | "error";
@@ -419,22 +449,69 @@ export async function wechatPollOnce(uuid: string, last = ""): Promise<WechatFra
 }
 
 export interface WechatWaitOptions {
+  /**
+   * 授权页 URL。
+   *
+   * ⚠ **不要把用户送到这个链接上扫码**：该页每次加载都会**新生成一个 uuid**
+   * （实测同一 state 连续 3 次加载得到 3 个不同 uuid），而本流程轮询的是
+   * **自己这一次**加载的 uuid。用户在那个页面上扫的码属于另一次会话，
+   * 长轮询永远看不到「已确认」，表现为「手机上确认了但流程一直卡住」。
+   *
+   * 正确做法见 `qrImageUrl`：把本流程的 uuid 渲染成二维码图片给用户扫。
+   * 这个 URL 仍保留，用于终端里展示「授权页在哪」以及拿回调 code。
+   */
   onUrl?: (url: string) => void;
+  /**
+   * **本流程 uuid 对应的二维码图片 URL**（真正该给用户扫的那张）。
+   *
+   * ⚠ 与 `onUrl` 是**两个不同的会话**：请用这张，不要用授权页上那张。
+   */
+  onQr?: (qrImageUrl: string) => void;
   onStatus?: (message: string) => void;
   timeoutSec?: number;
   pollIntervalSec?: number;
 }
 
-/** 完整扫码：生成 state → 打开授权页 → 提取 uuid → 轮询到拿到 `wx_code`。 */
-export async function wechatWaitForCode(options: WechatWaitOptions = {}): Promise<string> {
-  const { onUrl, onStatus } = options;
+/** 二维码图片基址（uuid → PNG/JPEG）。 */
+export const WECHAT_QR_IMAGE_BASE = "https://open.weixin.qq.com/connect/qrcode/";
+
+/** uuid → 二维码图片 URL。 */
+export function qrImageUrl(uuid: string): string {
+  return `${WECHAT_QR_IMAGE_BASE}${uuid}`;
+}
+
+/** 扫码结果的来源：`poll` = 长轮询拿到；`paste` = 用户粘回回调链接。 */
+export type WechatCodeSource = "poll" | "paste";
+
+export interface WechatCodeResult {
+  code: string;
+  source: WechatCodeSource;
+}
+
+/**
+ * 完整扫码：生成 state → 加载授权页 → 提取 uuid → 轮询到拿到 `wx_code`。
+ *
+ * ⚠ **这一页由本进程加载，用户必须扫本进程 uuid 渲染出的二维码**
+ * （经 `onQr` 给出）。让用户去 `onUrl` 那个页面扫码会拿到另一次会话的码，
+ * 轮询永远等不到确认。
+ */
+export async function wechatWaitForCode(
+  options: WechatWaitOptions & { pasteCode?: () => string | undefined } = {},
+): Promise<string> {
+  const result = await wechatObtainCode(options);
+  return result.code;
+}
+
+export async function wechatObtainCode(
+  options: WechatWaitOptions & { pasteCode?: () => string | undefined } = {},
+): Promise<WechatCodeResult> {
+  const { onUrl, onQr, onStatus, pasteCode } = options;
   const timeoutSec = options.timeoutSec ?? 300;
   const intervalMs = Math.max(0, (options.pollIntervalSec ?? 1.2) * 1000);
 
   const state = randomUUID().replace(/-/g, "");
   const url = wechatAuthorizeUrl(state);
-  onUrl?.(url); // ⚠ 立刻回调（界面据此弹窗）
-  onStatus?.("Scan the QR code with WeChat and confirm login");
+  onUrl?.(url);
 
   let html: string;
   try {
@@ -445,11 +522,13 @@ export async function wechatWaitForCode(options: WechatWaitOptions = {}): Promis
   }
   const uuid = extractWechatUuid(html);
   if (!uuid) throw new Error("could not extract the QR uuid from the authorize page (risk control or redesign?)");
-  onStatus?.(`QR code generated (uuid=${uuid.slice(0, 8)}...), waiting for scan`);
+  onQr?.(qrImageUrl(uuid));
+  onStatus?.("QR code generated; scan it with WeChat and confirm on your phone");
 
   const deadline = Date.now() + timeoutSec * 1000;
   let last = "";
   let scannedReported = false;
+  let pasteReported = false;
   while (Date.now() < deadline) {
     const frame = await wechatPollOnce(uuid, last);
     if (frame.status === "error") {
@@ -463,15 +542,28 @@ export async function wechatWaitForCode(options: WechatWaitOptions = {}): Promis
       }
     } else if (frame.status === "confirmed") {
       onStatus?.("confirmed, finishing login...");
-      return frame.code;
+      return { code: frame.code, source: "poll" };
     } else if (frame.status === "cancelled") {
       throw new Error("user cancelled the WeChat login");
     } else if (frame.status === "expired") {
       throw new Error("QR code expired; please scan again");
     }
+    // 兜底：用户把回调链接粘回来（长轮询拿不到时的唯一出路）
+    const pasted = pasteCode?.();
+    if (pasted) {
+      if (!pasteReported) {
+        onStatus?.("got the callback link, finishing login...");
+        pasteReported = true;
+      }
+      return { code: parseWechatCallback(pasted), source: "paste" };
+    }
     if (intervalMs > 0) await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new Error("WeChat scan timed out; re-run loomy login");
+  throw new Error(
+    "WeChat scan timed out; re-run loomy login. " +
+      "Note: after scanning, the browser lands on a 404 page — that is expected; " +
+      "copy the address bar URL back so the flow can finish without polling.",
+  );
 }
 
 /** 第 1 步：微信 code 换 `rcode`（code 只在这里用一次）。 */
@@ -552,7 +644,7 @@ async function credentialsFromSession(
 /** 微信扫码完整登录（bind=1 走 skip；bind=0 走发短信 + 校验）。 */
 export async function loginWechat(
   baseUrl?: string,
-  options: WechatWaitOptions = {},
+  options: WechatWaitOptions & { pasteCode?: () => string | undefined } = {},
 ): Promise<Credentials> {
   const { onStatus } = options;
   const code = await wechatWaitForCode(options);

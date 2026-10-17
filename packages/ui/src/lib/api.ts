@@ -52,6 +52,12 @@ export interface WebApi {
     activateAccount(cid: string, key: string): Promise<CommandData>;
     removeAccount(cid: string, key: string): Promise<CommandData>;
     syncPool(cid: string): Promise<CommandData>;
+    /**
+     * 提交用户粘回的回调链接（一次性 code 的兜底通道）。
+     *
+     * 回调页线上是 404，`code` 只在浏览器地址栏里；长轮询拿不到时靠这个完成登录。
+     */
+    pasteCallback(url: string): Promise<CommandData>;
   };
 }
 
@@ -107,5 +113,6 @@ export const api: WebApi = {
     activateAccount: (cid, key) => command("activateAccount", cid, { key }),
     removeAccount: (cid, key) => command("removeAccount", cid, { key }),
     syncPool: (cid) => command("syncPool", cid),
+    pasteCallback: (url) => command("pasteCallback", undefined, { url }),
   },
 };

@@ -77,7 +77,15 @@ const MIME: Record<string, string> = {
 export interface UiSnapshot {
   ui_state: string;
   message: string;
+  /** 授权页 URL。⚠ **不要在这里扫码**（每次加载都是新的二维码会话）。 */
   auth_url: string;
+  /**
+   * 二维码图片 URL（`<img src>` 直接内嵌）。
+   *
+   * ⚠ 扫码**必须**用这张：它对应登录流程本轮长轮询的 uuid。用 `auth_url`
+   * 那个页面上显示的二维码属于另一次会话，轮询永远等不到「已确认」。
+   */
+  qr_url: string;
   base_url: string;
   chat_url: string;
   endpoints: string[];
@@ -92,6 +100,7 @@ export function emptySnapshot(): UiSnapshot {
     ui_state: "probing",
     message: "",
     auth_url: "",
+    qr_url: "",
     base_url: "",
     chat_url: "",
     endpoints: ["/v1/chat/completions", "/v1/models", "/health"],
@@ -116,6 +125,13 @@ export interface ControlBridge {
    * 避免 http → app 的层级违例（见 `scripts/verify-layering.mjs`）。
    */
   triggerLogin?: (cid: string, force: boolean) => void;
+  /**
+   * 提交用户粘回的回调链接（一次性 code 的兜底通道）。
+   *
+   * 回调页线上是 404（微信只校验域名、官方客户端在内嵌窗口拦跳转），
+   * 故没有浏览器的进程只能靠用户把地址栏那条链接粘回来。
+   */
+  submitCallback?: (raw: string) => void;
 }
 
 export interface ConsoleServer {
@@ -313,6 +329,7 @@ export function createConsoleHandler(
           const { createWebCommandHandler } = await import("./web-command-handler.js");
           const handle = createWebCommandHandler({
             ...(bridge.triggerLogin ? { triggerLogin: bridge.triggerLogin } : {}),
+            ...(bridge.submitCallback ? { submitCallback: bridge.submitCallback } : {}),
           });
           const result = await handle({
             action,

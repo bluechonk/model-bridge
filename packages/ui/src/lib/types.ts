@@ -3,7 +3,10 @@
 export interface UiSnapshot {
   ui_state: string;
   message: string;
+  /** 授权页 URL。⚠ 不要在这里扫码（每次加载都是新的二维码会话）。 */
   auth_url: string;
+  /** 二维码图片 URL，扫码用这一张（对应登录流程本轮轮询的 uuid）。 */
+  qr_url: string;
   base_url: string;
   chat_url: string;
   endpoints: string[];
