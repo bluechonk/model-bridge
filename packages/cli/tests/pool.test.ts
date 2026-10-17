@@ -58,54 +58,67 @@ describe("仓库级模型池", () => {
     assert.equal(per.length, EXPECTED_CIDS.length, "逐渠道报告");
   });
 
-  it("/v1/models 动态返回全模型池，不带渠道前缀", async () => {
+  it("/v1/models 动态返回全模型池，id 为 <cid>/<模型> 形态", async () => {
     const resp = await fetch(`http://${running.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string; owned_by: string }> };
     const ids = payload.data.map((m) => m.id).sort();
-    // 全模型池：11 个渠道能提供的全部模型，去重后应包含 deepseek-v4-flash 与 glm-5.3-flash
-    assert.ok(ids.includes("deepseek-v4-flash"), "应包含 deepseek-v4-flash");
-    assert.ok(ids.includes("glm-5.3-flash"), "应包含 glm-5.3-flash");
+    // 全模型池：11 个渠道能提供的全部模型，按渠道挂前缀（同名模型各归各家）
+    assert.ok(ids.includes("workbuddyai/deepseek-v4.1-flash"), "应包含 workbuddyai/deepseek-v4.1-flash");
+    assert.ok(ids.includes("codearts/deepseek-v4.1-flash"), "应包含 codearts/deepseek-v4.1-flash");
+    assert.ok(ids.includes("catpaw/glm-5.3-flash"), "应包含 catpaw/glm-5.3-flash");
     assert.ok(ids.length > 2, `应多于 2 个模型，实际 ${ids.length}`);
     assert.ok(
-      payload.data.every((m) => !m.id.includes("/")),
-      "不再暴露 <cid>/<模型> 形态",
+      payload.data.every((m) => /^[a-z0-9-]+\/.+$/.test(m.id)),
+      "全部对外 id 都是 <cid>/<模型> 形态",
     );
-    assert.ok(payload.data.every((m) => m.owned_by === "modelmux"), "池身份");
+    assert.ok(
+      payload.data.every((m) => m.owned_by === m.id.split("/")[0]),
+      "owned_by 即 id 前缀里的渠道",
+    );
   });
 
-  it("每个池模型都有**跨渠道**候选（不是某个渠道私有）", () => {
-    const cidsOf = (model: string) =>
-      gw.poolCandidates(model as (typeof gw.POOL_MODELS)[number]).map((c) => c.cid);
-
-    const four1 = cidsOf("deepseek-v4.1-flash");
-    assert.ok(four1.includes("workbuddyai"), `4.1 候选: ${four1.join(", ")}`);
-    assert.ok(four1.includes("codearts"), `4.1 候选: ${four1.join(", ")}`);
-    assert.ok(four1.length >= 3, `4.1 至少 3 家，实际 ${four1.length}`);
-
-    const glm = cidsOf("glm-5.3-flash");
-    assert.ok(glm.includes("catpaw"), `glm 候选: ${glm.join(", ")}`);
-    assert.ok(glm.includes("raccoon"), `glm 候选: ${glm.join(", ")}`);
-
-    // 两个模型的候选集合互不相同（否则归一化把它们串在一起了）
-    assert.notDeepEqual([...four1].sort(), [...glm].sort());
+  it("每个池 id 的候选渠道就是它的前缀（渠道由请求方指定）", () => {
+    const candsOf = (model: string) => gw.poolCandidates(model).map((c) => c.cid);
+    assert.deepEqual(candsOf("workbuddyai/deepseek-v4.1-flash"), ["workbuddyai"]);
+    assert.deepEqual(candsOf("catpaw/glm-5.3-flash"), ["catpaw"]);
+    // 不同渠道的同名模型是独立 id，各自只指回自己
+    const four1 = [...gw.POOL_MODELS].filter((m) => m.endsWith("/deepseek-v4.1-flash"));
+    assert.ok(four1.length >= 3, `4.1 至少 3 个渠道各自暴露，实际 ${four1.join(", ")}`);
   });
 
-  it("旧的 `<cid>/<模型>` 形态 → 400 unknown_model", async () => {
+  it("裸模型名与未知渠道 → 400 unknown_model", async () => {
+    const post = (model: string) =>
+      fetch(`http://${running.addr}/v1/chat/completions`, {
+        method: "POST",
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "hi" }] }),
+        headers: { "Content-Type": "application/json" },
+      });
+    // 裸模型名（无渠道前缀）：渠道必须由请求方指定
+    const bare = await post("deepseek-v4.1-flash");
+    assert.equal(bare.status, 400);
+    assert.equal(((await bare.json()) as { error: { code: string } }).error.code, "unknown_model");
+    // 未注册的渠道前缀
+    const unknownChan = await post("nonexistent/deepseek-v4.1-flash");
+    assert.equal(unknownChan.status, 400);
+    assert.equal(
+      ((await unknownChan.json()) as { error: { code: string } }).error.code,
+      "unknown_model",
+    );
+  });
+
+  it("有效的 <cid>/<模型> 请求：测试环境无凭据 → 503 not_authenticated", async () => {
+    const model = gw.POOL_MODELS[0];
+    assert.ok(model, "池里有模型");
     const resp = await fetch(`http://${running.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({
-        model: "workbuddyai/deepseek-v4.1-flash",
-        messages: [{ role: "user", content: "hi" }],
-      }),
+      body: JSON.stringify({ model, messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
-    assert.equal(resp.status, 400);
-    const payload = (await resp.json()) as { error: { code: string } };
-    assert.equal(payload.error.code, "unknown_model");
+    assert.equal(resp.status, 503);
   });
 
-  it("渠道一览：桩渠道不贡献模型，也不拖垮整表", () => {
+  it("渠道一览：池 id 与渠道目录一一对应", () => {
     const rows = gw.channels().map((c) => {
       // 与 CLI 同样的容错：桩渠道（orcaterm）抛错 → 视为空
       let exposed: string[] = [];
@@ -119,30 +132,27 @@ describe("仓库级模型池", () => {
     assert.equal(rows.length, EXPECTED_CIDS.length);
 
     const contributed = (cid: string) =>
-      gw.POOL_MODELS.filter((model) => gw.poolCandidates(model).some((c) => c.cid === cid));
+      [...gw.POOL_MODELS].filter((model) => model.split("/")[0] === cid);
 
     assert.ok(
-      contributed("workbuddyai").includes("deepseek-v4.1-flash"),
+      contributed("workbuddyai").includes("workbuddyai/deepseek-v4.1-flash"),
       "workbuddyai 应贡献 deepseek-v4.1-flash",
     );
-    // qoder 的上游 key 是短名（gfmodel），由渠道自己映射成池内名；
-    // 全模型池：qoder 可能贡献多个模型（gfmodel / dfmodel 等）
+    // qoder 的上游 key 是短名（gfmodel），由渠道自己映射成池内名
     assert.ok(
-      contributed("qoder").includes("glm-5.3-flash"),
+      contributed("qoder").includes("qoder/glm-5.3-flash"),
       "qoder 应贡献 glm-5.3-flash",
     );
 
     const contributing = gw.channels().filter((c) => contributed(c.config.cid).length > 0);
     assert.ok(contributing.length >= 8, `至少 8 个渠道有贡献，实际 ${contributing.length}`);
 
-    // 每条被贡献的模型都必须在池内（不在这里重写归一化，避免与共享层脱节）
+    // 每个目录条目都应出现在该渠道的对外池 id 里（规范名形态，不在这里重写归一化）
     for (const row of rows) {
+      const listed = contributed(row.cid);
       for (const id of row.exposed) {
-        const inPool = gw.asPoolModel(id) !== null;
-        const listed = contributed(row.cid);
-        if (inPool) {
-          assert.ok(listed.length > 0, `${row.cid} 的 ${id} 在池内，却没人列出来`);
-        }
+        const poolId = gw.poolModelId(row.cid, id);
+        assert.ok(listed.includes(poolId), `${row.cid} 的 ${id} 应对外为 ${poolId}`);
       }
     }
   });

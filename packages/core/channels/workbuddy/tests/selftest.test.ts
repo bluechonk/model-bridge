@@ -294,7 +294,7 @@ describe("6. 端到端网关", () => {
     const resp = await fetch(`http://${gw.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string }> };
-    assert.ok(payload.data.some((m) => m.id === "deepseek-v4.1-flash"));
+    assert.ok(payload.data.some((m) => m.id === "workbuddy/deepseek-v4.1-flash"));
   });
 
   it("/health 报告 ok 与登录状态", async () => {
@@ -306,32 +306,36 @@ describe("6. 端到端网关", () => {
 
   it("流式对话：正常出字", async () => {
     const text = await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-v4.1-flash",
+      model: "workbuddy/deepseek-v4.1-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
     assert.equal(text, "网关通了");
   });
 
-  it("旧短名不再有候选渠道（网关只认渠道目录里的规范名）", async () => {
-    // 渠道自己的 catalog 仍能解析旧短名，但**网关入口**只接受池内 id —— 刻意的破坏性更新。
-    // 全模型池：deepseek-flash 归一化后是 deepseek-flash，不在池内 → 400
-    const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "deepseek-flash",
-        messages: [{ role: "user", content: "hi" }],
-        stream: true,
-      }),
-    });
-    assert.equal(resp.status, 503);
+  it("裸模型名与渠道目录外的模型都判 400（渠道由请求方前缀指定）", async () => {
+    const post = (model: string) =>
+      fetch(`http://${gw.addr}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "hi" }], stream: true }),
+      });
+    // 渠道自己的 catalog 仍能解析旧短名，但**网关入口**只接受 `<cid>/<模型>` —— 裸名是格式错误。
+    const bare = await post("deepseek-flash");
+    assert.equal(bare.status, 400);
+    // 带对了前缀、但渠道目录里没有这个模型：同样 400（渠道没货）
+    const noModel = await post("workbuddy/deepseek-flash");
+    assert.equal(noModel.status, 400);
+    for (const resp of [bare, noModel]) {
+      const payload = (await resp.json()) as { error: { code: string } };
+      assert.equal(payload.error.code, "unknown_model");
+    }
   });
 
   it("上游约束：注入 system + 强制 stream + 模型名映射", async () => {
     fake.captured.length = 0;
     await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-v4.1-flash",
+      model: "workbuddy/deepseek-v4.1-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
@@ -345,7 +349,7 @@ describe("6. 端到端网关", () => {
   it("上游约束：指纹改写为等价表述", async () => {
     fake.captured.length = 0;
     await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-v4.1-flash",
+      model: "workbuddy/deepseek-v4.1-flash",
       messages: [
         { role: "system", content: "Main branch (you will usually use this for PRs)" },
         { role: "user", content: "hi" },
@@ -366,7 +370,7 @@ describe("6. 端到端网关", () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "deepseek-v4.1-flash",
+        model: "workbuddy/deepseek-v4.1-flash",
         messages: [{ role: "user", content: "hi" }],
       }),
       headers: { "Content-Type": "application/json" },
@@ -426,7 +430,7 @@ describe("7. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "deepseek-v4.1-flash",
+          model: "workbuddy/deepseek-v4.1-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),

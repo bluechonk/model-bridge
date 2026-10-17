@@ -11,7 +11,7 @@
 
 import { channels, getChannel, hasChannel } from "../runtime/channel.js";
 import { runInChannel } from "../runtime/channel-context.js";
-import { POOL_MODELS, poolCandidates, canonicalModelId, asPoolModel } from "../pool/pool-targets.js";
+import { POOL_MODELS, canonicalModelId, poolModelId, poolCandidates } from "../pool/pool-targets.js";
 import { ledgerSnapshot, scoreOf } from "../pool/pool-usage.js";
 import { listAccounts, activateAccount, removeAccount, syncPool } from "../runtime/account-pool.js";
 import { renderChannelPool } from "./web-types.js";
@@ -76,12 +76,16 @@ export function createWebCommandHandler(deps: WebCommandDeps = {}): WebCommandHa
               return [] as string[];
             }
           });
+          // 渠道内先按规范名去重：同一渠道的不同原始写法收敛为同一个对外 id
+          const pool = [
+            ...new Map(catalogIds.map((id) => [canonicalModelId(id), id])).values(),
+          ].map((id) => poolModelId(cidInner, id));
           return {
             cid: cidInner,
             display: channel.upstream.DISPLAY_NAME,
             catalog: catalogIds,
-            pool: POOL_MODELS.filter((model) => catalogIds.some((id) => canonicalModelId(id) === model)),
-            out_of_pool: catalogIds.filter((id) => asPoolModel(id) === null).length,
+            pool,
+            out_of_pool: 0,
           };
         });
         return ok({ channels: rows });

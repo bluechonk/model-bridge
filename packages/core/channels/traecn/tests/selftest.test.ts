@@ -917,13 +917,13 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     const payload = (await resp.json()) as { data: Array<{ id: string }> };
     const ids = payload.data.map((m) => m.id);
     // 全模型池：不再限制只有两个池模型，而是动态返回渠道能提供的全部模型
-    assert.ok(ids.includes("deepseek-v4-flash"), "应包含 deepseek-v4-flash");
-    assert.ok(ids.includes("glm-5.2"), "应包含 glm-5.2（非 flash 也进池）");
-    assert.ok(ids.includes("kimi-k3"), "应包含 kimi-k3（别家模型也进池）");
-    assert.ok(ids.includes("solo-agent-only"), "应包含 solo-agent-only（远端目录）");
+    assert.ok(ids.includes("traecn/deepseek-v4-flash"), "应包含 traecn/deepseek-v4-flash");
+    assert.ok(ids.includes("traecn/glm-5.2"), "应包含 traecn/glm-5.2（非 flash 也进池）");
+    assert.ok(ids.includes("traecn/kimi-k3"), "应包含 traecn/kimi-k3（别家模型也进池）");
+    assert.ok(ids.includes("traecn/solo-agent-only"), "应包含 traecn/solo-agent-only（远端目录）");
     assert.ok(
-      ids.every((id) => !id.includes("/")),
-      "不再暴露 <cid>/<模型> 形态",
+      ids.every((id) => /^[a-z0-9-]+\//.test(id)),
+      "id 挂渠道前缀",
     );
     // 远端目录确实被采信：solo-agent-only 只在远端载荷里
     const detailIds = catalog.details().map((e) => e["id"]);
@@ -933,33 +933,33 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     assert.equal(modelsReq.headers["authorization"], "Cloud-IDE-JWT tok-e2e");
   });
 
-  it("池内没有可用模型：流式对话直接 503，不触达上游", async () => {
-    // traecn 目录只有 DeepSeek-V4-Flash 系 + 非 flash 的 glm，池收窄后一个都不提供
+  it("渠道目录外的模型：流式对话直接 400，不触达上游", async () => {
+    // traecn 目录只有 DeepSeek-V4-Flash 系 + 非 flash 的 glm，glm-5.3-flash 不在其中
     fake.requests.length = 0;
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "glm-5.3-flash",
+        model: "traecn/glm-5.3-flash",
         messages: [{ role: "user", content: "hi" }],
         stream: true,
       }),
       headers: { "Content-Type": "application/json" },
     });
-    assert.equal(resp.status, 503);
+    assert.equal(resp.status, 400);
     const payload = (await resp.json()) as { error: { code: string } };
-    assert.equal(payload.error.code, "not_authenticated");
-    assert.equal(fake.requests.length, 0, "没有候选渠道时不该触达上游");
+    assert.equal(payload.error.code, "unknown_model");
+    assert.equal(fake.requests.length, 0, "目录未命中不该触达上游");
   });
 
-  it("非流式：同样 503", async () => {
+  it("非流式：同样 400", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "deepseek-v4.1-flash", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "traecn/deepseek-v4.1-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
-    assert.equal(resp.status, 503);
+    assert.equal(resp.status, 400);
     const payload = (await resp.json()) as { error: { code: string } };
-    assert.equal(payload.error.code, "not_authenticated");
+    assert.equal(payload.error.code, "unknown_model");
   });
 
   it("请求校验：缺 model/messages 返回 400 统一信封", async () => {
@@ -978,12 +978,12 @@ describe("9. 端到端网关（假上游 + 真实网关）", () => {
     try {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
-        body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
+        body: JSON.stringify({ model: "traecn/glm-5.3-flash", messages: [{ role: "user", content: "hi" }], stream: true }),
         headers: { "Content-Type": "application/json" },
       });
-      assert.equal(resp.status, 503, "无候选渠道时请求根本到不了上游");
+      assert.equal(resp.status, 400, "目录未命中时请求根本到不了上游");
       const payload = (await resp.json()) as { error: { code: string; message: string } };
-      assert.equal(payload.error.code, "not_authenticated");
+      assert.equal(payload.error.code, "unknown_model");
       assert.ok(!payload.error.message.includes("internal detail leak"));
     } finally {
       mode.status = 200;
