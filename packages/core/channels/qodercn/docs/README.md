@@ -14,3 +14,11 @@ Qoder **国内版**（`qoder.com.cn`）的本地网关 —— 本工作区的一
 
 > 契约与规范：[`docs/CONTRACT-TS.md`](../../../docs/CONTRACT-TS.md) ·
 > 文档总索引：[`docs/README.md`](../../../docs/README.md)
+
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；协议结论与 [`qoder/docs/PROTOCOL.md`](../../qoder/docs/PROTOCOL.md) 共用。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [shuishuipingan/qoder2api-hub](https://github.com/shuishuipingan/qoder2api-hub) | 主参照（191★）：**国际国内双区**多账号网关中枢 —— COSY 签名、设备指纹防风控、OAuth 设备授权，国内版（qoder.com.cn）行为包含其中 |

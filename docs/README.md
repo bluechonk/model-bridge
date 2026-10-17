@@ -43,8 +43,8 @@
 | `qodercn` | Qoder 国内版（`qoder.com.cn`） | [说明](../packages/core/channels/qodercn/docs/README.md)；与 `qoder` **同一套协议**（仅域名/身份/模型目录不同），规格见 [qoder PROTOCOL](../packages/core/channels/qoder/docs/PROTOCOL.md) |
 | `raccoon` | Raccoon（商汤） | [说明](../packages/core/channels/raccoon/docs/README.md) · [PROTOCOL](../packages/core/channels/raccoon/docs/PROTOCOL.md) |
 | `traecn` | TRAE（字节，中国版） | [说明](../packages/core/channels/traecn/docs/README.md) · [PROTOCOL](../packages/core/channels/traecn/docs/PROTOCOL.md) |
-| `workbuddy` | WorkBuddy（国内版 CodeBuddy） | [说明](../packages/core/channels/workbuddy/docs/README.md) —— 与 `workbuddyai` **同一套端点协议**，无独立 PROTOCOL.md |
-| `workbuddyai` | WorkBuddyAI（国际版） | [说明](../packages/core/channels/workbuddyai/docs/README.md) —— 协议事实记在说明里，无独立 PROTOCOL.md |
+| `workbuddy` | WorkBuddy（国内版 CodeBuddy） | [说明](../packages/core/channels/workbuddy/docs/README.md) · [PROTOCOL](../packages/core/channels/workbuddy/docs/PROTOCOL.md)（与 `workbuddyai` 同一套端点协议，仅端点/域/版本不同） |
+| `workbuddyai` | WorkBuddyAI（国际版） | [说明](../packages/core/channels/workbuddyai/docs/README.md) · [PROTOCOL](../packages/core/channels/workbuddyai/docs/PROTOCOL.md)（官方 5.8.4 抓包的身分头族与 realm 端点表） |
 | `orcaterm` | OrcaTerm（腾讯云，登录已实现 / 上游待实现） | [说明](../packages/core/channels/orcaterm/docs/README.md) · [PROTOCOL](../packages/core/channels/orcaterm/docs/PROTOCOL.md) + [FINDINGS](../packages/core/channels/orcaterm/docs/FINDINGS.md) |
 
 > `orcaterm` 是**渠道包**（7 文件齐备并已注册），但只有**登录已实现**：

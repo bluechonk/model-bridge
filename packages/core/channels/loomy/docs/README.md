@@ -40,6 +40,16 @@ mx status / mx model list / mx billing loomy
 **接入**：任意 OpenAI 兼容客户端，baseUrl `http://127.0.0.1:8787/v1`（仓库级网关）、
 API key 任意非空、模型 `deepseek-v4.1-flash` / `glm-5.3-flash`（不带渠道前缀）。
 
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；结论进 [`PROTOCOL.md`](./PROTOCOL.md)。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [Patrick130306/loomy2api](https://github.com/Patrick130306/loomy2api) | 主参照（31★）：额度转 OpenAI 兼容 API |
+| [xingluoyuankong/loomy2api](https://github.com/xingluoyuankong/loomy2api) | 多账号池 + Web 面板 + 防风控；其 `docs/CLIENT-LOGIN.md`（客户端 asar 实抓 + 对照实验）是本渠道微信扫码登录修复的一手依据 |
+| [xxhhlk/loomy2api](https://github.com/xxhhlk/loomy2api) | 接口结构参考：端点、鉴权形状、请求/响应结构 |
+
 ## 许可证
 
 MIT

@@ -58,3 +58,11 @@ Tauri 按 Bundle ID `com.orcaterm-desktop.app` 落数据：
 | `%LOCALAPPDATA%\OrcaTerm\OrcaTerm.exe` | 主程序（58 MB，Tauri v2 + WebView2） |
 | `%LOCALAPPDATA%\com.orcaterm-desktop.app\` | `.cookies`、`logs\orcaterm.log`、`EBWebView\`（WebView2 profile） |
 | `%APPDATA%\com.orcaterm-desktop.app\` | `data.bin`（KV 存储）、`.window-state.json` |
+
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [hey7195/orcaterm_proxy](https://github.com/hey7195/orcaterm_proxy) | 当前唯一的上游协议参照 —— 本渠道的对话上游尚未实现，协议路径只能从 WebView2 缓存观测，实现 `upstream` 时以该仓库为起点 |

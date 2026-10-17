@@ -63,6 +63,15 @@ CodeArts 的 APIG 网关对**过期 token** 回 `HTTP 400 + {"error_code":"APIG.
 **接入**：任意 OpenAI 兼容客户端，baseUrl `http://127.0.0.1:8787/v1`（仓库级网关）、
 API key 任意非空、模型 `deepseek-v4.1-flash` / `glm-5.3-flash`（不带渠道前缀）。
 
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；结论进 [`PROTOCOL.md`](./PROTOCOL.md)。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [HITZY2002/codearts2api](https://github.com/HITZY2002/codearts2api) | 主参照（48★）：多账号轮转 + token 自动续期保活 + 并发控制 |
+| [Johnsheng1/codearts2api](https://github.com/Johnsheng1/codearts2api) | 订阅服务转 OpenAI 格式的对照样本 |
+
 ## 许可证
 
 MIT

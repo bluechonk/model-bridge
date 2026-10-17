@@ -37,6 +37,15 @@ node channels/qoder/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 > 翻译器对非 200 信封会先解析 body 保真内层 code/message（否则 10605 会被通用文案盖掉、
 > 排队重试永不触发），见 `channels/qoder/src/upstream.ts` 的 `newTranslator`。
 
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；结论进 [`PROTOCOL.md`](./PROTOCOL.md)。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [shuishuipingan/qoder2api-hub](https://github.com/shuishuipingan/qoder2api-hub) | 主参照（191★，国际国内双区多账号网关）：COSY 签名推理、稳定设备指纹防风控、OAuth 设备授权 —— 与本渠道的实现痛点一一对应 |
+| [cubk1/qoder2api](https://github.com/cubk1/qoder2api) | 逆向 demo 对照样本（90★） |
+
 ## 许可证
 
 MIT
