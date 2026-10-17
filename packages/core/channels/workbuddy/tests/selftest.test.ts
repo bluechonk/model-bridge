@@ -189,26 +189,26 @@ describe("3. 凭据", () => {
     assert.throws(() => cred.load(), cred.NotLoggedInError);
   });
 
-  it("登录基址恒为国内域（realm 参数被忽略）", async () => {
+  it("登录基址恒为 copilot.tencent.com（codebuddy.ai 是 DNS 沉洞，realm 参数被忽略）", async () => {
     const payload = Buffer.from(JSON.stringify({ sub: "u" })).toString("base64url");
     await cred.save({
       ...cred.EMPTY_CREDENTIALS,
       accessToken: `h.${payload}.s`,
       domain: "www.workbuddy.ai",
     });
-    assert.equal(cred.resolveBaseUrl("auto"), "https://www.codebuddy.ai");
-    assert.equal(cred.resolveBaseUrl("intl"), "https://www.codebuddy.ai", "没有 intl 一说，恒国内域");
-    assert.equal(cred.resolveBaseUrl("cn"), "https://www.codebuddy.ai");
+    assert.equal(cred.resolveBaseUrl("auto"), "https://copilot.tencent.com");
+    assert.equal(cred.resolveBaseUrl("intl"), "https://copilot.tencent.com", "没有 intl 一说，恒国内域");
+    assert.equal(cred.resolveBaseUrl("cn"), "https://copilot.tencent.com");
   });
 });
 
 describe("4. 上游配置", () => {
   it("URL 组装（chat 路径不用 prefixPath）", () => {
     const cfg = upstream.defaultConfig();
-    assert.equal(upstream.chatUrl(cfg), "https://www.codebuddy.ai/v2/chat/completions");
+    assert.equal(upstream.chatUrl(cfg), "https://copilot.tencent.com/v2/chat/completions");
     assert.equal(
       upstream.modelsUrl(cfg),
-      "https://www.codebuddy.ai/v2/enterprises/personal/models",
+      "https://copilot.tencent.com/v2/enterprises/personal/models",
     );
   });
 
@@ -217,7 +217,7 @@ describe("4. 上游配置", () => {
     upstream.applyAuth(headers, upstream.defaultConfig(), "tok", "uid-1");
     assert.equal(headers["Authorization"], "Bearer tok");
     assert.equal(headers["X-User-Id"], "uid-1");
-    assert.equal(headers["X-Domain"], "www.codebuddy.ai");
+    assert.equal(headers["X-Domain"], "copilot.tencent.com");
     // 上游按 UA 归因「使用端」并参与渠道校验 —— 用官方桌面端 UA（5.5.6）
     assert.equal(headers["User-Agent"], "WorkBuddy/5.5.6 WorkBuddy/5.5.6 CLI/2.137.1");
   });

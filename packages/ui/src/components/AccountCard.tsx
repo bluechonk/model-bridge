@@ -1,4 +1,4 @@
-import { Database, Plus, Trash2, UserCheck } from "lucide-react";
+import { Database, Plus, RefreshCw, Trash2, UserCheck } from "lucide-react";
 import type { PoolAccount } from "../lib/types";
 import type { ReactElement } from "react";
 import { StatusBadge } from "./StatusBadge";
@@ -21,6 +21,9 @@ export interface ChannelBilling {
   ok: number;
   fail: number;
   models: number;
+  /** 按生效账号拆分的请求计数（key = 账号池 key）。 */
+  accounts?: Array<{ key: string; ok: number; fail: number }>;
+  billing_at?: null;
 }
 
 function rowOf(account: PoolAccount | Record<string, unknown>): PoolAccount {
@@ -52,6 +55,8 @@ export function AccountCard({
   onActivate,
   onRemove,
   onAdd,
+  onRefreshBilling,
+  refreshing,
   busyKey,
 }: {
   pool: AccountPool;
@@ -60,6 +65,9 @@ export function AccountCard({
   onActivate: (cid: string, key: string) => void;
   onRemove: (cid: string, key: string) => void;
   onAdd: (cid: string) => void;
+  /** 只刷新本渠道的账单 / 剩余额度。 */
+  onRefreshBilling: (cid: string) => void;
+  refreshing: boolean;
   busyKey: string | null;
 }): ReactElement {
   return (
@@ -84,8 +92,11 @@ export function AccountCard({
         <div className="mb-2 text-xs text-gray-600">（空池：添加账号后会自动入池）</div>
       ) : (
         <ul className="mb-2 space-y-1.5">
-          {pool.index.accounts.map((raw) => {
-            const account = rowOf(raw);
+          {[...pool.index.accounts]
+            .map(rowOf)
+            // 当前生效的账号恒排第一行，其余保持原顺序
+            .sort((a, b) => Number(b.key === pool.index.active) - Number(a.key === pool.index.active))
+            .map((account) => {
             const key = account.key;
             const active = key === pool.index.active;
             return (
@@ -149,8 +160,32 @@ export function AccountCard({
             </span>
             <span className="text-gray-600">供给 {billing.models} 个池模型</span>
             {billing.cooling && <span className="text-yellow-400">冷却中</span>}
+            <button
+              className="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:opacity-50"
+              disabled={refreshing || busyKey !== null}
+              onClick={() => onRefreshBilling(pool.cid)}
+              title="重新请求本渠道的账单 / 剩余额度"
+            >
+              <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "刷新中…" : "刷新"}
+            </button>
           </div>
-          <div className="mt-1 text-gray-600">账本记在当前生效账号头上</div>
+          {billing.accounts && billing.accounts.length > 0 && (
+            <div className="mt-2 border-t border-gray-800 pt-2">
+              <div className="mb-1 text-gray-600">按账号拆分（渠道 × 账号）：</div>
+              <ul className="space-y-0.5">
+                {billing.accounts.map((a) => (
+                  <li key={a.key} className="flex items-center gap-2 font-mono">
+                    <span className="truncate text-gray-300">{a.key}</span>
+                    <span className="text-gray-500">
+                      ok=<span className="text-green-400">{a.ok}</span> fail=
+                      <span className={a.fail > 0 ? "text-red-400" : "text-gray-500"}>{a.fail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

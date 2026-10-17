@@ -47,7 +47,11 @@ export interface WebApi {
     login(cid: string, force: boolean): Promise<CommandData>;
     status(cid?: string): Promise<CommandData>;
     models(cid?: string): Promise<CommandData>;
-    billing(cid?: string): Promise<CommandData>;
+    /**
+     * 渠道账单快照；`args.refresh = true` 时后端会先重查一遍各渠道账单
+     * （控制台「刷新」按钮用）。`cid` 限定单渠道。
+     */
+    billing(cid?: string, args?: { refresh?: boolean }): Promise<CommandData>;
     accounts(cid?: string): Promise<CommandData>;
     activateAccount(cid: string, key: string): Promise<CommandData>;
     removeAccount(cid: string, key: string): Promise<CommandData>;
@@ -108,7 +112,7 @@ export const api: WebApi = {
     login: (cid, force) => command("login", cid, { force }),
     status: (cid) => command("status", cid),
     models: (cid) => command("models", cid),
-    billing: (cid) => command("billing", cid),
+    billing: (cid, args) => command("billing", cid, args ?? {}),
     accounts: (cid) => command("accounts", cid),
     activateAccount: (cid, key) => command("activateAccount", cid, { key }),
     removeAccount: (cid, key) => command("removeAccount", cid, { key }),

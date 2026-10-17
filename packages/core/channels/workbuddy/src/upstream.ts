@@ -23,7 +23,9 @@ import { randomBytes, randomUUID } from "node:crypto";
 
 import { upstreamPath, ensureDir } from "@modelmux/gateway";
 
-export const DEFAULT_BASE_URL = "https://www.codebuddy.ai";
+// chat 上游按 PROTOCOL §1 是 copilot.tencent.com；www.codebuddy.ai 是 DNS 沉洞（实测打不开），
+// www.codebuddy.cn 只做计费域。
+export const DEFAULT_BASE_URL = "https://copilot.tencent.com";
 
 /** 国内版桌面端身分取值（5.5.6；与 workbuddyai 共用同一套头族，见其 PROTOCOL.md §2）。 */
 const DESKTOP_UA_CN = "WorkBuddy/5.5.6 WorkBuddy/5.5.6 CLI/2.137.1";
