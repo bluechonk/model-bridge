@@ -272,6 +272,13 @@ export async function runServe(options: ServeOptions): Promise<number> {
     retryLogin: () => {
       state.retryRequested = true;
     },
+    // 控制台的「登录」按钮经此回调触发真实登录流程（本函数在 app 层，
+    // 控制台层不认识它 —— 见 scripts/verify-layering.mjs）
+    triggerLogin: (cid, force) => {
+      void runLogin({ cid, force, json: true, realm: "auto" }).catch(() => {
+        // 登录失败会反映在后续 /web/api/state 的 auth_url 或 gateway_error 上
+      });
+    },
   };
   // 单端口模式：控制台 handler 挂载进网关的 /web 前缀（不再起独立 server）。
   // `consoleEnabled=false`（--no-console）时不注入，网关保持纯 API 行为。

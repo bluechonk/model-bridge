@@ -109,6 +109,13 @@ export interface ControlBridge {
   provider?: () => UiSnapshot;
   setTheme?: (mode: string) => void;
   retryLogin?: () => void;
+  /**
+   * 触发某渠道的交互式登录（浏览器授权）。
+   *
+   * 由上层（headless / 单渠道 CLI）注入实现 —— 控制台层不认识登录流程本身，
+   * 避免 http → app 的层级违例（见 `scripts/verify-layering.mjs`）。
+   */
+  triggerLogin?: (cid: string, force: boolean) => void;
 }
 
 export interface ConsoleServer {
@@ -303,7 +310,10 @@ export function createConsoleHandler(
             json(res, { ok: false, error: "参数 action 必填" }, 400);
             return;
           }
-          const handle = (await import("./web-command-handler.js")).handleWebCommand;
+          const { createWebCommandHandler } = await import("./web-command-handler.js");
+          const handle = createWebCommandHandler({
+            ...(bridge.triggerLogin ? { triggerLogin: bridge.triggerLogin } : {}),
+          });
           const result = await handle({
             action,
             ...(typeof cid === "string" ? { cid } : {}),
