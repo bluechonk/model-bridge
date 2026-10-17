@@ -53,6 +53,23 @@
 - `systemPromptContext.systemPromptOverride` 有 **65508 字符**硬上限（JSON 转义后长度口径），
   超限回 `HTTP 200` + `success:false`；round 还拒收连续 `assistant` 消息。
 
+## 积分中心：额度查询与申领（`[参考]`+本机验证）
+
+> 来源：`reference/HITZY2002_catpaw2api` 的 `internal/upstream/const.go` / `client.go`；
+> 本机已实测两条端点（2026-10-18）。
+
+| 端点 | 方法 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| `https://catx.nocode.cn/api/gateway/credit/balance` | GET | `X-Auth-Token` | 积分余额；`data.availableCredits` 为可用积分（实测 548.61） |
+| `https://catx.nocode.cn/api/gateway/credit/register` | POST | `X-Auth-Token` | 注册奖励申领（幂等；body `{"registerChannel":"CATPAW_PC"}`；老用户回 `newUser:false`） |
+| `https://credit.catpaw.meituan.com/api/campaign/init-after-login` | POST | `X-Passport-Token` + Cookie | 积分中心活动初始化（可能发放活动额度；未接入） |
+
+- 鉴权注意：额度走**网关层** `X-Auth-Token`，与对话直连服务的
+  `X-Passport-Token` / Cookie 不是同一套头的语义；两者的 token 都源自
+  网关 passport（见 `src/cred.ts` 的 poll-token）。
+- 上游没有「每日签到」端点；`mx checkin catpaw` 的领取对应注册奖励（幂等）。
+- 早期「网关不暴露额度端点」的结论**有误**，已在 `src/billing.ts` 修正。
+
 ## 边界与伦理
 
 - 分析对象是**本机、本人账号**的登录态文件；仓库不包含、也不生成任何可用凭据。
