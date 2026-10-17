@@ -45,8 +45,10 @@ const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".tmp", ".box-agent",
 function gitIgnored(paths) {
   if (paths.length === 0) return new Set();
   try {
-    // --stdin 一次问完：几百个文件也只是一次进程调用
-    const out = execFileSync("git", ["check-ignore", "--stdin"], {
+    // --stdin 一次问完：几百个文件也只是一次进程调用。
+    // core.quotepath=false：git 默认把非 ASCII 路径转义成 æ… 八进制形式，
+    // 返回集就对不上原始中文文件名了（Windows 中文文件名必踩）。
+    const out = execFileSync("git", ["-c", "core.quotepath=false", "check-ignore", "--stdin"], {
       cwd: workspaceRoot,
       input: paths.join("\n"),
       encoding: "utf8",
