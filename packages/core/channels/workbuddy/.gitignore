@@ -13,3 +13,6 @@ __pycache__/
 .planning/
 .commandcode/
 *.log
+
+# 第三方参考实现（clone 下来的学习材料，不入库）
+reference/
