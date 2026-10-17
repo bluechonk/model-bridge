@@ -2,43 +2,43 @@
   "files": [],
   "references": [
     {
-      "path": "packages/channels/catpaw"
+      "path": "packages/core/channels/catpaw"
     },
     {
-      "path": "packages/channels/codearts"
+      "path": "packages/core/channels/codearts"
     },
     {
-      "path": "packages/channels/lobsterai"
+      "path": "packages/core/channels/lobsterai"
     },
     {
-      "path": "packages/channels/loomy"
+      "path": "packages/core/channels/loomy"
     },
     {
-      "path": "packages/channels/orcaterm"
+      "path": "packages/core/channels/orcaterm"
     },
     {
-      "path": "packages/channels/qoder"
+      "path": "packages/core/channels/qoder"
     },
     {
-      "path": "packages/channels/qodercn"
+      "path": "packages/core/channels/qodercn"
     },
     {
-      "path": "packages/channels/raccoon"
+      "path": "packages/core/channels/raccoon"
     },
     {
-      "path": "packages/channels/traecn"
+      "path": "packages/core/channels/traecn"
     },
     {
-      "path": "packages/channels/workbuddy"
+      "path": "packages/core/channels/workbuddy"
     },
     {
-      "path": "packages/channels/workbuddyai"
+      "path": "packages/core/channels/workbuddyai"
     },
     {
       "path": "packages/cli"
     },
     {
-      "path": "packages/gateway"
+      "path": "packages/core/gateway"
     }
   ]
 }

@@ -6,7 +6,7 @@
  *  - 控制台必须在**登录完成前**就可用，而此时网关还没启动。
  *
  * 端点：
- *   GET  /                    静态 SPA 首页 (packages/gateway/dist/ui/index.html)
+ *   GET  /                    静态 SPA 首页 (packages/core/gateway/dist/ui/index.html)
  *   GET  /assets/*            静态资产
  *   GET  /api/state           状态快照
  *   POST /api/theme           主题

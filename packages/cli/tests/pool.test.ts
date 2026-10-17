@@ -16,14 +16,14 @@ const HOME = mkdtempSync(join(tmpdir(), "modelmux-all-selftest-"));
 process.env["MODELMUX_HOME"] = HOME;
 
 /**
- * 渠道清单的**来源真相**：`packages/channels/<cid>/package.json` 存在即算一个渠道
+ * 渠道清单的**来源真相**：`packages/core/channels/<cid>/package.json` 存在即算一个渠道
  * （与 `tools/verify-contract.mjs` 同口径）。
  *
  * 刻意**不写死数量** —— 写死就要求「每加一个渠道都回来改测试」，而这里真正要
  * 断言的是「目录里的渠道都注册上了」，数量本身不是被测对象。
  */
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const CHANNELS_DIR = join(REPO_ROOT, "packages", "channels");
+const CHANNELS_DIR = join(REPO_ROOT, "packages", "core", "channels");
 const EXPECTED_CIDS = readdirSync(CHANNELS_DIR)
   .filter((name) => existsSync(join(CHANNELS_DIR, name, "package.json")))
   .sort();
@@ -43,9 +43,9 @@ describe("仓库级模型池", () => {
     rmSync(HOME, { recursive: true, force: true });
   });
 
-  it("注册了 packages/channels/ 下的全部渠道（数量由目录推导）", () => {
+  it("注册了 packages/core/channels/ 下的全部渠道（数量由目录推导）", () => {
     const cids = gw.channels().map((c) => c.config.cid).sort();
-    assert.deepEqual(cids, EXPECTED_CIDS, "注册清单与 packages/channels/ 目录不一致");
+    assert.deepEqual(cids, EXPECTED_CIDS, "注册清单与 packages/core/channels/ 目录不一致");
     assert.ok(!cids.includes("cline"), "cline 渠道已移除");
     assert.ok(!cids.includes("zcode"), "zcode 渠道已移除");
   });

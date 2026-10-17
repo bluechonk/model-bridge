@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "多渠道本地模型池网关：把多个渠道汇成一个 OpenAI 兼容端点，只暴露两个池内模型（modelmux CLI）",
+  "description": "多渠道本地模型池网关：把多个渠道汇成一个 OpenAI 兼容端点，对外暴露各渠道真实模型（modelmux CLI）",
   "workspaces": [
     "packages/*",
-    "packages/channels/*"
+    "packages/core/channels/*"
   ],
   "scripts": {
     "build": "tsc -b && npm run build --workspace=packages/ui && npm run build --workspace=packages/cli && node tools/copy-ui.mjs",

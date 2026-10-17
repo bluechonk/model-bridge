@@ -1,9 +1,9 @@
 # 存储落点与文件命名规范（工作区 `modelmux`）
 
 本文件只规定**放在哪里、叫什么名字**：存储根、cid 分层、覆盖用环境变量、目录内的文件命名。
-**凭证/配置的字段内容不在此列** —— 各 `packages/channels/<cid>/` 自己决定（见 `CONTRACT-TS.md` §5）。
+**凭证/配置的字段内容不在此列** —— 各 `packages/core/channels/<cid>/` 自己决定（见 `CONTRACT-TS.md` §5）。
 
-适用范围：工作区内全部渠道包 + 共享包 `packages/gateway`（清单以 `mx model list` 为准）。
+适用范围：工作区内全部渠道包 + 共享包 `packages/core/gateway`（清单以 `mx model list` 为准）。
 历史布局兼容（`legacyDirs` / `fileMigrations` / 旧环境变量）已随 modelmux 更名整体移除：
 **只认下面这一种布局**，不做任何旧目录/旧名字迁移。
 
@@ -54,7 +54,7 @@
 1. **单一存储根**：`~/.modelmux/`，由共享层唯一解析，渠道不得自行拼绝对路径。
 2. **按 cid 分层**：`<root>/<cid>/`。`cid` 全小写、仅 `[a-z0-9-]`、等于 `ChannelConfig.cid`。
 3. **根目录覆盖变量**：`MODELMUX_HOME`（唯一；没有别的名字，也不读历史变量）。
-4. **目录内固定文件名**（唯一定义处：`packages/gateway/src/paths.ts`）：
+4. **目录内固定文件名**（唯一定义处：`packages/core/gateway/src/paths.ts`）：
 
   | 文件 | 用途 |
   |---|---|

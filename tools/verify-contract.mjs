@@ -28,13 +28,13 @@ const DEP_ALLOW = ["@modelmux/gateway"];
 const CHANNEL_PKG_RE = /^@modelmux\/[a-z0-9-]+$/;
 const DEV_ALLOW = ["typescript", "@types/node"];
 
-const channelsDir = join(repo, "packages", "channels");
+const channelsDir = join(repo, "packages", "core", "channels");
 const channelDirs = readdirSync(channelsDir).filter((n) => existsSync(join(channelsDir, n, "package.json")));
 
 let registeredImports = 0;
 
 for (const cid of channelDirs) {
-  const where = `packages/channels/${cid}`;
+  const where = `packages/core/channels/${cid}`;
 
   // src/ 恰 7 文件：多出来的都是共享层旧副本残留
   const srcDir = join(channelsDir, cid, "src");
@@ -88,7 +88,7 @@ check(
 const registered = [...read("packages/cli/src/channels.ts").matchAll(/import\s+"(@modelmux\/[a-z0-9-]+)"/g)].map((m) => m[1]);
 registeredImports = registered.length;
 for (const cid of channelDirs) {
-  check(registered.includes(`@modelmux/${cid}`), `packages/channels/${cid}: 未在 packages/cli/src/channels.ts 注册`);
+  check(registered.includes(`@modelmux/${cid}`), `packages/core/channels/${cid}: 未在 packages/cli/src/channels.ts 注册`);
 }
 check(
   registered.length === channelDirs.length,
@@ -117,9 +117,9 @@ const referencesBlock = (text) => {
 
 const tsconfigs = [
   "tsconfig.json",
-  ...channelDirs.map((cid) => `packages/channels/${cid}/tsconfig.json`),
+  ...channelDirs.map((cid) => `packages/core/channels/${cid}/tsconfig.json`),
   "packages/cli/tsconfig.json",
-  "packages/gateway/tsconfig.json",
+  "packages/core/gateway/tsconfig.json",
 ];
 for (const where of tsconfigs) {
   const block = referencesBlock(read(where));
@@ -129,7 +129,7 @@ for (const where of tsconfigs) {
 }
 
 const solutionPaths = [...referencesBlock(read("tsconfig.json")).matchAll(/"path"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
-const packagePaths = [...channelDirs.map((cid) => `packages/channels/${cid}`), "packages/cli", "packages/gateway"];
+const packagePaths = [...channelDirs.map((cid) => `packages/core/channels/${cid}`), "packages/cli", "packages/core/gateway"];
 const missingRefs = packagePaths.filter((p) => !solutionPaths.includes(p));
 const strayRefs = solutionPaths.filter((p) => !packagePaths.includes(p));
 check(
@@ -138,14 +138,14 @@ check(
 );
 
 // 共享包自身必须零第三方依赖（CONTRACT-TS §2）
-const gwDeps = Object.keys(JSON.parse(read("packages/gateway/package.json")).dependencies ?? {});
-check(gwDeps.length === 0, `packages/gateway: 共享包必须零运行依赖，当前 ${gwDeps.join(", ")}`);
+const gwDeps = Object.keys(JSON.parse(read("packages/core/gateway/package.json")).dependencies ?? {});
+check(gwDeps.length === 0, `packages/core/gateway: 共享包必须零运行依赖，当前 ${gwDeps.join(", ")}`);
 
 // 公共池模型动态化（全模型池）：不再断言固定 2 个 flash，改为检查动态收集函数存在
-const poolTargets = read("packages/gateway/src/pool-targets.ts");
+const poolTargets = read("packages/core/gateway/src/pool-targets.ts");
 check(/export function poolModels\(\)/.test(poolTargets), "pool-targets.ts: 缺 poolModels()（全模型池动态收集）");
 check(/function asPoolModel\(/.test(poolTargets), "pool-targets.ts: 缺 asPoolModel()（动态匹配）");
-// 共享层代码不得硬编码厂商模型名（AGENTS.md §1：packages/gateway 不许出现渠道知识）。
+// 共享层代码不得硬编码厂商模型名（AGENTS.md §1：packages/core/gateway 不许出现渠道知识）。
 // 剥离注释后再查 —— JSDoc 里的示例 id 是文档，不是共享层持有的模型知识。
 const poolCode = poolTargets
   .replace(/\/\*[\s\S]*?\*\//g, "") // 块注释
@@ -156,7 +156,7 @@ check(
 );
 
 // 池白名单判据定义在共享层（渠道不得自行实现家族过滤，CONTRACT-TS §4）
-const modelFamily = read("packages/gateway/src/model-family.ts");
+const modelFamily = read("packages/core/gateway/src/model-family.ts");
 check(/FAMILY_ALLOWLIST/.test(modelFamily), "model-family.ts: 缺 FAMILY_ALLOWLIST（池白名单必须在共享层）");
 check(/REQUIRED_ALLOWLIST/.test(modelFamily), "model-family.ts: 缺 REQUIRED_ALLOWLIST（型号闸门必须在共享层）");
 
