@@ -95,7 +95,7 @@ check(
   `注册清单（${registered.length}）与渠道目录数（${channelDirs.length}）不一致`,
 );
 
-// 工程引用对齐（AGENTS.md §4：根 tsconfig 是 solution 文件，references 列出全部包）。
+// 工程引用对齐（AGENTS.md【命令】：根 tsconfig 是 solution 文件，references 列出全部包）。
 // 每个条目恰含一个 path —— 空条目与「单条目多 path」都是脚本化增删渠道留下的畸形残留：
 // TS 自己的解析器会保留重复键（编译照过），走标准 JSON.parse 的工具却只认最后一个。
 const referencesBlock = (text) => {
@@ -145,7 +145,7 @@ check(gwDeps.length === 0, `packages/core/gateway: 共享包必须零运行依�
 const poolTargets = read("packages/core/gateway/src/pool-targets.ts");
 check(/export function poolModels\(\)/.test(poolTargets), "pool-targets.ts: 缺 poolModels()（全模型池动态收集）");
 check(/function asPoolModel\(/.test(poolTargets), "pool-targets.ts: 缺 asPoolModel()（动态匹配）");
-// 共享层代码不得硬编码厂商模型名（AGENTS.md §1：packages/core/gateway 不许出现渠道知识）。
+// 共享层代码不得硬编码厂商模型名（AGENTS.md【仓库结构】：共享层不许出现渠道知识）。
 // 剥离注释后再查 —— JSDoc 里的示例 id 是文档，不是共享层持有的模型知识。
 const poolCode = poolTargets
   .replace(/\/\*[\s\S]*?\*\//g, "") // 块注释

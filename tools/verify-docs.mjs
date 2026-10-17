@@ -95,7 +95,7 @@ for (const rel of candidates) {
   if (ignored.has(rel)) continue; // 被忽略的第三方材料：不归本仓库文档规则管
   checked += 1;
   if (ALLOWED.some((re) => re.test(rel))) continue;
-  problems.push(`${rel} —— md 落点不合法（规则见 AGENTS.md §2）`);
+  problems.push(`${rel} —— md 落点不合法（规则见 AGENTS.md【文档规则】）`);
 }
 
 // 每个渠道包都必须自带渠道说明（防止文档又被抽回仓库级 docs/，包单独发布时就没文档了）
@@ -105,7 +105,7 @@ if (existsSync(channelsDir)) {
     if (!entry.isDirectory()) continue;
     const doc = join(channelsDir, entry.name, "docs", "README.md");
     if (!existsSync(doc)) {
-      problems.push(`packages/core/channels/${entry.name}/docs/README.md —— 缺渠道说明（渠道文档跟包走，规则见 AGENTS.md §2）`);
+      problems.push(`packages/core/channels/${entry.name}/docs/README.md —— 缺渠道说明（渠道文档跟包走，规则见 AGENTS.md【文档规则】）`);
     }
   }
 }
