@@ -1,7 +1,7 @@
 /**
  * 提交信息规范校验：`type(scope): 中文描述`。
  *
- * 规范遵循 Conventional Commits 并改中文（见 AGENTS.md【提交信息规范】），与 github 插件的
+ * 规范遵循 Conventional Commits 并改中文（见 AGENTS.md §提交信息规范），与 github 插件的
  * `$commit` 技能一致：
  * - type 只允许 feat / fix / docs / style / refactor / perf / test / chore；
  * - scope（`(git事件)`）**必填**，为变更涉及的模块或对象名；
@@ -10,7 +10,7 @@
  *
  * **merge commit 一并校验**：GitHub 默认生成的 `Merge pull request #N from …`
  * 不含 type/scope/中文，属违规。仓库设置已改为 `merge_commit_title=PR_TITLE`
- * （见 AGENTS.md【提交信息规范】），合并前本地 `git merge -m "merge(scope): 中文"` 也必须合规。
+ * （见 AGENTS.md §提交信息规范），合并前本地 `git merge -m "merge(scope): 中文"` 也必须合规。
  *
  * 用法：`node tools/verify-commits.mjs [<range>]`，默认校验 HEAD 可达的全部提交
  * （含 merge）。range 例：`HEAD~5..HEAD`、`origin/main..HEAD`。

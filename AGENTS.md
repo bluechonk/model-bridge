@@ -2,10 +2,9 @@
 
 本文件是**仓库级**规则，与 `~/.zcode/AGENTS.md` 的个人偏好同时生效；项目约定以本文件为准。
 
-**本文档的编写格式（强制）**：小节一律用 `【小节名】` 独占一行，正文用编号列表（`1.` `2.` `3.`）或短横线列表（`-`）。
-**禁止**使用 markdown 的 `##` / `###` 标题层级 —— 与全局 `~/.zcode/AGENTS.md` 的体例保持一致。
+**本文档的编写格式**：小节用 markdown 标题层级（`##`），正文用编号列表（`1.` `2.` `3.`）或短横线列表（`-`）。
 
-【这是什么】
+## 这是什么
 
 1. 一个本地 OpenAI 兼容网关 CLI（`modelmux`，bin `modelmux` / `mx`）+ 全部渠道。
 2. 专注一件事：多个渠道汇成一个 OpenAI 兼容端点，对外暴露各渠道目录里的真实模型。
@@ -13,7 +12,7 @@
 4. 对外模型是**动态模型池**（全池，不再限定 flash 家族）；请求落到哪家渠道由网关按各渠道**账单已用量**决定
    （`pool-targets.ts` / `pool-usage.ts`）。
 
-【仓库结构】
+## 仓库结构
 
 ```
 packages/
@@ -31,7 +30,9 @@ docs/                         契约与规范（唯一的仓库级文档层）
 2. `packages/core/gateway` 是共享层，**不许出现任何渠道知识**（厂商名、渠道特有字段、渠道模型名一律不得硬编码）。
 3. `packages/core/channels/<cid>` 是渠道包，**只实现 4 个渠道特有模块**，其余一律复用共享层。
 
-【分支与重构】（**强制**）
+## 分支与重构
+
+**强制**。
 
 1. **大规模修改或重构必须先创建新分支**，禁止在 `main` 上直接动手。
 2. 分支名使用明确的类型前缀：`refactor/<模块名>` / `feat/<模块名>` / `fix/<模块名>`。
@@ -48,7 +49,9 @@ docs/                         契约与规范（唯一的仓库级文档层）
 7. 重构以**可运行、可测试**为分界；大步骤拆小提交，每个提交保持可构建与逻辑一致。
 8. 纯文档、单文件修复、注释订正等小改动可直接在 `main` 上提交。
 
-【文档规则】（**强制**）
+## 文档规则
+
+**强制**。
 
 1. 契约与规范集中在 `docs/`；渠道文档跟着包走，放在 `packages/core/channels/<cid>/docs/`。
 2. 各类文档的落点：
@@ -74,7 +77,7 @@ docs/                         契约与规范（唯一的仓库级文档层）
 5. 完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
    需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
 
-【代码约定】
+## 代码约定
 
 1. 渠道包 `src/` **只能有 7 个文件**（`channel` / `cli` / `index` + `cred` / `upstream` / `catalog` / `billing`）；
    多出来的共享模块副本一律删除。详见 `docs/CONTRACT-TS.md`。
@@ -88,7 +91,7 @@ docs/                         契约与规范（唯一的仓库级文档层）
 6. **测试只做端到端真实测试**：跑真实网关、真实上游、真实登录链路，以「用户视角能跑通」为准；
    **不写单元测试、不写集成测试**，也不再要求测试「完全离线」。
 
-【命令】
+## 命令
 
 ```bash
 npm install                       # 装工作区依赖（含软链）
@@ -125,7 +128,7 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
 9. `npm run build` 末尾还要跑 `tools/copy-ui.mjs`，把 UI 产物拷到**两个**落点
    （`packages/core/gateway/dist/ui` 与 `packages/cli/dist/ui`）—— 少拷一份，全局 `mx web` 就报「UI 未构建」。
 
-【提交前检查】
+## 提交前检查
 
 1. `npm test` 全绿（自带 `build`，含 `verify:storage` / `verify:docs` / `verify:commits`）。
 2. **测试链读的是各包 `dist/`（不是 `src/`）**，所以编译必须在链首：`npm test` 已内置 `npm run build`；
@@ -134,7 +137,9 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
 4. 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。
 5. 推送前必须跑本地 WSL 测试门禁（`.githooks/pre-push` 自动执行）；禁止用 `--no-verify` 绕过。
 
-【改完代码的执行顺序】（**强制**）
+## 改完代码的执行顺序
+
+**强制**。
 
 改动 `packages/core/**`、`packages/cli/**`、`packages/ui/**` 后，必须按顺序完成全部四步：
 
@@ -154,7 +159,7 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
 判定口径：`status --json` 的 `stale_build` 必须为 `false`。
 实现见 `packages/core/gateway/src/stale-build.ts`；事故记录见 `docs/CONTRACT-TS.md` 的「陈旧构建」一节。
 
-【开发规范】
+## 开发规范
 
 1. 换行一律 **LF**；根 `.gitattributes` 强制（`* text=auto eol=lf`），**禁止 CRLF 混入提交**。
 2. 严禁提交 apikey / accesskey / secret / token / 密码 / 私钥 / 证书 / 含真实凭据的 `.env`。
@@ -168,7 +173,7 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
 7. 开发前先检索现成方案（GitHub 优先），优先复用而非自建；借鉴重构前先检查许可证。
 8. 临时文件一律写入项目根目录下的 `.tmp/`（必须已被 `.gitignore` 覆盖），任务结束前清理。
 
-【提交信息规范】
+## 提交信息规范
 
 格式 `type(scope): 中文描述`，即 Conventional Commits 的中文版（`tools/verify-commits.mjs` 已接入 `npm test`）。
 
