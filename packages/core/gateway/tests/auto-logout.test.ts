@@ -1,10 +1,12 @@
 /**
- * 渠道自动登出与候选过滤（**完全离线**：mkdtemp 存储根 + 假上游）。
+ * 渠道鉴权失败语义（**完全离线**：mkdtemp 存储根 + 假上游）。
  *
- * 自动化语义：
- * - 上游明确拒绝 token（401）+ 刷新不可用 + 池内无后备账号 → 网关**自动登出**
- *   （清掉 credentials.json 与池账号），渠道回到干净的未登录态；
- * - 死/未登录渠道**不再进入路由候选**（不可能成功，不白耗尝试预算）。
+ * 2026-10-18 起：**上游拒绝 token 时绝不删除凭证**。
+ * 401/403 可能是账号限制（11140）、临时风控或令牌轮换 —— 凭证是可恢复状态，
+ * 删掉等于把可恢复变成不可恢复，用户被迫重新授权。自动化语义：
+ * - 失败请求返回 502，健康度标 unauthorized，凭证与池账号**原样保留**；
+ * - 已登录但凭据被拒的渠道仍进入路由，后续请求会继续尝试上游并再次失败；
+ * - 未登录（没有凭证）的渠道不进入路由（不可能成功，不白耗尝试预算）。
  */
 
 import assert from "node:assert/strict";
@@ -112,7 +114,7 @@ async function chat(addr: string): Promise<{ status: number; text: string }> {
   return { status: resp.status, text: await resp.text() };
 }
 
-describe("自动登出：死凭据被清理并退出路由", () => {
+describe("鉴权失败：凭证保留（不再自动登出）", () => {
   let root = "";
   let upstream: Awaited<ReturnType<typeof fakeUpstream>>;
   let gw: gateway.RunningGateway;
@@ -136,26 +138,26 @@ describe("自动登出：死凭据被清理并退出路由", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("401 + 刷新不可用 → 请求失败并自动登出（凭证与池账号都被清）", async () => {
+  it("401 + 刷新不可用 → 请求失败但凭证与池账号保留", async () => {
     assert.equal(existsSync(paths.credentialsPath("dead")), true, "前置：凭证文件存在");
     const { status } = await chat(gw.addr);
     assert.equal(status, 502, "所有候选失败 → 502");
-    assert.equal(existsSync(paths.credentialsPath("dead")), false, "死凭据应被自动移除");
-    assert.equal(listAccounts("dead").accounts.length, 0, "池账号应被清空");
+    assert.equal(existsSync(paths.credentialsPath("dead")), true, "凭证必须保留（不许删）");
+    assert.equal(listAccounts("dead").accounts.length, 1, "池账号也原样保留");
     assert.ok(
-      logs.some((m) => m.includes("auto logout")),
-      `日志应记录自动登出（实际: ${logs.filter((m) => m.includes("logout")).join(" | ") || "无"}）`,
+      logs.some((m) => m.includes("credentials kept")),
+      `日志应说明凭证保留（实际: ${logs.filter((m) => m.includes("auth failed")).join(" | ") || "无"}）`,
     );
   });
 
-  it("下一次请求：未登录渠道不再进入路由（503 / 不触达上游）", async () => {
+  it("下一次请求仍会尝试上游（凭证还在），并再次失败", async () => {
     upstream.captured.length = 0;
     const { status, text } = await chat(gw.addr);
-    assert.equal(status, 503);
-    const payload = JSON.parse(text) as { error: { code: string; message: string } };
-    assert.equal(payload.error.code, "not_authenticated");
-    assert.ok(payload.error.message.includes("mx login <cid>"), "提示重新登录的出口");
-    assert.equal(upstream.captured.length, 0, "不应触达上游（渠道根本没凭据）");
+    assert.equal(status, 502);
+    assert.ok(upstream.captured.length > 0, "凭据还在，路由会继续尝试上游");
+    const payload = JSON.parse(text) as { error: { code: string } };
+    assert.equal(payload.error.code, "upstream_unauthenticated");
+    assert.equal(existsSync(paths.credentialsPath("dead")), true, "多轮失败后凭证依旧保留");
   });
 });
 

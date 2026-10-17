@@ -953,7 +953,7 @@ describe("9. 端到端网关（假上游）", () => {
     const server = fake.current!;
     server.captured.length = 0;
     const text = await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "glm-5.3-flash",
+      model: "lobsterai/glm-5.3-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
@@ -970,7 +970,7 @@ describe("9. 端到端网关（假上游）", () => {
   it("非流式：本层聚合成 chat.completion", async () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
-      body: JSON.stringify({ model: "glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({ model: "lobsterai/glm-5.3-flash", messages: [{ role: "user", content: "hi" }] }),
       headers: { "Content-Type": "application/json" },
     });
     assert.equal(resp.status, 200);
@@ -1008,7 +1008,7 @@ describe("10. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "glm-5.3-flash",
+          model: "lobsterai/glm-5.3-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),

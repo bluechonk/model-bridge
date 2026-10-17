@@ -6,7 +6,7 @@
  *   2. 浏览器打开 authUrl，人工授权（唯一人工步骤）
  *   3. `GET {base}/v2/plugin/auth/token?state=...` 每 5s 轮询，≤5 分钟 → 令牌
  *   4. 落盘为 credentials.json（Go 风格字段名）
- * 刷新：`POST /v2/plugin/auth/refresh`（纯 HTTP，无需浏览器）
+ * 刷新：`POST /v2/plugin/auth/token/refresh`（纯 HTTP，X-Refresh-Token 头）
  *
  * ⚠ 本渠道**只有一个域**（国内版 codebuddy.ai）。账号属于哪个域就必须用哪个渠道
  * 登录：国内账号走本渠道，国际账号走 `workbuddyai` —— 不再有 `--realm` 二选一。
@@ -303,14 +303,27 @@ export async function login(baseUrl: string, options: LoginOptions = {}): Promis
   throw new Error(`no login detected after ${MAX_LOGIN_ROUNDS} attempt(s)`);
 }
 
-/** 用存储的刷新令牌换取新的访问令牌。失败由调用方回退到交互登录。 */
+/** 用存储的刷新令牌换取新的访问令牌。失败由调用方回退到交互登录。
+ *
+ * 端点与鉴权形态按 hub 实测（`wb_accounts.py` 的 `_refresh_locked`，cn 的
+ * refresh 也打在 chat 上游 copilot.tencent.com）：路径带 `/token/` 段，
+ * 令牌走 `X-Refresh-Token` 头、请求体为空对象；来源头 cn 为 `workbuddy`。
+ */
 export async function refresh(c: Credentials): Promise<Credentials> {
   if (!c.refreshToken) throw new Error("no refresh token available");
-  const base = c.domain ? `https://${c.domain}` : DEFAULT_BASE_URL;
-  const resp = await fetchWithTimeout(`${base}/v2/plugin/auth/refresh?${PLATFORM_QS}`, {
+  const resp = await fetchWithTimeout("https://copilot.tencent.com/v2/plugin/auth/token/refresh", {
     method: "POST",
-    body: JSON.stringify({ refreshToken: c.refreshToken }),
-    headers: { ...anonHeaders(), "Content-Type": "application/json" },
+    body: "{}",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/plain, */*",
+      "X-Requested-With": "XMLHttpRequest",
+      "X-Refresh-Token": c.refreshToken,
+      "X-Auth-Refresh-Source": "workbuddy",
+      "X-User-Id": c.uid,
+      "X-Domain": c.domain || "copilot.tencent.com",
+      "X-CodeBuddy-Request": "1",
+    },
   });
   if (resp.status !== 200) throw new Error(`refresh failed: HTTP ${resp.status}`);
   let env: Record<string, unknown>;

@@ -123,6 +123,16 @@ SSE 规范化与聚合、端到端网关（system 注入 / 强制流式 / 指纹
  而 ZCode 的解析器判定 `tool_calls != null` 就结束思考块 ——
  不剔除会让每个 reasoning token 被切成独立的「思考」块
 
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；结论进 [`PROTOCOL.md`](./PROTOCOL.md)。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [ardeyouxipianyi/workbuddy2api-hub](https://github.com/ardeyouxipianyi/workbuddy2api-hub) | 主参照（1576★，mitmproxy 5.8.4 实测）：`wb_identity.py` 官方身分头族（X-Agent-* / X-IDE-* / 会话头族 / B3 链路）与 UA、realm 端点表（国际版 `www.workbuddy.ai`，`www.codebuddy.ai` 已 DNS 沉洞）、`wb_fingerprint.py` 按账号派生 machineId/sessionId 的防关联口径 |
+| [Tom6814/WorkBuddy2API](https://github.com/Tom6814/WorkBuddy2API) | WorkBuddy / CodeBuddy 逆向 API（97★，Docker 部署） |
+| [ckldy/workbuddy2api](https://github.com/ckldy/workbuddy2api) | WorkBuddy 转服务的对照样本 |
+
 ## 许可证
 
 MIT

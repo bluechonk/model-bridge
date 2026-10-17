@@ -6,7 +6,7 @@
  *   2. 浏览器打开 authUrl，人工授权（唯一人工步骤）
  *   3. `GET {base}/v2/plugin/auth/token?state=...` 每 5s 轮询，≤5 分钟 → 令牌
  *   4. 落盘为 credentials.json（Go 风格字段名）
- * 刷新：`POST /v2/plugin/auth/refresh`（纯 HTTP，无需浏览器）
+ * 刷新：`POST /v2/plugin/auth/token/refresh`（纯 HTTP，X-Refresh-Token 头）
  *
  * ⚠ 本渠道**只有一个域**（国际版 workbuddy.ai）。国内版（codebuddy.ai）是**独立渠道**
  * `workbuddy` —— 账号属于哪个域就用哪个渠道登录，不再有 `--realm` 二选一。
@@ -305,14 +305,29 @@ export async function login(baseUrl: string, options: LoginOptions = {}): Promis
   throw new Error(`no login detected after ${MAX_LOGIN_ROUNDS} attempt(s)`);
 }
 
-/** 用存储的刷新令牌换取新的访问令牌。失败由调用方回退到交互登录。 */
+/** 用存储的刷新令牌换取新的访问令牌。失败由调用方回退到交互登录。
+ *
+ * 端点与鉴权形态按 hub 实测（`wb_accounts.py` 的 `_refresh_locked`）：路径带
+ * `/token/` 段，令牌走 `X-Refresh-Token` 头、请求体为空对象；上游会轮换
+ * refresh token，新值必须回写（拿不到就保留旧值）。
+ */
 export async function refresh(c: Credentials): Promise<Credentials> {
   if (!c.refreshToken) throw new Error("no refresh token available");
-  const base = c.domain ? `https://${c.domain}` : DEFAULT_BASE_URL;
-  const resp = await fetchWithTimeout(`${base}/v2/plugin/auth/refresh?${PLATFORM_QS}`, {
+  const realmCn = c.domain === "copilot.tencent.com" || c.domain.endsWith("codebuddy.cn");
+  const base = realmCn ? "https://copilot.tencent.com" : DEFAULT_BASE_URL;
+  const resp = await fetchWithTimeout(`${base}/v2/plugin/auth/token/refresh`, {
     method: "POST",
-    body: JSON.stringify({ refreshToken: c.refreshToken }),
-    headers: { ...anonHeaders(), "Content-Type": "application/json" },
+    body: "{}",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/plain, */*",
+      "X-Requested-With": "XMLHttpRequest",
+      "X-Refresh-Token": c.refreshToken,
+      "X-Auth-Refresh-Source": realmCn ? "workbuddy" : "plugin",
+      "X-User-Id": c.uid,
+      "X-Domain": c.domain || hostOf(base),
+      "X-CodeBuddy-Request": "1",
+    },
   });
   if (resp.status !== 200) throw new Error(`refresh failed: HTTP ${resp.status}`);
   let env: Record<string, unknown>;

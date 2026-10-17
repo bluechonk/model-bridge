@@ -289,10 +289,16 @@ export interface LoginOptions {
   onUrl?: (url: string) => void;
   onStatus?: (message: string) => void;
   /**
-   * 回调 URL 的来源。优先级：本字段 → 环境变量 `RACCOON_LOGIN_CALLBACK` → stdin。
-   * 正式 CLI 不传（提示用户粘贴）；测试与脚本用它注入。
+   * 回调 URL 的来源。优先级：本字段 → 环境变量 `RACCOON_LOGIN_CALLBACK` →
+   * `pasteCode`（Web 控制台粘贴通道）∥ stdin（终端粘贴）双通道竞争。
+   * 正式 CLI 不传 callback（提示用户粘贴）；测试与脚本用它注入。
    */
   callback?: string | (() => Promise<string>);
+  /**
+   * 取走用户粘回的回调链接（共享层 Web 控制台的粘贴通道；resolveCallback 里
+   * 每 400ms 轮询一次）。网关进程 stdin 非交互，缺这条通道 Web 授权流程走不完。
+   */
+  pasteCode?: () => string | undefined;
   /** 等待回调的时限（默认 5 分钟）。 */
   timeoutMs?: number;
 }
@@ -408,42 +414,81 @@ async function resolveCallback(options: LoginOptions, timeoutMs: number): Promis
   }
   const env = (process.env["RACCOON_LOGIN_CALLBACK"] ?? "").trim();
   if (env) return env;
-  if (process.stdin.isTTY || !process.stdin.readableEnded) {
-    // ⚠ 空输入**重问**而不是报错：用户常见动作是「回车看看会发生什么」（真机踩过，
-    //   报 `LoginCallbackError: empty callback` 让人一头雾水）。只有 EOF 才算放弃。
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) throw new Error("waiting for pasted callback timed out; run raccoon login again");
-      const line = await withTimeout(
-        readLineFromStdin(
-          "Paste the ENTIRE callback url from the browser address bar\n" +
-            "(office-raccoon://auth/callback?code=…), then press Enter:\n> ",
-        ),
-        remaining,
-        "waiting for pasted callback",
-      );
-      if (line === null) {
-        throw new Error("stdin closed before a callback url was provided; run raccoon login again");
-      }
-      const trimmed = line.trim();
-      if (trimmed) return trimmed;
-      process.stderr.write(
-        "(empty input) Nothing was pasted. Finish the login in the browser first; the address bar will\n" +
-          "show `office-raccoon://auth/callback?code=…` — copy that whole line and paste it here.\n",
-      );
-    }
+  // Web 控制台（pasteCode 轮询）与终端（stdin）双通道竞争，任一先到先用。
+  const tasks: Array<Promise<string>> = [];
+  const timeoutError = (): Error =>
+    new Error(
+      "waiting for pasted callback timed out; run raccoon login again, or paste the callback in the web console",
+    );
+  if (typeof options.pasteCode === "function") {
+    const paste = options.pasteCode;
+    tasks.push(
+      (async (): Promise<string> => {
+        for (;;) {
+          if (Date.now() >= deadlineFor(timeoutMs)) throw timeoutError();
+          const line = paste();
+          const trimmed = typeof line === "string" ? line.trim() : "";
+          if (trimmed) return trimmed;
+          await sleep(400);
+        }
+      })(),
+    );
   }
-  throw new Error(
-    "no callback provided and stdin is not interactive; run login in a terminal or set RACCOON_LOGIN_CALLBACK",
-  );
+  if (process.stdin.isTTY || !process.stdin.readableEnded) {
+    // ⚠ 空输入**重问**而不是报错：用户常见动作是「回车看看会发生什么」（真机踩过）。
+    // 提示文案压成单行：源码里不出现换行转义（校验器与编辑器都更稳）。
+    tasks.push(
+      (async (): Promise<string> => {
+        for (;;) {
+          const remaining = deadlineFor(timeoutMs) - Date.now();
+          if (remaining <= 0) throw timeoutError();
+          const line = await withTimeout(
+            readLineFromStdin(
+              "Paste the ENTIRE callback url from the browser address bar (office-raccoon://auth/callback?code=…), then press Enter: ",
+            ),
+            remaining,
+            "waiting for pasted callback",
+          );
+          if (line === null) {
+            throw new Error("stdin closed before a callback url was provided; run raccoon login again");
+          }
+          const trimmed = line.trim();
+          if (trimmed) return trimmed;
+          process.stderr.write(
+            "(empty input) Nothing was pasted. Finish the login in the browser first; the address bar will show `office-raccoon://auth/callback?code=…` — copy that whole line and paste it here. ",
+          );
+        }
+      })(),
+    );
+  }
+  if (tasks.length === 0) {
+    throw new Error(
+      "no callback provided and stdin is not interactive; run login in a terminal, set RACCOON_LOGIN_CALLBACK, or paste the callback in the web console",
+    );
+  }
+  return await Promise.race(tasks);
 }
+
+/** 回调等待的绝对截止时刻。 */
+function deadlineFor(timeoutMs: number): number {
+  return Date.now() + timeoutMs;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * 渠道特有登录指引（单行，分号分隔；CLI 与 Web 提示条共用同一句）。
+ */
+const RACCOON_LOGIN_GUIDE =
+  "Raccoon does NOT continue automatically: 1) open the authorization URL in your browser and log in with WeChat / SMS / password; 2) after login the browser jumps to an `office-raccoon://auth/callback?code=…` URL (or an error page — that is expected, the protocol is not registered); 3) copy that ENTIRE url and paste it back (terminal prompt or the web console callback box).";
 
 /**
  * 网页登录：授权页 → 用户登录 → 回收回调 URL → 授权码换凭证。
  *
  * 回调回收方式见 `resolveCallback`（本插件注册不了 `office-raccoon://` 自定义协议，
- * 所以由用户把地址栏里的整条 URL 粘贴回来 —— 与参考实现 agent2api 的 Docker 形态一致）。
+ * 由用户把地址栏里的整条 URL 粘贴回来 —— 终端提示或 Web 控制台的「回调链接」框）。
  */
 export async function login(baseUrlOverride?: string, options: LoginOptions = {}): Promise<Credentials> {
   const { onUrl, onStatus } = options;
@@ -451,21 +496,10 @@ export async function login(baseUrlOverride?: string, options: LoginOptions = {}
 
   const state = newLoginState();
   const url = authorizeUrl(state, baseUrlOverride);
-  // ⚠ onUrl 里带上**渠道特有**指引：共享层的 onUrl 文案写的是「授权后自动继续」，
-  //   那对能轮询的渠道成立，对 raccoon 不成立 —— 它要求用户把回调 URL 粘贴回来。
-  //   不覆盖这句，用户会等一个永远不会发生的「自动继续」（真机踩过）。
-  onUrl?.(
-    `${url}\n` +
-      "  ── Raccoon-specific: this channel does NOT continue automatically. ──\n" +
-      "  1) Open the URL above in your browser and log in with WeChat / SMS / password.\n" +
-      "  2) After login the browser jumps to an `office-raccoon://auth/callback?code=…` URL\n" +
-      "     (or shows an error page — that is EXPECTED, the protocol is not registered).\n" +
-      "  3) Copy that ENTIRE url from the address bar and paste it back into this terminal,\n" +
-      "     then press Enter.",
-  );
-  onStatus?.(
-    "Waiting for the pasted callback url (office-raccoon://auth/callback?code=…); press Enter after pasting",
-  );
+  // ⚠ onUrl 只发**纯 URL**：Web 快照把 auth_url 渲染成可点链接，混入指引文本会让链接
+  // 打不开；渠道特有指引走 onStatus 的 message（CLI 与 Web 共用 RACCOON_LOGIN_GUIDE）。
+  onUrl?.(url);
+  onStatus?.(RACCOON_LOGIN_GUIDE);
 
   const raw = await resolveCallback(options, timeoutMs);
   const parsed = parseLoginCallback(raw, state);

@@ -76,6 +76,12 @@ docs/                         契约与规范（唯一的仓库级文档层）
    - 跑 `npm test`：`scripts/verify-docs.mjs` 拦住落错位置的 md，`scripts/verify-storage.mjs` 校验落点规范。
 5. 完成后不再有用的过程记录（RUN-LOG、已结项计划、已删渠道存档）**随任务结束删除**，
    需要时从 git 历史取 —— 不设 `archive/` 目录，避免死文档堆积。
+6. **第三方参考实现（`reference/`）约定**：
+   - 逆向学习用的开源反代项目 clone 到 `packages/core/channels/<cid>/reference/<owner>_<repo>/`
+     （`--depth 1`），由渠道级 `.gitignore` 的 `reference/` 条目忽略，**不入库**；
+   - 从参考实现学到的**结论**写进该渠道自己的 `docs/PROTOCOL.md`（每条标注来源仓库与文件）；
+   - 渠道 `docs/README.md` 必须维护「参考实现」一节，列出全部已 clone 仓库的 **GitHub 链接**
+     与一句话用途 —— 克隆或删除参考仓库时同步更新本节。
 
 ## 代码约定
 
@@ -85,9 +91,10 @@ docs/                         契约与规范（唯一的仓库级文档层）
 3. **落点由共享层按 `cid` 推导**：渠道不许自己拼路径（见 `docs/STORAGE-CONVENTION.md`）。
 4. 调用渠道模块前必须包 `runInChannel(cid, …)`（`AsyncLocalStorage` 上下文；
    否则渠道内部的 `paths.*` 在多渠道路由下不知道为谁解析）。
-5. 对外模型 id 是**动态模型池**（各渠道 `catalog.exposedIds()` 归一化去重），恒小写、不带渠道前缀；
-   客户端请求名不剥路径段（`<cid>/<模型>` 旧形态一律 400）。
-   模型收集见 `pool-targets.ts`，匹配与排序见 `docs/POOL-ARCHITECTURE.md`。
+5. 对外模型 id 是**动态模型池**，形态为 `<cid>/<规范模型名>`（如 `loomy/kimi-k2.6`）：
+   渠道由请求方通过前缀显式指定；模型段按各渠道 `catalog.exposedIds()` 归一化（恒小写），
+   渠道内去重、**跨渠道不合并**（`catpaw/glm-5.3-flash` 与 `raccoon/glm-5.3-flash` 是两个 id）。
+   裸模型名（无前缀）一律 400。模型收集与匹配见 `pool-targets.ts`，规则见 `docs/POOL-ARCHITECTURE.md`。
 6. **共享层内部单向分层**（`scripts/verify-layering.mjs` 在 `npm test` 里强制）：
    `runtime(0) < pool(1) / auth(1) < http(2) < app(3)` —— **只能 import 层级 ≤ 自己的目录**，
    向上依赖一律失败。`index.ts` 是桶导出，不受限。
@@ -99,6 +106,14 @@ docs/                         契约与规范（唯一的仓库级文档层）
      且条目失效时（不再向上）脚本会报错要求删除。
 7. **测试只做端到端真实测试**：跑真实网关、真实上游、真实登录链路，以「用户视角能跑通」为准；
    **不写单元测试、不写集成测试**，也不再要求测试「完全离线」。
+8. **测试红线：禁止使用用户真实凭证**（违反 = 拿用户真实账号去撞上游风控，先警告后封号）：
+   - 任何测试（`npm test`、渠道 selftest、仓库级测试）**不得读取或依赖** `~/.modelmux/` 下的
+     真实数据（凭据、账号池、账本、目录缓存）：存储根一律用 `MODELMUX_HOME` 指向临时目录
+     （`paths.ts` 对该变量惰性解析，测试进程永远打不开真实主目录）；
+   - 测试代码与 fixture **禁止**对真实上游发任何请求（含对话、签到、账单、登录轮询），
+     上游一律用本机假服务；真实上游验证只能走「真机手动验证」（见下文）；
+   - 真实 uid / label / token 等身份信息**不得**出现在测试、fixture、示例或文档中，
+     一律用明显虚构的占位值。
 
 ## 命令
 

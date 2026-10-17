@@ -11,10 +11,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { type Channel, type Credential, type StreamTranslator } from "../runtime/channel.js";
+import { hasChannel } from "../runtime/channel.js";
 import { runInChannel } from "../runtime/channel-context.js";
-import { activateAccount, markActiveHealth, pickAccount, purgeCredentials, readIndex } from "../runtime/account-pool.js";
+import { activateAccount, markActiveHealth, pickAccount, readIndex } from "../runtime/account-pool.js";
 import { resolvePoolModel } from "../pool/model-pool.js";
-import { asPoolModel, poolCandidates, POOL_MODELS, POOL_MODEL_META, getPoolModelMeta } from "../pool/pool-targets.js";
+import { asPoolModel, parsePoolModel, poolCandidates, POOL_MODELS, POOL_MODEL_META, getPoolModelMeta } from "../pool/pool-targets.js";
 import { isCooling, maybeRefreshBilling, noteFailure, noteSuccess, scoreOf } from "../pool/pool-usage.js";
 import * as sseStream from "./sse-stream.js";
 import type { GatewayOptions } from "./gateway.js";
@@ -146,7 +147,8 @@ interface UpstreamCall {
 
 async function openStream(channel: Channel, c: Credential, body: Buffer): Promise<UpstreamCall> {
   const { upstream } = channel;
-  const headers = upstream.buildHeaders(c);
+  // 渠道声明了对话专用头族（如 workbuddyai 的官方身分头）就用它，否则回退基础头
+  const headers = upstream.buildChatHeaders ? upstream.buildChatHeaders(c) : upstream.buildHeaders(c);
   if (!Object.keys(headers).some((k) => k.toLowerCase() === "accept")) {
     headers["Accept"] = "text/event-stream";
   }
@@ -179,7 +181,16 @@ async function openStream(channel: Channel, c: Credential, body: Buffer): Promis
   }
 
   if (resp.status === 401 || resp.status === 403) {
-    return { ok: false, status: resp.status, headers: resp.headers, body: null };
+    // 鉴权类失败也**读响应体**：11140（账号被限制）同样是 403，不读 body
+    // 就永远分不清「令牌过期」和「账号被封」（排查 workbuddy 时实际踩过）
+    const snippet = await resp.text().catch(() => "");
+    return {
+      ok: false,
+      status: resp.status,
+      headers: resp.headers,
+      body: null,
+      error: new Error(`upstream returned HTTP ${resp.status}: ${snippet.slice(0, 2048)}`),
+    };
   }
   if (resp.status !== 200) {
     const snippet = await resp.text().catch(() => "");
@@ -453,8 +464,8 @@ async function callUpstream(
     }
     if (call.ok || (call.status !== 401 && call.status !== 403)) return { kind: "ok", call };
 
-    // 401/403：先刷新当前账号的 token
-    logger("token rejected, trying refresh...");
+    // 401/403：先刷新当前账号的 token（响应体一并留痕，见 openStream）
+    logger(`token rejected, trying refresh...${call.error ? ` (${call.error.message})` : ""}`);
     let refreshed: Credential | null = null;
     try {
       refreshed = await inChannel(channel, () => cred.refresh(credential));
@@ -472,16 +483,13 @@ async function callUpstream(
     if (activeKey) tried.push(activeKey);
     const next = pickAccount(cid, tried);
     if (!next) {
-      // 所有账号都被拒且无后备 → 凭据已死。**自动登出**（清 credentials.json + 池），
-      // 否则死凭据会让渠道每次请求都白试一轮鉴权、还「看起来已登录」。
-      // 清成未登录态后：池路由按凭据过滤跳过它（用户重新登录即恢复）。
-      // ⚠ 只在「池内已无可试账号」这条确定性路径做；撞 MAX_ACCOUNT_ATTEMPTS
-      // 上限退出时池里可能还有未试账号，不能误清。
-      const purged = purgeCredentials(cid);
+      // 所有账号都被拒且无后备。**凭证一律保留**（2026-10-18 起）：
+      // 上游的「拒绝」可能是 11140 账号限制、临时风控或令牌轮换，删掉凭证等于
+      // 把可恢复状态变成不可恢复，且用户只想重试时被迫重新授权。
+      // 健康度已标 unauthorized，池路由照常按凭据过滤；是否重新登录由用户决定。
       logger(
-        `auto logout (${cid}): token rejected by upstream and refresh unusable; ` +
-          `removed ${purged.accounts} pool account(s)${purged.credential ? " + stored credential" : ""}; ` +
-          `run \`mx login ${cid}\` to re-authorize`,
+        `auth failed (${cid}): token rejected by upstream and refresh unusable; ` +
+          `credentials kept, run \`mx login ${cid}\` to re-authorize if needed`,
       );
       return {
         kind: "auth_exhausted",
@@ -538,9 +546,8 @@ export async function handleChat(
     return;
   }
 
-  // 公共模型池：对外只认池内模型，请求落到哪家渠道由账本决定
-  // （匹配见 pool-targets.ts，排序见 pool-usage.ts）。
-  // 全模型池：不再限制只认 2 个 flash，而是动态匹配全部渠道能提供的模型。
+  // 公共模型池：对外 id 是 `<cid>/<模型>` 形态（渠道由请求方显式指定，见 pool-targets.ts）；
+  // 渠道内部的账号池轮换与冷却账本照旧（pool-usage.ts）。
   maybeRefreshBilling(opts.logger); // 账单额度到期就在后台刷，不阻塞本次请求
 
   const target = asPoolModel(model);
@@ -549,26 +556,38 @@ export async function handleChat(
       res,
       400,
       "unknown_model",
-      `unknown model ${model}; <cid>/<模型> 形态已失效，请用归一化后的模型名`,
+      `unknown model ${model}; 请用 <渠道>/<模型> 形态（模型清单见 GET /v1/models）`,
     );
     return;
   }
-  // 全模型池：池是**动态**的（取决于渠道登录与目录就绪状态），因此「候选为空」
-  // 本质是可用性问题（模型可能在池里，只是当前没有渠道能供给），统一按 503 回报；
-  // 400 只留给格式错误（带 `<cid>/` 前缀的旧形态，见上面的 asPoolModel 判定）。
+  // 拆出渠道段与模型段：`asPoolModel` 已归一过，parsePoolModel 这里必成功，仅作类型收窄
+  const targetParts = parsePoolModel(target);
+  if (!targetParts) return;
+  // 渠道段要有对应注册渠道（客户端写错渠道名是**请求问题**，400，与未登录的 503 分开）
+  if (!hasChannel(targetParts.cid)) {
+    writeJsonError(
+      res,
+      400,
+      "unknown_model",
+      `unknown channel ${targetParts.cid}; 可用渠道见 GET /v1/models 各 id 的前缀`,
+    );
+    return;
+  }
+  // 渠道已指定：候选至多一条。目录里没有这个模型 → 400（渠道没货，换渠道是客户端的决定）；
+  // 503 只留给「渠道已登录但凭据失效」的可用性问题（见下文 authed 为空的分支）。
   const candidates = poolCandidates(target);
   if (candidates.length === 0) {
     writeJsonError(
       res,
-      503,
-      "not_authenticated",
-      `no channel provides ${target} (channel not logged in or catalog not ready)`,
+      400,
+      "unknown_model",
+      `channel ${targetParts.cid} has no model ${targetParts.model} (catalog may not be ready; see GET /v1/models)`,
     );
     return;
   }
 
   // 选候选：**未登录的渠道直接退出路由**（凭据读不出 ⇒ 不可能成功，只会白耗一次
-  // 尝试预算；自动登出清掉死凭据后的渠道即走这条）；其余按账本排序
+  // 尝试预算；未登录（没有凭据）的渠道即走这条）；其余按账本排序
   // （账单已用量降序），冷却中的渠道硬排除（失败后暂不可用，下一次请求不走它），
   // 最多试 maxPoolAttempts() 个。全池都在冷却时回退到完整候选——冷却只是短暂
   // 状态，服务不能因此不可用。
@@ -843,11 +862,8 @@ async function relayUpstream(
 /**
  * 公共模型池：`/v1/models` **动态返回全部渠道能提供的模型**。
  *
- * 客户端看到归一化后的模型 id（如 `deepseek-v4.1-flash`、`glm-5.3-flash`、`qwen3-coder` 等），
- * **不带渠道前缀** —— 请求落到哪家由网关按账本决定，客户端不参与也无法指定。
- * 某个模型暂时没有可用渠道时照样列出（模型可见性与登录状态解耦），请求时才报 503。
- *
- * 全模型池：不再限制只暴露 2 个 flash，而是动态收集全部渠道 `exposedIds()` 归一化后的去重结果。
+ * 客户端看到 `<cid>/<模型>` 形态的池 id（如 `loomy/kimi-k2.6`），
+ * 请求时用渠道前缀显式选池子；渲染逻辑在 `gateway.ts` 的 handleModels。
  */
 
 export { writeJson, writeJsonError };

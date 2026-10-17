@@ -15,14 +15,86 @@
  * `authentication.attributes.prefixPath` 为 `/plugin`，但
  * `POST /plugin/v2/chat/completions` 返回 **404**，而
  * `POST /v2/chat/completions` 返回 **200** —— 故刻意不使用该前缀。
+ *
+ * 另外：上游按**整组身分头**判定请求是否来自官方桌面客户端，缺任一员整条
+ * 会话被 400 `code=11128` 拒绝 —— `buildChatHeaders()` 按官方 5.8.4 抓包补齐
+ * 头族（规格见同包 `docs/PROTOCOL.md` §1-§3；网关经 `Channel.buildChatHeaders`
+ * 可选钩子取用）。
  */
 
 import { readFileSync } from "node:fs";
 import { writeFile, rename, chmod } from "node:fs/promises";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { upstreamPath, ensureDir } from "@modelmux/gateway";
 
 export const DEFAULT_BASE_URL = "https://www.workbuddy.ai";
+
+/** 桌面端 UA 与版本随 realm 分版（官方 5.8.4 / 5.5.6 抓包；见 docs/PROTOCOL.md §2）。 */
+const DESKTOP_UA_INTL = "WorkBuddy/5.8.4 workbuddy-ai/5.8.4 CLI/2.161.0";
+const DESKTOP_UA_CN = "WorkBuddy/5.5.6 WorkBuddy/5.5.6 CLI/2.137.1";
+
+/**
+ * realm 表：chat 上游 / X-Domain / 身分头取值随国际版 / 国内版切换。
+ *
+ * 依据 `wb_identity.py` 的 endpoint_for：cn 桌面端 chat 上游是 copilot.tencent.com，
+ * www.codebuddy.cn 只做计费；intl 两者同为 www.workbuddy.ai。
+ */
+const REALM_INTL = {
+  chatUpstream: "https://www.workbuddy.ai",
+  domain: "www.workbuddy.ai",
+  origin: "https://www.workbuddy.ai",
+  ua: DESKTOP_UA_INTL,
+  ideVersion: "5.8.4",
+  acceptLanguage: "en-US",
+} as const;
+const REALM_CN = {
+  chatUpstream: "https://copilot.tencent.com",
+  domain: "copilot.tencent.com",
+  origin: "https://www.codebuddy.cn",
+  ua: DESKTOP_UA_CN,
+  ideVersion: "5.5.6",
+  acceptLanguage: "zh-CN",
+} as const;
+
+/** 凭据 domain → realm（取不到就按国际版；见 docs/PROTOCOL.md §1）。 */
+function realmOf(domain: string): typeof REALM_INTL | typeof REALM_CN {
+  const d = domain.trim().toLowerCase();
+  return d === "copilot.tencent.com" || d.endsWith("codebuddy.cn") ? REALM_CN : REALM_INTL;
+}
+
+/** 每轮新生的会话 id（带连字符 UUID；上游不按它存历史）。 */
+function newConversationId(): string {
+  return randomUUID();
+}
+
+/**
+ * 每条消息新生的请求 id（UUIDv7 形态：48 位毫秒时间戳 + ver7 + 变体位，
+ * 32 位无连字符 hex —— 与官方客户端一致）。
+ */
+function newMessageId(): string {
+  const bytes = randomBytes(16);
+  const ts = BigInt(Date.now());
+  for (let i = 0; i < 6; i += 1) {
+    bytes[i] = Number((ts >> BigInt(40 - 8 * i)) & 0xffn);
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  return bytes.toString("hex");
+}
+
+/** W3C traceparent + b3 链路族（X-B3-ParentSpanId 需要真实父子关系，不伪造）。 */
+function traceHeaders(): Record<string, string> {
+  const trace = randomBytes(16).toString("hex");
+  const span = randomBytes(8).toString("hex");
+  return {
+    traceparent: `00-${trace}-${span}-01`,
+    b3: `${trace}-${span}-1`,
+    "X-B3-TraceId": trace,
+    "X-B3-SpanId": span,
+    "X-B3-Sampled": "1",
+  };
+}
 
 /** 展示名（状态页与错误文案用）。 */
 export const DISPLAY_NAME = "WorkBuddyAI";
@@ -107,6 +179,9 @@ export function loadConfig(): [Config, boolean] {
     tokenType: parsed.tokenType ?? "bearerToken",
     usernameHeader: parsed.usernameHeader ?? "X-User-Id",
   };
+  // 历史遗留：旧版默认 baseUrl 曾是 www.codebuddy.ai，实测 DNS 沉洞（解析到 0.0.0.1），
+  // 国际版请求指向它必然超时 —— 读出即归一到国际版 chat 上游（下次 saveConfig 落盘纠正）
+  if (hostOf(cfg.baseUrl) === "www.codebuddy.ai") cfg.baseUrl = REALM_INTL.chatUpstream;
   return [cfg, true];
 }
 
@@ -157,10 +232,12 @@ export function hostOf(baseUrl: string): string {
 export function buildHeaders(credential: AuthLike, cfg?: Config): Record<string, string> {
   const resolved = cfg ?? loadConfig()[0];
   const domain = credential.domain || hostOf(resolved.baseUrl);
+  const realm = realmOf(domain);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "CodeBuddyCode/1.0",
-    "X-Domain": domain,
+    // 官方桌面端 UA：上游按 UA 归因「使用端」（账单品牌）并参与渠道校验
+    "User-Agent": realm.ua,
+    "X-Domain": realm.domain,
   };
   const headerName = resolved.tokenHeader || "Authorization";
   headers[headerName] = `Bearer ${credential.accessToken}`;
@@ -168,6 +245,47 @@ export function buildHeaders(credential: AuthLike, cfg?: Config): Record<string,
     headers[resolved.usernameHeader] = credential.uid;
   }
   return headers;
+}
+
+/**
+ * 对话请求的官方身分头族：在基础头之上补齐 X-Agent-* / X-IDE-* / X-Product /
+ * 会话与请求 ID / 链路族（整组缺任一员都会被 11128 拒绝，见 docs/PROTOCOL.md §2/§4）。
+ *
+ * 会话与请求 ID 是**每轮新生**的（上游不按会话 id 存历史，不需要跨轮一致）；
+ * `buildChatBody` 仍负责请求体的三条硬约束（首条 system / 强制流式 / 指纹改写）。
+ */
+export function buildChatHeaders(credential: AuthLike, cfg?: Config): Record<string, string> {
+  const resolved = cfg ?? loadConfig()[0];
+  const domain = credential.domain || hostOf(resolved.baseUrl);
+  const realm = realmOf(domain);
+  const convReqId = newMessageId();
+  const messageId = newMessageId();
+  return {
+    ...buildHeaders(credential, cfg),
+    // 浏览器语义头：渠道校验要求请求「像从官方前端发出」—— Origin/Referer/
+    // X-CodeBuddy-Request 缺任一都会 11128（参考 hub 的 account.headers("chat")，
+    // 计费头因带这组而通过、对话头缺它被拒，实机对照结论）
+    "Accept": "application/json, text/plain, */*",
+    "X-Requested-With": "XMLHttpRequest",
+    "Origin": realm.origin,
+    "Referer": `${realm.origin}/`,
+    "X-CodeBuddy-Request": "1",
+    "Accept-Language": realm.acceptLanguage,
+    "X-Agent-Intent": "craft",
+    "X-Agent-Purpose": "conversation",
+    "X-Agent-Type": "main",
+    "X-IDE-Name": "WorkBuddy",
+    "X-IDE-Type": "WorkBuddy",
+    "X-IDE-Version": realm.ideVersion,
+    "X-Private-Data": "true",
+    "X-Product": "SaaS",
+    "X-Conversation-ID": newConversationId(),
+    "X-Conversation-Request-ID": convReqId,
+    "X-Root-Request-ID": convReqId,
+    "X-Conversation-Message-ID": messageId,
+    "X-Request-ID": messageId,
+    ...traceHeaders(),
+  };
 }
 
 /** 兼容旧调用形态：把鉴权头就地合并进 `headers`。 */

@@ -214,25 +214,91 @@ export async function fetchCredits(options: { refreshOn401?: boolean } = {}): Pr
   };
 }
 
+// ── 每日签到（billing/meter 域）───────────────────────────────────────────────
+
+/** 每日签到端点（国内版现状：`/v2` 前缀；POST 空 body，参考实现 checkin_activity.go 同族）。 */
+const DAILY_CHECKIN_PATH = "/v2/billing/meter/daily-checkin";
+
+/** 一次签到的结果。 */
+export interface CheckinResult {
+  checkedIn: boolean;
+  /** 上游幂等拒绝（今天已签）时为 true。 */
+  already: boolean;
+  message: string;
+}
+
+/**
+ * 执行每日签到（`POST /v2/billing/meter/daily-checkin`，body `{}`）。
+ *
+ * 参考实现实测（2026-09-28，CN 与 global 同形）：已签到时上游业务码非 0，
+ * 按「幂等成功」处理而不是报错；其余业务码如实抛 CreditsError。
+ */
+export async function dailyCheckin(): Promise<CheckinResult> {
+  const c = cred.load(); // 未登录 → NotLoggedInError
+
+  let cfg: upstream.Config;
+  try {
+    [cfg] = upstream.loadConfig();
+  } catch {
+    cfg = upstream.defaultConfig();
+  }
+  if (c.domain && c.domain !== upstream.hostOf(cfg.baseUrl)) {
+    cfg.baseUrl = `https://${c.domain}`;
+  }
+  const base = cfg.baseUrl.replace(/\/+$/, "");
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${base}${DAILY_CHECKIN_PATH}`, {
+      method: "POST",
+      body: "{}",
+      headers: headers(c, base),
+      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new CreditsError(`daily checkin request failed: ${String(err)}`);
+  }
+  if (resp.status === 401 || resp.status === 403) {
+    throw new cred.NotLoggedInError("daily checkin rejected the access token (401/403)");
+  }
+  if (resp.status !== 200) throw new CreditsError(`daily checkin returned HTTP ${resp.status}`);
+
+  let env: Record<string, unknown>;
+  try {
+    env = (await resp.json()) as Record<string, unknown>;
+  } catch (err) {
+    throw new CreditsError(`daily checkin response is not valid JSON: ${String(err)}`);
+  }
+  const code = env["code"];
+  const msg = String(env["msg"] ?? "");
+  if (code === 0) {
+    return { checkedIn: true, already: false, message: "签到成功" };
+  }
+  if (/already|已签|repeat|duplicate/i.test(msg)) {
+    return { checkedIn: true, already: true, message: msg || "今天已签到" };
+  }
+  throw new CreditsError(`daily checkin failed: code=${String(code)} msg=${msg}`);
+}
+
 // ── 签到 / 领取能力（共享层 CLI 的 `<cid> checkin` 用；契约要求**每个渠道都提供**）──────
 
 import type { SigninModule } from "@modelmux/gateway";
 /**
  * 签到 / 领取能力（`<cid> checkin`）。
  *
- * **WorkBuddy（国内版）没有签到端点** —— 额度按订阅周期发放（如 Free Plan 每月 100 credits），上游不提供「签到领积分」
- *
- * 按契约仍要提供这个能力（共享层对**所有**渠道一视同仁，不做能力探测），
- * 所以这里不假装有端点、也不当成错误：`status()` 只说"没有可领的"，
- * `claim()` 原样回同一句说明。用户看到的就是这句。
+ * 早期「国内版没有签到端点」的结论**有误**（参考实现 HanawaBanana 实测
+ * `/v2/billing/meter/daily-checkin`，2026-09-28 CN 与 global 同形）——
+ * `claim()` 真实执行签到；上游幂等拒绝（今天已签）按成功回报。
  */
-const NO_ENDPOINT = "WorkBuddy（国内版）没有签到端点 —— 额度按订阅周期发放（如 Free Plan 每月 100 credits），上游不提供「签到领积分」";
-
 export const signin: SigninModule = {
   async status() {
-    return { claimable: false, summary: NO_ENDPOINT };
+    return {
+      claimable: true,
+      summary: "存在每日签到端点（/v2/billing/meter/daily-checkin，POST 空 body）",
+    };
   },
   async claim() {
-    return { ok: true, summary: NO_ENDPOINT };
+    const r = await dailyCheckin();
+    return { ok: true, summary: r.message };
   },
 };

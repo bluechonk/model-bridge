@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
+import { after, afterEach, before, describe, it } from "node:test";
 
 // 必须在 import 被测模块之前设置（paths 每次调用都重新解析存储根）
 const HOME = mkdtempSync(join(tmpdir(), "wb-cn-selftest-"));
@@ -26,6 +26,7 @@ process.env["MODELMUX_HOME"] = HOME;
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
 const { paths, sseStream: sse, gateway } = await import("@modelmux/gateway");
 const channelModule = await import("../dist/channel.js");
+const billing = await import("../dist/billing.js");
 const catalog = await import("../dist/catalog.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");
@@ -217,8 +218,29 @@ describe("4. 上游配置", () => {
     assert.equal(headers["Authorization"], "Bearer tok");
     assert.equal(headers["X-User-Id"], "uid-1");
     assert.equal(headers["X-Domain"], "www.codebuddy.ai");
-    // 上游按 UA 归因「使用端」，缺品牌字样会让账单显示为 `-`
-    assert.equal(headers["User-Agent"], "CodeBuddyCode/1.0");
+    // 上游按 UA 归因「使用端」并参与渠道校验 —— 用官方桌面端 UA（5.5.6）
+    assert.equal(headers["User-Agent"], "WorkBuddy/5.5.6 WorkBuddy/5.5.6 CLI/2.137.1");
+  });
+
+  it("buildChatHeaders 补齐身分头族（X-Conversation-ID 恒发、ID 形态合规）", () => {
+    const cred = { accessToken: "tok", uid: "uid-1", domain: "www.codebuddy.ai" };
+    const a = upstream.buildChatHeaders(cred);
+    const b = upstream.buildChatHeaders(cred);
+    for (const name of [
+      "X-Agent-Intent", "X-Agent-Purpose", "X-Agent-Type",
+      "X-IDE-Name", "X-IDE-Type", "X-IDE-Version",
+      "X-Conversation-ID", "X-Conversation-Request-ID", "X-Root-Request-ID",
+      "X-Conversation-Message-ID", "X-Request-ID",
+      "traceparent", "b3", "X-B3-TraceId", "X-B3-SpanId", "X-B3-Sampled",
+    ]) {
+      assert.ok(a[name], `缺身分头 ${name}`);
+    }
+    assert.equal(a["X-IDE-Version"], "5.5.6");
+    assert.equal(a["X-Conversation-Request-ID"], a["X-Root-Request-ID"], "两者同值");
+    assert.equal(a["X-Conversation-Message-ID"], a["X-Request-ID"], "两者同值");
+    assert.match(a["X-Conversation-ID"] as string, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.match(a["X-Request-ID"] as string, /^[0-9a-f]{32}$/);
+    assert.notEqual(a["X-Conversation-ID"], b["X-Conversation-ID"], "ID 每轮新生");
   });
 
   it("resolveConfig 取 endpoint 与鉴权属性", () => {
@@ -294,7 +316,7 @@ describe("6. 端到端网关", () => {
     const resp = await fetch(`http://${gw.addr}/v1/models`);
     assert.equal(resp.status, 200);
     const payload = (await resp.json()) as { data: Array<{ id: string }> };
-    assert.ok(payload.data.some((m) => m.id === "deepseek-v4.1-flash"));
+    assert.ok(payload.data.some((m) => m.id === "workbuddy/deepseek-v4.1-flash"));
   });
 
   it("/health 报告 ok 与登录状态", async () => {
@@ -306,32 +328,36 @@ describe("6. 端到端网关", () => {
 
   it("流式对话：正常出字", async () => {
     const text = await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-v4.1-flash",
+      model: "workbuddy/deepseek-v4.1-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
     assert.equal(text, "网关通了");
   });
 
-  it("旧短名不再有候选渠道（网关只认渠道目录里的规范名）", async () => {
-    // 渠道自己的 catalog 仍能解析旧短名，但**网关入口**只接受池内 id —— 刻意的破坏性更新。
-    // 全模型池：deepseek-flash 归一化后是 deepseek-flash，不在池内 → 400
-    const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "deepseek-flash",
-        messages: [{ role: "user", content: "hi" }],
-        stream: true,
-      }),
-    });
-    assert.equal(resp.status, 503);
+  it("裸模型名与渠道目录外的模型都判 400（渠道由请求方前缀指定）", async () => {
+    const post = (model: string) =>
+      fetch(`http://${gw.addr}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "hi" }], stream: true }),
+      });
+    // 渠道自己的 catalog 仍能解析旧短名，但**网关入口**只接受 `<cid>/<模型>` —— 裸名是格式错误。
+    const bare = await post("deepseek-flash");
+    assert.equal(bare.status, 400);
+    // 带对了前缀、但渠道目录里没有这个模型：同样 400（渠道没货）
+    const noModel = await post("workbuddy/deepseek-flash");
+    assert.equal(noModel.status, 400);
+    for (const resp of [bare, noModel]) {
+      const payload = (await resp.json()) as { error: { code: string } };
+      assert.equal(payload.error.code, "unknown_model");
+    }
   });
 
   it("上游约束：注入 system + 强制 stream + 模型名映射", async () => {
     fake.captured.length = 0;
     await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-v4.1-flash",
+      model: "workbuddy/deepseek-v4.1-flash",
       messages: [{ role: "user", content: "hi" }],
       stream: true,
     });
@@ -345,7 +371,7 @@ describe("6. 端到端网关", () => {
   it("上游约束：指纹改写为等价表述", async () => {
     fake.captured.length = 0;
     await readSseFrames(`http://${gw.addr}/v1/chat/completions`, {
-      model: "deepseek-v4.1-flash",
+      model: "workbuddy/deepseek-v4.1-flash",
       messages: [
         { role: "system", content: "Main branch (you will usually use this for PRs)" },
         { role: "user", content: "hi" },
@@ -366,7 +392,7 @@ describe("6. 端到端网关", () => {
     const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
       method: "POST",
       body: JSON.stringify({
-        model: "deepseek-v4.1-flash",
+        model: "workbuddy/deepseek-v4.1-flash",
         messages: [{ role: "user", content: "hi" }],
       }),
       headers: { "Content-Type": "application/json" },
@@ -426,7 +452,7 @@ describe("7. 上游错误处理", () => {
       const resp = await fetch(`http://${gw.addr}/v1/chat/completions`, {
         method: "POST",
         body: JSON.stringify({
-          model: "deepseek-v4.1-flash",
+          model: "workbuddy/deepseek-v4.1-flash",
           messages: [{ role: "user", content: "hi" }],
           stream: true,
         }),
@@ -444,5 +470,52 @@ describe("7. 上游错误处理", () => {
       await new Promise<void>((r) => failing.server.close(() => r()));
       await upstream.saveConfig(saved[0]);
     }
+  });
+});
+
+// ── 8. 每日签到（billing/meter 域，离线 mock fetch） ─────────────────────────
+
+describe("8. 每日签到", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  function writeCredential(): void {
+    const dir = join(HOME, "workbuddy");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "credentials.json"),
+      JSON.stringify({ accessToken: "tok-w", uid: "u-2", domain: "www.codebuddy.ai" }),
+    );
+  }
+
+  it("daily-checkin POST 空 body；业务码 0 = 签到成功", async () => {
+    writeCredential();
+    let captured: { url: string; method: string; body: string } | null = null;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      captured = { url: String(input), method: String(init?.method), body: String(init?.body ?? "") };
+      return new Response(JSON.stringify({ code: 0, msg: "success" }), { status: 200 });
+    }) as typeof fetch;
+    const r = await billing.dailyCheckin();
+    assert.match(captured!.url, /\/v2\/billing\/meter\/daily-checkin$/);
+    assert.equal(captured!.method, "POST");
+    assert.deepEqual(JSON.parse(captured!.body), {});
+    assert.deepEqual(r, { checkedIn: true, already: false, message: "签到成功" });
+  });
+
+  it("上游幂等拒绝（今天已签）按成功回报", async () => {
+    writeCredential();
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ code: 50001, msg: "already checked in today" }), { status: 200 })) as typeof fetch;
+    const r = await billing.dailyCheckin();
+    assert.deepEqual(r, { checkedIn: true, already: true, message: "already checked in today" });
+  });
+
+  it("其他业务码如实抛 CreditsError", async () => {
+    writeCredential();
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ code: 40001, msg: "activity ended" }), { status: 200 })) as typeof fetch;
+    await assert.rejects(() => billing.dailyCheckin(), /activity ended/);
   });
 });

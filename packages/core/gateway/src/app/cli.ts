@@ -37,7 +37,7 @@ export function usage(): string {
   stop                      停止守护式网关（读 PID 文件杀进程树，不碰第三方进程）
   restart                   重启守护式网关（stop + start）
   serve                     前台运行网关（内部命令，供调试）
-  web                       启动 Web 管理看板（默认 http://127.0.0.1:8788）
+  web                       打开 Web 控制台（http://127.0.0.1:4412/web/）
 
 模型池（全模型池：动态返回全部渠道能提供的模型，请求落到哪家渠道由网关按账单已用量决定）:
   model list                池视图：2 个模型 → 候选渠道 + 已用量 + 冷却/暂不可用

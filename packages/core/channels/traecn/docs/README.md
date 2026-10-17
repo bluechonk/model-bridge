@@ -23,6 +23,17 @@ node channels/traecn/dist/cli.js --help    # 单渠道 CLI（调试 / 回归）
 `http://127.0.0.1:8787/v1`（唯一端口，全部渠道从它后面供给池内模型）。
 单渠道独立运行（`node channels/traecn/dist/cli.js serve`）仅在调试该渠道时用。
 
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；结论进 [`PROTOCOL.md`](./PROTOCOL.md)。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [JeffHu0912/trae2api](https://github.com/JeffHu0912/trae2api) | 协议规格参照（`docs/work-wire-protocol-spec.md`、`docs/work-crypto-algorithm.md`） |
+| [autumnsentiment/Trae2api-cn](https://github.com/autumnsentiment/Trae2api-cn) | 国内版实现参照 |
+| [connectedGraph/trae2api-web](https://github.com/connectedGraph/trae2api-web) | Web 端协议参照（`docs/RESEARCH.md`） |
+| [A-23187/trae-api](https://github.com/A-23187/trae-api) | 最小实现样本 |
+
 ## 许可证
 
 MIT

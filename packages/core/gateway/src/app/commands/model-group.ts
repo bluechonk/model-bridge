@@ -9,7 +9,7 @@
 import { channels, getChannel, hasChannel, type Channel } from "../../runtime/channel.js";
 import { runInChannel } from "../../runtime/channel-context.js";
 import { catalogCacheFetchedAt } from "../../runtime/catalog-cache.js";
-import { asPoolModel, canonicalModelId, POOL_MODELS, poolCandidates } from "../../pool/pool-targets.js";
+import { canonicalModelId, POOL_MODELS, poolCandidates, poolModelId } from "../../pool/pool-targets.js";
 import { ledgerSnapshot, refreshBilling, scoreOf } from "../../pool/pool-usage.js";
 import { poolUsagePath } from "../../runtime/paths.js";
 import * as accountCli from "../account-cli.js";
@@ -104,10 +104,9 @@ function originNote(origin: CatalogOrigin): string {
 }
 
 /**
- * `models <cid>`：该渠道贡献了池内哪些模型。
+ * `models <cid>`：该渠道能提供哪些模型（对外 id 形态 `<cid>/<模型>`）。
  *
- * 对外 id 恒为**池 id**（`deepseek-v4.1-flash` 这种），客户端不指定渠道。
- * 渠道目录里没进池的条目只报数量（可能几十条，全列是噪音）。
+ * 渠道目录里不能对外暴露的条目只报数量（可能几十条，全列是噪音）。
  */
 
 export async function listLocalModels(
@@ -130,12 +129,10 @@ export async function listLocalModels(
       return [] as string[];
     }
   });
-  const contributed = POOL_MODELS.flatMap((model) => {
-    const hit = catalogIds.find((id) => canonicalModelId(id) === model);
-    return hit === undefined ? [] : [{ model, exposed_id: hit }];
-  });
-  const deduped = [...new Map(catalogIds.map((id) => [id.toLowerCase(), id])).values()];
-  const outside = deduped.filter((id) => asPoolModel(id) === null);
+  // 渠道内先按规范名去重：同一渠道的不同原始写法收敛为同一个对外 id
+  const contributed = [
+    ...new Map(catalogIds.map((id) => [canonicalModelId(id), id])).values(),
+  ].map((id) => ({ model: poolModelId(cid, id), exposed_id: id }));
 
   if (json) {
     console.log(
@@ -149,7 +146,7 @@ export async function listLocalModels(
             : {}),
           ...(origin.kind === "failed" ? { reason: origin.reason } : {}),
           pool_models: contributed,
-          out_of_pool_count: outside.length,
+          out_of_pool_count: 0,
         },
         null,
         2,
@@ -161,37 +158,21 @@ export async function listLocalModels(
   // 其余情形（刚拉取 / 拉取失败 / 内置表）用户需要知道自己在看哪份数据。
   if (origin.kind !== "cache") console.error(`${cid}: ${originNote(origin)}`);
   if (contributed.length === 0) {
-    console.log(`${cid}: 该渠道没有池内模型（池只有 ${POOL_MODELS.join(" / ")}）`);
+    console.log(`${cid}: 该渠道没有可对外暴露的模型`);
   } else {
-    console.log(`${cid} 贡献的池内模型：`);
+    console.log(`${cid} 对外的模型：「渠道/模型」形态，客户端用它指定渠道：`);
     for (const row of contributed) {
-      console.log(`  ${row.model.padEnd(22)} ← ${row.exposed_id}`);
+      console.log(`  ${row.model.padEnd(30)} ← ${row.exposed_id}`);
     }
-  }
-  if (outside.length > 0) {
-    console.error(`${cid}: 另有 ${outside.length} 个模型不在池内（渠道 CLI 仍可直接调用）`);
   }
   return 0;
 }
 
-/** 某渠道目录里进了池的模型 id（池 id 形态）。 */
-
-function contributedOf(channel: Channel): string[] {
-  const catalogIds = runInChannel(channel.config.cid, () => {
-    try {
-      return channel.catalog.exposedIds();
-    } catch {
-      return [] as string[];
-    }
-  });
-  return POOL_MODELS.filter((model) => catalogIds.some((id) => canonicalModelId(id) === model));
-}
-
 /**
- * `model list`：**公共模型池视图** —— 池内模型，各自挂出候选渠道与账本状态。
+ * `model list`：**公共模型池视图** —— 对外模型（`<cid>/<模型>`）与各渠道账本状态。
  *
- * 展示顺序与实际路由顺序一致（账单已用量降序、冷却中当 0、同分保持注册顺序），
- * 所以看到的第一行就是网关会先试的那家。
+ * 渠道由请求方通过 id 前缀指定，这里按渠道列出各自的对外模型；账本数据
+ * （已用量 / 冷却 / ok / fail）供观察渠道健康度，不再决定路由去向。
  */
 
 export async function listPoolModels(json: boolean): Promise<number> {
@@ -219,8 +200,7 @@ export async function listPoolModels(json: boolean): Promise<number> {
           fail: entry?.fail ?? 0,
           billing_at: entry?.billing_at ?? null,
         };
-      })
-      .sort((a, b) => b.score - a.score),
+      }),
   }));
 
   if (json) {
@@ -229,12 +209,12 @@ export async function listPoolModels(json: boolean): Promise<number> {
   }
 
   console.log(
-    `公共模型池（对外 ${POOL_MODELS.length} 个模型；请求落到哪家由网关按账单已用量决定）\n`,
+    `公共模型池（对外 ${POOL_MODELS.length} 个模型；id 为「渠道/模型」，由请求方指定渠道）\n`,
   );
   for (const row of rows) {
     console.log(`  ${row.model}`);
     if (row.candidates.length === 0) {
-      console.log("    （没有渠道提供它）\n");
+      console.log("    （渠道目录里没有它，或目录未就绪）\n");
       continue;
     }
     for (const candidate of row.candidates) {

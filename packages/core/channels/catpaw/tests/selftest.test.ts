@@ -15,11 +15,11 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
+import { after, afterEach, before, describe, it } from "node:test";
 
 const HOME = mkdtempSync(join(tmpdir(), "catpaw-selftest-"));
 process.env["MODELMUX_HOME"] = HOME;
@@ -430,9 +430,61 @@ describe("catalog", () => {
 
 // ── 7. 额度 ──────────────────────────────────────────────────────────────────
 
-describe("billing", () => {
-  it("无额度端点抛 CreditsError", async () => {
-    await assert.rejects(() => billing.fetchCredits(), billing.CreditsError);
+describe("billing（积分中心，离线 mock fetch）", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  /** 写一份本测试专用凭据（MODELMUX_HOME 已指向临时目录）。 */
+  function writeCredential(): void {
+    const dir = join(HOME, "catpaw");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "credentials.json"),
+      JSON.stringify({ accessToken: "tok-b", uid: "u-1", domain: "catx.nocode.cn" }),
+    );
+  }
+
+  it("credit/balance → 可用积分（网关层 X-Auth-Token 鉴权）", async () => {
+    writeCredential();
+    let captured: { url: string; headers: Record<string, string> } | null = null;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      captured = { url: String(input), headers: (init?.headers ?? {}) as Record<string, string> };
+      return new Response(JSON.stringify({ code: 0, data: { availableCredits: 548.61 } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const r = await billing.fetchCredits();
+    assert.match(captured!.url, /^https:\/\/catx\.nocode\.cn\/api\/gateway\/credit\/balance$/);
+    assert.equal(captured!.headers["X-Auth-Token"], "tok-b");
+    assert.equal(r.total.remain, 548.61);
+    assert.equal(r.total.used, 0, "上游不给已用量，如实记 0");
+    assert.equal(r.total.unit, "积分");
+  });
+
+  it("credit/register → 幂等申领（registerChannel=CATPAW_PC）", async () => {
+    writeCredential();
+    let captured: { url: string; body: string } | null = null;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      captured = { url: String(input), body: String(init?.body ?? "") };
+      return new Response(
+        JSON.stringify({ code: 0, data: { newUser: false, registrationBonus: 0, message: "用户已注册，幂等返回" } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    const { result } = await billing.claimRegister();
+    assert.match(captured!.url, /credit\/register$/);
+    assert.deepEqual(JSON.parse(captured!.body), { registerChannel: "CATPAW_PC" });
+    assert.equal(result.newUser, false);
+  });
+
+  it("上游 401 → NotLoggedInError（引导重新登录）", async () => {
+    writeCredential();
+    globalThis.fetch = (async () =>
+      new Response("{}", { status: 401 })) as typeof fetch;
+    await assert.rejects(() => billing.fetchCredits(), /please log in again/);
   });
 });
 

@@ -120,6 +120,13 @@ export interface UpstreamModule {
   modelsUrl(cfg?: any): string;
   buildHeaders(credential: any, cfg?: any): Record<string, string>;
   /**
+   * 可选：对话请求的**专用头族**（上游按整组头判定「是否官方客户端」的渠道需要）。
+   *
+   * 缺省时网关回退 `buildHeaders`（基础鉴权头）——普通 OpenAI 兼容渠道无需声明。
+   * 实例：workbuddyai 的官方桌面端身分头族（含每轮新生的会话/请求 ID）。
+   */
+  buildChatHeaders?(credential: any, cfg?: any): Record<string, string>;
+  /**
    * 可选：判定「非 401/403 的响应」是否也算**鉴权失败**（触发 token 刷新 + 换账号）。
    *
    * 有些上游不用标准状态码表达凭据失效 —— 如 codearts 的 APIG 网关对过期 token

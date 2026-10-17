@@ -75,6 +75,17 @@ node --test channels/workbuddy/tests/*.test.ts
 
 数据目录用 `MODELMUX_HOME` 指向临时目录，不碰真实凭据。
 
+## 参考实现（reference/）
+
+clone 到 `reference/` 的学习材料（不入库）；结论进 [`PROTOCOL.md`](./PROTOCOL.md)。
+
+| 仓库 | 用途 |
+| --- | --- |
+| [HanawaBanana/workbuddy2api](https://github.com/HanawaBanana/workbuddy2api) | 主参照（Go）：`internal/upstream/headers.go` 的官方桌面端指纹注入（X-Agent-Purpose + X-IDE-* 四头 + 按 realm 切 UA）、`internal/prompt/prompt.go` 的 11128 指纹串误杀与中性提示词重试 |
+| [xiaofan6ya/workbuddy2api](https://github.com/xiaofan6ya/workbuddy2api) | 协议与上游错误码参照（`docs/protocol-reference.md`、`docs/RELEASE_NOTES_UPSTREAM_ERRORS.md`） |
+| [linguo2625469/workbuddy2api-panel](https://github.com/linguo2625469/workbuddy2api-panel) | 管理面板与账号池运营形态参照 |
+| [Sliverkiss/CodeBuddy2api](https://github.com/Sliverkiss/CodeBuddy2api) | CodeBuddy 双区参照（83★）：国内端点 `copilot.tencent.com` 与本渠道对应（`internal/ioa`），CLI 身分（`X-IDE-Type: CLI`）；其国际端点用旧域名 `www.codebuddy.ai`（实测已 DNS 沉洞，桌面端已迁 `workbuddy.ai`，故不归 `workbuddyai` 渠道） |
+
 ## 许可证
 
 MIT
