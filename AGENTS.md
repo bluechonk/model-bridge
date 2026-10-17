@@ -166,10 +166,10 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
 - 禁止只 `build` 不 `restart`。
 - 禁止以「改动很小」「只改了注释」为由跳过 `restart`。
 - 禁止在 `status` 报陈旧构建时继续验证或宣称修复生效。
-- 禁止修改 `packages/core/gateway/src/stale-build.ts` 的判据来让 `status` 不再报警。
+- 禁止修改 `packages/core/gateway/src/app/stale-build.ts` 的判据来让 `status` 不再报警。
 
 判定口径：`status --json` 的 `stale_build` 必须为 `false`。
-实现见 `packages/core/gateway/src/stale-build.ts`；事故记录见 `docs/CONTRACT-TS.md` 的「陈旧构建」一节。
+实现见 `packages/core/gateway/src/app/stale-build.ts`；事故记录见 `docs/CONTRACT-TS.md` 的「陈旧构建」一节。
 
 ## 开发规范
 

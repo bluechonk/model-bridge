@@ -116,7 +116,7 @@ packages/core/channels/<cid>/
 
 ## 3. 渠道注册表（共享层与渠道层的唯一接缝）
 
-`packages/core/gateway/src/channel.ts` 定义 `Channel` 接口与注册函数。渠道在**入口处**
+`packages/core/gateway/src/runtime/channel.ts` 定义 `Channel` 接口与注册函数。渠道在**入口处**
 （`src/channel.ts`，模块加载时）调用 `setChannel()`；共享模块在**函数被调用时**
 通过 `getChannel()` 取用 —— 所以注册顺序只需早于第一次网络/路径操作即可。
 
@@ -217,11 +217,11 @@ export const REQUIRED_ALLOWLIST: RegExp[] = [/\bflash/i];             // 型号�
 ## 5. 渠道特有模块的接口契约
 
 共享层的 `gateway.ts` / `headless.ts` / `daemon.ts` / `auth-flow.ts` 按这套接口调用渠道模块。
-**导出签名以 `packages/core/gateway/src/channel.ts` 的类型定义与各渠道实现为准** ——
+**导出签名以 `packages/core/gateway/src/runtime/channel.ts` 的类型定义与各渠道实现为准** ——
 `tsc -b` 就是签名的校验器，本文不抄写签名（抄写必漂移）。本节只记录**编译器管不到的语义约定**：
 行为契约、禁止事项、与「为什么」。
 
-> 类型定义在 `packages/core/gateway/src/channel.ts`（`CredModule` / `UpstreamModule` /
+> 类型定义在 `packages/core/gateway/src/runtime/channel.ts`（`CredModule` / `UpstreamModule` /
 > `CatalogModule` / `BillingModule`）。凭据/配置的具体形态各渠道不同，故这些位置用
 > `any` —— 共享层只在**结构**上依赖它们，不做跨渠道的类型统一（那会在 10 个异构
 > 渠道间制造大量摩擦）。
@@ -408,7 +408,7 @@ Ctrl+点击 / 复制），用户自行在浏览器打开，再轮询/回调拿�
 
 ### 8.2 机制化防线（**不靠人记**）
 
-`packages/core/gateway/src/stale-build.ts`：比较**构建产物的最新 mtime**（工作区内各
+`packages/core/gateway/src/app/stale-build.ts`：比较**构建产物的最新 mtime**（工作区内各
 `packages/*/dist`、`packages/core/channels/*/dist` 下的 `.js`）与**守护进程启动时刻**
 （pid 文件的 mtime，`start` 亲手写的那一刻，等价且零平台依赖）。
 
@@ -462,7 +462,7 @@ mx <命令组> <子命令> [参数...]           # mx model list / mx model usag
 - **不采用 `mx <cid> <动词>`**：渠道名与动词共享位置 1 会二义（某渠道一旦叫 `models`，
  `mx models` 就分不清是「列渠道模型」还是「仓库级模型列表」），且与主流 CLI 心智相悖。
 
-实现落点：`packages/core/gateway/src/cli.ts` 的分发（动词表在前、cid 作 operand）、
+实现落点：`packages/core/gateway/src/app/cli.ts` 的分发（动词表在前、cid 作 operand）、
 `command-groups.ts` 的 `CHANNEL_VERBS`（动词 → 说明表）与 `runVerb`（动词 + 可选 cid）。
 
 ---

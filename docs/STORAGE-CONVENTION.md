@@ -54,7 +54,7 @@
 1. **单一存储根**：`~/.modelmux/`，由共享层唯一解析，渠道不得自行拼绝对路径。
 2. **按 cid 分层**：`<root>/<cid>/`。`cid` 全小写、仅 `[a-z0-9-]`、等于 `ChannelConfig.cid`。
 3. **根目录覆盖变量**：`MODELMUX_HOME`（唯一；没有别的名字，也不读历史变量）。
-4. **目录内固定文件名**（唯一定义处：`packages/core/gateway/src/paths.ts`）：
+4. **目录内固定文件名**（唯一定义处：`packages/core/gateway/src/runtime/paths.ts`）：
 
   | 文件 | 用途 |
   |---|---|

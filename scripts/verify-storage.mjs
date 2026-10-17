@@ -82,7 +82,7 @@ if (bridges.length < 2) {
 }
 
 const { rootDirFor } = await import(
-  pathToFileURL(join(workspaceRoot, "packages/core/gateway/dist/paths.js")).href
+  pathToFileURL(join(workspaceRoot, "packages/core/gateway/dist/runtime/paths.js")).href
 );
 
 const cids = new Set(bridges.map((b) => b.config.cid));

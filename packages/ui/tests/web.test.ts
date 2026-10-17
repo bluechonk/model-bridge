@@ -11,10 +11,10 @@ import { fileURLToPath } from "node:url";
 import { request } from "node:http";
 import { after, before, describe, it } from "node:test";
 
-import { start, emptySnapshot, type ControlBridge } from "../../core/gateway/dist/console.js";
-import { channels, clearChannels, setChannel, type Channel, type ChannelConfig } from "../../core/gateway/dist/channel.js";
-import { runInChannel } from "../../core/gateway/dist/channel-context.js";
-import { listAccounts, syncPool } from "../../core/gateway/dist/account-pool.js";
+import { start, emptySnapshot, type ControlBridge } from "../../core/gateway/dist/http/console.js";
+import { channels, clearChannels, setChannel, type Channel, type ChannelConfig } from "../../core/gateway/dist/runtime/channel.js";
+import { runInChannel } from "../../core/gateway/dist/runtime/channel-context.js";
+import { listAccounts, syncPool } from "../../core/gateway/dist/runtime/account-pool.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const HOME = mkdtempSync(join(tmpdir(), "modelmux-web-e2e-"));

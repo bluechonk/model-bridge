@@ -58,7 +58,7 @@
 > 官方「自定义模型」占位（`custom_model_*`）、上游标记不可用的通道会被各渠道排除，
 > 共享层不再做家族闸门。`traecn` 的隐藏条目与 `custom_model_*` 同样不出现在 `/v1/models`。
 
-来源：`packages/core/gateway/src/pool-targets.ts`（目标与匹配）、`pool-usage.ts`（账本与排序）。
+来源：`packages/core/gateway/src/pool/pool-targets.ts`（目标与匹配）、`pool-usage.ts`（账本与排序）。
 
 ### 2.1 匹配 = 归一化 + 精确相等
 
