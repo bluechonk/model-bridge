@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
+import { after, afterEach, before, describe, it } from "node:test";
 
 // 必须在 import 被测模块之前设置（paths 每次调用都重新解析存储根）
 const HOME = mkdtempSync(join(tmpdir(), "wb-cn-selftest-"));
@@ -26,6 +26,7 @@ process.env["MODELMUX_HOME"] = HOME;
 // 共享层来自工作区包；先注册本渠道（副作用）再引渠道模块
 const { paths, sseStream: sse, gateway } = await import("@modelmux/gateway");
 const channelModule = await import("../dist/channel.js");
+const billing = await import("../dist/billing.js");
 const catalog = await import("../dist/catalog.js");
 const cred = await import("../dist/cred.js");
 const upstream = await import("../dist/upstream.js");
@@ -469,5 +470,52 @@ describe("7. 上游错误处理", () => {
       await new Promise<void>((r) => failing.server.close(() => r()));
       await upstream.saveConfig(saved[0]);
     }
+  });
+});
+
+// ── 8. 每日签到（billing/meter 域，离线 mock fetch） ─────────────────────────
+
+describe("8. 每日签到", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  function writeCredential(): void {
+    const dir = join(HOME, "workbuddy");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "credentials.json"),
+      JSON.stringify({ accessToken: "tok-w", uid: "u-2", domain: "www.codebuddy.ai" }),
+    );
+  }
+
+  it("daily-checkin POST 空 body；业务码 0 = 签到成功", async () => {
+    writeCredential();
+    let captured: { url: string; method: string; body: string } | null = null;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      captured = { url: String(input), method: String(init?.method), body: String(init?.body ?? "") };
+      return new Response(JSON.stringify({ code: 0, msg: "success" }), { status: 200 });
+    }) as typeof fetch;
+    const r = await billing.dailyCheckin();
+    assert.match(captured!.url, /\/v2\/billing\/meter\/daily-checkin$/);
+    assert.equal(captured!.method, "POST");
+    assert.deepEqual(JSON.parse(captured!.body), {});
+    assert.deepEqual(r, { checkedIn: true, already: false, message: "签到成功" });
+  });
+
+  it("上游幂等拒绝（今天已签）按成功回报", async () => {
+    writeCredential();
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ code: 50001, msg: "already checked in today" }), { status: 200 })) as typeof fetch;
+    const r = await billing.dailyCheckin();
+    assert.deepEqual(r, { checkedIn: true, already: true, message: "already checked in today" });
+  });
+
+  it("其他业务码如实抛 CreditsError", async () => {
+    writeCredential();
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ code: 40001, msg: "activity ended" }), { status: 200 })) as typeof fetch;
+    await assert.rejects(() => billing.dailyCheckin(), /activity ended/);
   });
 });

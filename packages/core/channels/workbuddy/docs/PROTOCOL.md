@@ -25,7 +25,22 @@
 - **11128 的内容侧缓解**（`internal/prompt/prompt.go`）：上游内容审核按逐字精确匹配误杀
  system 里的指纹样板文本 → 改写为最小中性表述后重试一次；与头族修复互补，不可互替。
 
-## 3. 错误码
+## 3. 每日签到（`[参考]`，CN 与 global 同形）
+
+> 来源：`reference/HanawaBanana_workbuddy2api` 的 `internal/upstream/checkin_activity.go`
+> 与 `client.go`（实测 2026-09-28）。早期「国内版没有签到端点」的结论有误，已修正。
+
+| 端点（billing/meter 域，billingBase + path） | 方法 | 说明 |
+| --- | --- | --- |
+| `/v2/billing/meter/daily-checkin` | POST（body `{}`） | 每日签到；已签时业务码非 0（幂等，按成功回报） |
+| `/v2/billing/meter/checkin-activity-status` | POST（body `{}`） | 签到活动状态（只读）：`today_checked_in` / `streak_days` / `end_time` 等 |
+
+- CN 走 `/v2` 前缀；global 首选无 `/v2`、404 再回落（`/billing/meter/*`）—— 本渠道是
+  国内版，恒用 `/v2`。
+- 活动起止时间非 RFC3339（形如 `2026-09-29 23:59:59`，按 CST 解释）。
+- `GET` 同路径返回 404（上游只挂 POST），不要改方法。
+
+## 4. 错误码
 
 `11128`（request illegal / 非官方特征）与 `11140`（账号被限制）语义与
 `workbuddyai` 相同，见其 PROTOCOL.md §4。
