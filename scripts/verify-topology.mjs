@@ -11,24 +11,21 @@
  *
  * 允许的真实合并：两父各自承载了不同改动（tree 不等于任一父）时保留。
  *
- * 用法：`node scripts/verify-topology.mjs [<range>]`，默认校验「本地领先 origin/main 的提交」。
- * 读不到 origin/main 时退化为校验 HEAD 全部历史。
+ * 用法：`node scripts/verify-topology.mjs [<range>]`。
+ *
+ * ⚠ **默认范围是「全部可达的 merge」而非 `origin/main..HEAD`** —— 这一条是踩坑后的修正：
+ * GitHub 在 PR 合并时生成的 merge commit **从不经过本地校验**（它诞生在服务端、直接进 main），
+ * 用「领先 origin/main 的提交」作范围会永远漏掉它。全历史范围则能在下一次 push 的
+ * WSL 门禁里把它抓住。
+ *
+ * 存量已清理干净，所以全历史范围不会误报。
  */
 import { execFileSync } from "node:child_process";
 
 /** GitHub Actions 在 pull_request 事件里构造的临时合并提交（不在真实历史里，跳过）。 */
 const SYNTHETIC_MERGE = /^Merge [0-9a-f]{40} into [0-9a-f]{40}$/;
 
-function defaultRange() {
-  try {
-    execFileSync("git", ["rev-parse", "--verify", "origin/main"], { stdio: "ignore" });
-    return "origin/main..HEAD";
-  } catch {
-    return "";
-  }
-}
-
-const range = process.argv[2] ?? defaultRange();
+const range = process.argv[2];
 const args = ["rev-list", "--merges", ...(range ? [range] : ["HEAD"])];
 
 let hashes;
