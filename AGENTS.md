@@ -119,25 +119,26 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 - 文档与代码**同一个 commit** 更新。
 - 不要提交运行时数据（`~/.modelmux/`、`dist/`、`node_modules/`）。
 
-## 6. 改完代码要重启网关（**别让用户测旧进程**）
+## 6. 改完代码的执行顺序（**强制**）
 
-`npm run build` 只更新 `dist/`，**不会**重启已在跑的守护进程。旧进程继续用内存里的
-旧代码服务请求 —— 表现为「修复看起来没生效」：
+改动 `packages/core/**` 或 `packages/cli/**` 或 `packages/ui/**` 后，必须按此顺序执行全部四步：
 
-- 用户以为登录/凭证坏了，实际是进程没重启；
-- 日志里留着早已修掉的错误（如 `上游返回 HTTP 500`），把排查带偏；
-- agent 以为改动无效，开始重复排查同一个 bug。
+1. **构建**：`npm run build`
+2. **重启**：`node packages/cli/dist/cli.js restart`
+3. **确认无陈旧构建**：`node packages/cli/dist/cli.js status`
+   —— 输出必须**不含** `网关在跑旧代码`。
+4. **真机验证**：涉及 `login` / `cred` / `upstream` 的改动，必须走一遍
+   `mx login <cid>` → `mx status <cid>` → 一次真实对话。
 
-**曾发生过的真实事故**：网关启动于 21:29:59，修复 21:33 才编译完 —— 用户随后几次请求
-全打在旧代码上，看到的是修之前的行为（详见 `docs/CONTRACT-TS.md` 的「陈旧构建」一节）。
+禁止事项：
 
-规则：
+- 禁止只 `build` 不 `restart`。
+- 禁止以「改动很小」「只改了注释」为由跳过 `restart`。
+- 禁止在 `status` 报陈旧构建时继续验证或宣称修复生效。
+- 禁止修改 `packages/core/gateway/src/stale-build.ts` 的判据来让 `status` 不再报警。
 
-1. 改完共享层或渠道代码并 `npm run build` 后，**主动 `restart`**，别只 build。
-2. 涉及登录链路/上游协议的改动，必须走一次真机验证（`login <cid>` → `status` → 一次真实对话）。
-3. 判断当前进程是不是旧代码：`node packages/cli/dist/cli.js status`
-  —— 它会主动报 ` 网关在跑旧代码：构建产物 … 比进程启动 … 新`；
-  `status --json` 里是 `stale_build: true`。实现见 `packages/core/gateway/src/stale-build.ts`。
+判定口径：`status --json` 的 `stale_build` 必须为 `false`。实现见 `packages/core/gateway/src/stale-build.ts`，
+事故记录见 `docs/CONTRACT-TS.md` 的「陈旧构建」一节。
 
 ## 7. 开发规范（与全局 `~/.zcode/AGENTS.md` 一致，落到本仓库）
 
@@ -166,3 +167,10 @@ mx <动词> [<cid>] [参数...]        # 如 mx login traecn / mx status traecn 
 | 描述 | 简体中文，一句话说清改了什么，结尾不加句号 |
 | 正文 | 可选；与主题空一行；不要求解释「为什么」 |
 | footer | 可选；破坏性变更用 `!` 或 `BREAKING CHANGE: …` 标注 |
+
+**merge commit 同样适用**（校验器不过滤 merge）：
+
+- 本地合并必须显式给标题：`git merge --no-ff -m "merge(scope): 中文描述"`。
+- 禁止 `Merge pull request #N from …` 这类 GitHub 默认标题（无 type/scope/中文）。
+  仓库设置已固定为 `merge_commit_title=PR_TITLE`，故建 PR 时**PR 标题本身**必须是
+  `type(scope): 中文描述` —— 它会被直接用作 merge commit 标题。

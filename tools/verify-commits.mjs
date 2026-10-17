@@ -1,5 +1,5 @@
 /**
- * 提交信息规范校验：`type(scope)!: 中文描述`。
+ * 提交信息规范校验：`type(scope): 中文描述`。
  *
  * 规范遵循 Conventional Commits 并改中文（见 AGENTS.md §7），与 github 插件的
  * `$commit` 技能一致：
@@ -8,8 +8,12 @@
  * - 描述为简体中文，**结尾不加句号**；
  * - 破坏性变更可加 `!`（如 `refactor(repo)!:`）。
  *
+ * **merge commit 一并校验**：GitHub 默认生成的 `Merge pull request #N from …`
+ * 不含 type/scope/中文，属违规。仓库设置已改为 `merge_commit_title=PR_TITLE`
+ * （见 AGENTS.md §7），合并前本地 `git merge -m "merge(scope): 中文"` 也必须合规。
+ *
  * 用法：`node tools/verify-commits.mjs [<range>]`，默认校验 HEAD 可达的全部提交
- * （跳过 merge）。range 例：`HEAD~5..HEAD`、`origin/main..HEAD`。
+ * （含 merge）。range 例：`HEAD~5..HEAD`、`origin/main..HEAD`。
  */
 import { execFileSync } from "node:child_process";
 
@@ -17,8 +21,26 @@ const TYPES = new Set(["feat", "fix", "docs", "style", "refactor", "perf", "test
 const SUBJECT = /^([a-z]+)(\(([^)]*)\))?(!)?: (.+)$/;
 const CJK = /[\u3400-\u9fff]/;
 
-const range = process.argv[2];
-const args = ["log", "--no-merges", "--pretty=format:%h%x09%s", ...(range ? [range] : [])];
+const range = process.argv[2] ?? defaultRange();
+// 不过滤 merge（--no-merges 会让 GitHub 生成的英文 merge 标题漏网）
+const args = ["log", "--pretty=format:%h%x09%s", ...(range ? [range] : [])];
+
+/**
+ * 默认校验范围：**本地领先远端 main 的提交**（即「本次要推的」）。
+ *
+ * 为什么不校验全部历史：规则收紧（如开始约束 merge 标题）时，既有历史必然不合规，
+ * 但那已不可改写 —— 对历史报错只会让校验器无法通过，从而被绕过。
+ * 口径与 CI 一致：只管新增的这批。
+ * 读不到 origin/main 时退化为校验 HEAD 全部历史（单机上仍可用）。
+ */
+function defaultRange() {
+  try {
+    execFileSync("git", ["rev-parse", "--verify", "origin/main"], { stdio: "ignore" });
+    return "origin/main..HEAD";
+  } catch {
+    return "";
+  }
+}
 
 let out;
 try {
