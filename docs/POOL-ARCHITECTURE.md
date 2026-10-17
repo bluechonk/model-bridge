@@ -25,7 +25,7 @@
 - **渠道的新角色**：不是「一个网关」，而是**一个池子**。
  - **模型池**：该渠道能提供哪些模型（= 现有 `catalog` + 两道闸门白名单 `(deepseek|glm)` + `flash`，见 `CONTRACT-TS.md` §4.2）。
  - **账号池**：该渠道背后有几个账号（现状：只有 1 个）。
-- **对外形态**：一个 base URL（`http://127.0.0.1:8787/v1`）+ **两个公共模型 id**
+- **对外形态**：一个 base URL（`http://127.0.0.1:4412/v1`）+ **两个公共模型 id**
  （`deepseek-v4.1-flash` / `glm-5.3-flash`）。客户端只写模型名，
  落到哪家渠道由网关自己挑 —— 见 §2。
 
@@ -333,8 +333,8 @@ hasChannel(cid?: string): boolean;
 - **守护进程的「范围」**：渠道级（显式 `cid` 或只注册 1 个渠道）用渠道层文件
  `<root>/<cid>/gateway.pid|gateway.log|prefs.json`；**仓库级**（多渠道路由、未指定 cid）
  用根级 `<root>/gateway.pid|gateway.log|prefs.json` —— 一个服务多池的进程不属于任何单个渠道。
-- **仓库级默认端口**：多渠道路由时用 `REPO_DEFAULT_ADDR = 127.0.0.1:8787` /
- `REPO_DEFAULT_UI_PORT = 8788`，而不是取某个渠道的端口。
+- **仓库级默认端口**：多渠道路由时用 `REPO_DEFAULT_ADDR = 127.0.0.1:4412` /
+ 控制台挂在 `REPO_UI_PREFIX = /web`，而不是取某个渠道的端口。
 - **修掉一个潜伏 bug**：`daemon.start` 原本 spawn **共享包的 `cli.js`**，而那个文件只是一组
  导出、没有自带入口调用 → 守护进程起来立刻退出（TS 版 `start` 一直是坏的）。现在改为重跑
  **当前进程的入口**（`process.argv[1]`），任何入口（单渠道 bin / 仓库级 bin）都自洽。
@@ -345,7 +345,7 @@ hasChannel(cid?: string): boolean;
 - **仓库级 CLI 已可用**：`packages/cli`（bin `modelmux` / `mx`）。
 - **插件层已整体移除（2026-10-13）**：`plugins/` 与 `marketplace.json` 删除，项目更名
  `modelmux`，定位 = 纯 npx/npm -g 可装的 CLI；集成方式就是「任何 OpenAI 兼容客户端
- 指向 `http://127.0.0.1:8787/v1`」。（更早：per-channel 插件 → 单插件收敛 → 全部移除。）
+ 指向 `http://127.0.0.1:4412/v1`」。（更早：per-channel 插件 → 单插件收敛 → 全部移除。）
 
 ### 4.4 三层进程模型（2026-10-16 落地）
 

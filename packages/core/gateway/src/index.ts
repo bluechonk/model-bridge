@@ -93,7 +93,7 @@ export {
   defaultAddr,
   defaultUiPort,
   REPO_DEFAULT_ADDR,
-  REPO_DEFAULT_UI_PORT,
+  REPO_UI_PREFIX,
 } from "./cli-consts.js";
 
 // 服务身份（池路由入口在 pool-targets.ts）

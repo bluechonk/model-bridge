@@ -98,7 +98,7 @@ npm install                       # 装工作区依赖（含软链）
 npm run build                     # 全仓编译（tsc -b 增量 + cli 单文件 bundle）
 npm test                          # build + 三个校验器 + 全部包的测试
 npm run build --workspace=packages/core/channels/<cid>    # 只编一个渠道（也走引用链）
-node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，唯一网关端口 8787（REPO_DEFAULT_ADDR）
+node packages/cli/dist/cli.js --help        # 仓库级 CLI：多渠道路由，唯一网关端口 4412（REPO_DEFAULT_ADDR）
 node packages/cli/dist/cli.js model list    # 池视图：动态模型 → 候选渠道 + 账单用量 + 冷却
 node packages/cli/dist/cli.js model usage   # 池账本；--refresh 立刻重查
 node packages/cli/dist/cli.js login <cid>   # 对某个渠道操作：login / relogin / status / models / billing / accounts / paths / logs
@@ -118,8 +118,12 @@ node packages/core/channels/<cid>/dist/cli.js --help      # 单渠道 CLI（调�
    `mx status <cid>` 才是「某渠道的状态」。
 5. **反面写法 `mx <cid> <动词>` 一律不采用**：渠道名与动词共享位置 1 的命名空间会让两者二义
    （一旦某个渠道叫 `models`，`mx models` 就无法区分），且与主流 CLI 心智相悖。
-6. **端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:8787`，控制台 8788）；
+6. **单端口语义**：仓库级网关只监听**一个**端口（`REPO_DEFAULT_ADDR = 127.0.0.1:4412`），
+   Web 控制台与网关**共用该端口**，挂在 `REPO_UI_PREFIX = /web` 下（控制台 API 位于 `/web/api/*`）。
    `ChannelConfig.defaultAddr` / `uiPort` 只在**单渠道独立运行**时生效。`--addr` 可覆盖。
+   - 路由分工：`/` `/v1/*` `/health` 归网关；`/web` 与 `/web/*` 归控制台 handler
+     （由 `createConsoleHandler(bridge, "/web")` 注入 `GatewayOptions.console`；不注入时网关是纯 API 服务）。
+   - `mx web` = 「确保网关在跑 → 打开 `http://127.0.0.1:4412/web/`」，不再起独立进程。
 7. **构建模型**：根 `tsconfig.json` 是 *solution* 文件（`files: []` + `references` 列出全部包），
    公共编译选项在根 `tsconfig.base.json`（各包 `extends` 它）；`tsc -b` 一次调度整个依赖图，
    产物落在各包 `dist/`，增量状态在 `dist/tsconfig.tsbuildinfo`。

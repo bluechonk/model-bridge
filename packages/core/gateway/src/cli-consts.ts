@@ -33,10 +33,13 @@ function entryVersion(): string {
  * 仓库级（多渠道路由）默认值。
  *
  * 一个网关进程服务多个渠道时，它不属于任何单个渠道，故不取渠道的 `defaultAddr`。
- * `8787` 是既有的仓库级端口约定（ZCode 里的 `modelmux` provider 就指向它）。
+ * `4412` 是仓库级端口约定 —— 网关与 Web 控制台**共用同一端口**（单端口模式）：
+ * Web UI 挂在 `/web` 前缀下，控制台 API 位于 `/web/api/*`（见 `console.ts`）。
  */
-export const REPO_DEFAULT_ADDR = "127.0.0.1:8787";
-export const REPO_DEFAULT_UI_PORT = 8788;
+export const REPO_DEFAULT_ADDR = "127.0.0.1:4412";
+
+/** Web UI 的挂载前缀（单端口模式下由网关转发给 console handler）。 */
+export const REPO_UI_PREFIX = "/web";
 
 /** CLI 版本号：渠道级 = 该渠道的版本；多渠道路由 = 入口包（仓库级 CLI）的版本。 */
 export function version(cid?: string): string {
@@ -52,9 +55,14 @@ export function defaultAddr(cid?: string): string {
   return REPO_DEFAULT_ADDR;
 }
 
-/** 控制台 API 默认端口（多渠道路由时用仓库级默认值）。 */
+/**
+ * 控制台 API 默认端口。
+ *
+ * 单渠道独立运行时用该渠道的 `uiPort`（渠道自己的约定）；
+ * 仓库级（多渠道路由）下控制台与网关**共用同一端口**，取 `REPO_DEFAULT_ADDR` 的端口。
+ */
 export function defaultUiPort(cid?: string): number {
   if (cid !== undefined) return getChannel(cid).config.uiPort;
   if (channelCount() === 1) return getChannel().config.uiPort;
-  return REPO_DEFAULT_UI_PORT;
+  return Number.parseInt(REPO_DEFAULT_ADDR.split(":")[1] ?? "4412", 10);
 }

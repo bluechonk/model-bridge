@@ -15,6 +15,7 @@ import { runInChannel } from "./channel-context.js";
 import { channels, getChannel, type Channel } from "./channel.js";
 import * as console_ from "./console.js";
 import * as gateway from "./gateway.js";
+import { REPO_UI_PREFIX } from "./cli-consts.js";
 import { credentialsPath } from "./paths.js";
 
 /** 输出一行 JSON 事件。解析方应跳过无法解析的行（第三方库也可能打印 stdout）。 */
@@ -225,7 +226,8 @@ export async function runLogin(options: {
 
 export interface ServeOptions {
   addr: string;
-  uiPort: number;
+  /** 已废弃：单端口模式下控制台与网关共用 `addr`，此字段仅保留签名兼容。 */
+  uiPort?: number;
   verbose: boolean;
   ensureLogin?: boolean;
   forceLogin?: boolean;
@@ -249,7 +251,6 @@ export interface ServeOptions {
 export async function runServe(options: ServeOptions): Promise<number> {
   const {
     addr,
-    uiPort,
     verbose,
     ensureLogin = false,
     forceLogin = false,
@@ -263,7 +264,7 @@ export async function runServe(options: ServeOptions): Promise<number> {
   const prefix = `[${gateway.serviceName(cid)}]`;
 
   const state = new ServiceState(addr);
-  if (json) emit({ event: "start", mode: "serve", addr, ui_port: uiPort, ...(cid ? { cid } : {}) });
+  if (json) emit({ event: "start", mode: "serve", addr, ui_prefix: REPO_UI_PREFIX, ...(cid ? { cid } : {}) });
 
   const bridge: console_.ControlBridge = {
     provider: () => state.snapshot(),
@@ -272,7 +273,11 @@ export async function runServe(options: ServeOptions): Promise<number> {
       state.retryRequested = true;
     },
   };
-  const consoleServer = consoleEnabled ? await console_.start(uiPort, bridge, undefined, cid) : null;
+  // 单端口模式：控制台 handler 挂载进网关的 /web 前缀（不再起独立 server）。
+  // `consoleEnabled=false`（--no-console）时不注入，网关保持纯 API 行为。
+  const consoleHandler = consoleEnabled
+    ? console_.createConsoleHandler(bridge, REPO_UI_PREFIX)
+    : null;
 
   let running: gateway.RunningGateway | null = null;
   let shuttingDown = false;
@@ -282,7 +287,6 @@ export async function runServe(options: ServeOptions): Promise<number> {
     shuttingDown = true;
     state.quitting = true;
     await running?.close().catch(() => {});
-    await consoleServer?.close().catch(() => {});
   };
 
   // 终止源统一化：SIGINT/SIGTERM/SIGHUP 与「监督者消失（IPC 断开）」都汇入 stopped，
@@ -355,6 +359,7 @@ export async function runServe(options: ServeOptions): Promise<number> {
       running = await gateway.start(addr, {
         verbose,
         logger: (m) => console.error(`${prefix} ${m}`),
+        ...(consoleHandler ? { console: consoleHandler, consolePrefix: REPO_UI_PREFIX } : {}),
       });
     } catch (err) {
       state.setGatewayError(String(err));
@@ -367,7 +372,7 @@ export async function runServe(options: ServeOptions): Promise<number> {
       emit({
         event: "ready",
         gateway: `http://${state.base}`,
-        console: consoleServer?.url ?? "",
+        console: consoleEnabled ? `http://${state.base}${REPO_UI_PREFIX}/` : "",
       });
     }
     // 网关 ready 即挂自动签到：逐渠道（未登录跳过 / 台账已签跳过 / 连败 3 次当日熔断）

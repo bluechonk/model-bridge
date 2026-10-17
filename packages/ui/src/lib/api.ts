@@ -6,16 +6,21 @@ import type {
   UiSnapshot,
 } from "./types";
 
+/**
+ * 后端基地址：单端口模式下 UI 挂在网关的 `/web` 前缀下，
+ * 控制台 API 相应地位于 `/web/api/*`（见 `core/gateway/src/console.ts`）。
+ */
 const BASE = typeof window === "undefined" ? "" : window.location.origin;
+const API_BASE = `${BASE}/web`;
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json() as T;
 }
 
 async function post<T>(path: string, body: unknown = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

@@ -109,6 +109,16 @@ export const IMPLEMENTATION = "typescript";
 export interface GatewayOptions {
   verbose?: boolean;
   logger?: (message: string) => void;
+  /**
+   * 控制台 Web UI 的挂载点（**可选注入**）。
+   *
+   * 单端口模式（`mx web` / `mx start --web`）时传入 `createConsoleHandler(bridge, "/web")`，
+   * 网关会在 `/web` 与 `/web/*` 前缀下转发给它；不传时网关行为与纯 API 服务完全一致
+   * （保持 gateway 不被 UI 耦合）。
+   */
+  console?: (req: IncomingMessage, res: ServerResponse) => void;
+  /** 控制台挂载前缀（默认 `/web`）。 */
+  consolePrefix?: string;
 }
 
 function writeJson(res: ServerResponse, data: unknown, status = 200): void {
@@ -963,11 +973,27 @@ export function createHandler(opts: GatewayOptions = {}) {
   const options: Required<GatewayOptions> = {
     verbose: opts.verbose ?? false,
     logger: opts.logger ?? ((m: string) => console.error(`[${serviceName()}] ${m}`)),
+    console: opts.console ?? (() => {}),
+    consolePrefix: opts.consolePrefix ?? "/web",
   };
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const path = new URL(req.url ?? "/", "http://localhost").pathname;
     try {
+      // —— 控制台 Web UI（可选挂载；未注入时下面的 live 检查会直接跳过）——
+      if (opts.console) {
+        const prefix = options.consolePrefix;
+        // `/web` 无尾斜杠时补一个 301，保证 SPA 里的相对资源路径解析正确
+        if (path === prefix) {
+          res.writeHead(301, { Location: `${prefix}/` });
+          res.end();
+          return;
+        }
+        if (path.startsWith(`${prefix}/`)) {
+          options.console(req, res);
+          return;
+        }
+      }
       if (path === "/v1/chat/completions") {
         await handleChat(req, res, options);
         return;

@@ -176,19 +176,24 @@ function isSameOrigin(req: import("node:http").IncomingMessage, host: string): b
   }
 }
 
-/** 启动控制台 API 服务。端口被占用时回退到系统分配的空闲端口。 */
-export async function start(
-  port: number,
+/**
+ * 把 console 路由体抽成**可挂载的 handler**，供两种形态复用：
+ * - 独立进程（`mx web` / 单渠道调试）：`prefix = ""`，自带 server
+ * - 挂载进网关（单端口模式）：`prefix = "/web"`，由 gateway 的 handler 转发
+ *
+ * 所有路由判断都带 `prefix`，因此同一份实现能同时服务根路径与子路径。
+ */
+export function createConsoleHandler(
   bridge: ControlBridge,
+  prefix = "",
   host = DEFAULT_UI_HOST,
-  cid?: string,
-): Promise<ConsoleServer> {
-  void cid; // 保留签名兼容（旧的 hostname 区分逻辑，独立 web 模式无渠道概念）
-  const server = createServer((req, res) => {
+): (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => void {
+  return (req, res) => {
     const path = new URL(req.url ?? "/", "http://localhost").pathname;
+    const p = (suffix: string): string => `${prefix}${suffix}`;
 
     // —— 静态（GET） ——
-    if (path === "/" && (req.method === "GET" || req.method === "HEAD")) {
+    if (path === p("/") && (req.method === "GET" || req.method === "HEAD")) {
       if (existsSync(WEB_UI_INDEX)) serveStatic(res, "index.html");
       else
         text(
@@ -198,22 +203,22 @@ export async function start(
         );
       return;
     }
-    const assetsPrefix = "/assets/";
+    const assetsPrefix = p("/assets/");
     if ((req.method === "GET" || req.method === "HEAD") && path.startsWith(assetsPrefix)) {
-      // 只去掉开头的 `/`，**保留 `assets/` 目录段** ——
+      // 只去掉前缀与开头的 `/`，**保留 `assets/` 目录段** ——
       // 用 slice(assetsPrefix.length) 会把目录段一起剥掉，导致查 ui/index-*.js（不存在）而 404。
-      serveStatic(res, path.slice(1));
+      serveStatic(res, path.slice(prefix.length + 1));
       return;
     }
 
     // SPA 回退：React Router 在客户端负责路由（非 API 路径都回 index.html）
-    if (!path.startsWith("/api/") && (req.method === "GET" || req.method === "HEAD")) {
+    if (!path.startsWith(p("/api/")) && (req.method === "GET" || req.method === "HEAD")) {
       serveStatic(res, WEB_UI_INDEX);
       return;
     }
 
     // —— API ——
-    if (path === "/api/state") {
+    if (path === p("/api/state")) {
       let snapshot: UiSnapshot;
       try {
         snapshot = bridge.provider?.() ?? emptySnapshot();
@@ -224,7 +229,7 @@ export async function start(
       return;
     }
 
-    if (path === "/api/theme") {
+    if (path === p("/api/theme")) {
       if (req.method !== "POST") {
         json(res, { ok: false, error: "use POST" }, 405);
         return;
@@ -255,7 +260,7 @@ export async function start(
       return;
     }
 
-    if (path === "/api/retry-login") {
+    if (path === p("/api/retry-login")) {
       if (req.method !== "POST") {
         json(res, { ok: false, error: "use POST" }, 405);
         return;
@@ -269,7 +274,7 @@ export async function start(
       return;
     }
 
-    if (path === "/api/commands") {
+    if (path === p("/api/commands")) {
       if (req.method !== "POST") {
         json(res, { ok: false, error: "use POST" }, 405);
         return;
@@ -311,7 +316,19 @@ export async function start(
     }
 
     json(res, { ok: false, error: `unknown path ${path}` }, 404);
-  });
+  };
+}
+
+/** 启动控制台 API 服务。端口被占用时回退到系统分配的空闲端口。 */
+export async function start(
+  port: number,
+  bridge: ControlBridge,
+  host = DEFAULT_UI_HOST,
+  cid?: string,
+): Promise<ConsoleServer> {
+  void cid; // 保留签名兼容（旧的 hostname 区分逻辑，独立 web 模式无渠道概念）
+  const handler = createConsoleHandler(bridge, "", host);
+  const server = createServer((req, res) => handler(req, res));
 
   const bound = await new Promise<number>((resolve, reject) => {
     server.once("error", (err: NodeJS.ErrnoException) => {

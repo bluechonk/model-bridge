@@ -25,7 +25,7 @@ modelmux/                     ← 仓库根 = 工作区根
 │       ├── auth-flow.ts          ← 登录与凭证生命周期（与界面解耦）
 │       ├── cli.ts                ← 命令行入口与参数解析
 │       ├── cli-consts.ts         ← version / defaultAddr / defaultUiPort（取自注册的渠道）
-│       ├── console.ts            ← 控制台 API（/api/state 等）
+│       ├── console.ts            ← 控制台 API（/web/api/state 等）
 │       ├── paths.ts              ← 本地文件路径（凭证/配置/日志/PID）
 │       ├── portfree.ts           ← 端口占用检测与释放、地址工具
 │       ├── sse-stream.ts         ← SSE 规范化、聚合、中继

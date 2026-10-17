@@ -6,7 +6,7 @@ OpenAI 兼容客户端指过来就能用。
 
 ## 这是什么
 
-- **一个网关**：监听 `127.0.0.1:8787`，提供 `/v1/chat/completions`、`/v1/models`、`/health`。
+- **一个网关**：监听 `127.0.0.1:4412`，提供 `/v1/chat/completions`、`/v1/models`、`/health`。
 - **动态模型池**：对外模型是全部渠道 `catalog` 的归一化并集（`/v1/models` 实时汇总）。
   客户端只写模型名，请求落到哪家渠道由网关按各渠道账单已用量决定（失败的渠道进冷却、当 0 处理）。
 - **11 个渠道**：每个渠道是一个池子（模型目录 + 凭据 + 上游协议），注册在 `packages/core/channels/` 下。
@@ -31,7 +31,7 @@ npm install          # 装工作区依赖
 npm run build        # 全仓编译（tsc -b + cli 单文件 bundle）
 npm test             # build + 校验器 + 全部包的测试
 
-node packages/cli/dist/cli.js start              # 启动网关（守护式，端口 8787）
+node packages/cli/dist/cli.js start              # 启动网关（守护式，端口 4412）
 node packages/cli/dist/cli.js model list         # 池视图：两个模型分别会落到谁
 node packages/cli/dist/cli.js login <cid>        # 登录某个渠道（浏览器授权）
 ```
@@ -53,7 +53,7 @@ mx model list
 ## 接入任意客户端
 
 网关不绑定任何宿主工具：任何 OpenAI 兼容客户端（CLI、IDE、桌面应用）把 base url
-指到 `http://127.0.0.1:8787/v1`，模型填 `deepseek-v4.1-flash` 或 `glm-5.3-flash`
+指到 `http://127.0.0.1:4412/v1`，模型填 `deepseek-v4.1-flash` 或 `glm-5.3-flash`
 （API key 任意非空）即可。
 
 ## 文档
