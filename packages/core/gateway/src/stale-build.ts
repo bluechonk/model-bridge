@@ -45,8 +45,8 @@ const NOT_STALE: StaleBuildReport = { stale: false, buildMs: null, pidMs: null }
 /**
  * 从 `start` 向上找**工作区根**：带 `workspaces` 清单的 `package.json`。
  *
- * 早期判据要求 workspaces 里含 `-bridge` 结尾的条目（旧布局 `packages/channels/*-bridge`），
- * 但本仓库早已改成 `packages/*` + `packages/channels/*` —— 判据失配会让查找**永远失败**
+ * 早期判据要求 workspaces 里含 `-bridge` 结尾的条目（旧布局 `packages/core/channels/*-bridge`），
+ * 但本仓库早已改成 `packages/*` + `packages/core/channels/*` —— 判据失配会让查找**永远失败**
  * （`paths <cid>` 因此一直报「未找到工作区根」）。现在只认 `workspaces` 字段本身，
  * 与具体布局解耦。
  *
@@ -95,14 +95,19 @@ function packageRoot(): string {
 function newestBuildMs(root: string | null): number | null {
   const dirs: string[] = [];
   if (root) {
-    for (const group of ["packages", "packages/channels"]) {
-      let names: string[];
-      try {
-        names = readdirSync(join(root, group));
-      } catch {
-        continue;
+    // 显式列出**全部包目录**（含嵌套的 packages/core/*）——
+    // 早期用「顶层 groups 遍历一层」的写法，core 下沉后 gateway 会被漏掉，
+    // 导致「跑旧代码」检测对共享层失明。
+    for (const group of ["packages/cli", "packages/ui", "packages/core/gateway"]) {
+      dirs.push(join(root, group, "dist"));
+    }
+    // 渠道包是 core/channels 下的一层（数量随渠道增减，故动态列）
+    try {
+      for (const name of readdirSync(join(root, "packages/core/channels"))) {
+        dirs.push(join(root, "packages/core/channels", name, "dist"));
       }
-      for (const name of names) dirs.push(join(root, group, name, "dist"));
+    } catch {
+      /* 目录不存在时忽略（如打包后的单渠道环境） */
     }
   } else {
     dirs.push(join(packageRoot(), "dist"));

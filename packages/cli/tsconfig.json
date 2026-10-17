@@ -16,40 +16,40 @@
   ],
   "references": [
     {
-      "path": "../gateway"
+      "path": "../core/gateway"
     },
     {
-      "path": "../channels/catpaw"
+      "path": "../core/channels/catpaw"
     },
     {
-      "path": "../channels/codearts"
+      "path": "../core/channels/codearts"
     },
     {
-      "path": "../channels/lobsterai"
+      "path": "../core/channels/lobsterai"
     },
     {
-      "path": "../channels/loomy"
+      "path": "../core/channels/loomy"
     },
     {
-      "path": "../channels/orcaterm"
+      "path": "../core/channels/orcaterm"
     },
     {
-      "path": "../channels/qoder"
+      "path": "../core/channels/qoder"
     },
     {
-      "path": "../channels/qodercn"
+      "path": "../core/channels/qodercn"
     },
     {
-      "path": "../channels/raccoon"
+      "path": "../core/channels/raccoon"
     },
     {
-      "path": "../channels/traecn"
+      "path": "../core/channels/traecn"
     },
     {
-      "path": "../channels/workbuddy"
+      "path": "../core/channels/workbuddy"
     },
     {
-      "path": "../channels/workbuddyai"
+      "path": "../core/channels/workbuddyai"
     }
   ]
 }
