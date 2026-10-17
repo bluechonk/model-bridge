@@ -4,14 +4,12 @@ import type { ReactElement } from "react";
 /** 登录流程面板。 */
 export function LoginForm({
   channels,
-  authUrl,
   message,
   onLogin,
   busy,
   noLoginChannels,
 }: {
   channels: ChannelInfo[];
-  authUrl: string;
   message: string;
   onLogin: (cid: string, force: boolean) => void;
   busy: boolean;
@@ -58,14 +56,6 @@ export function LoginForm({
         </button>
       </div>
       {message && <div className="text-sm">{message}</div>}
-      {authUrl && (
-        <div className="rounded bg-blue-50 p-3 text-sm">
-          授权链接：
-          <a className="ml-1 break-all text-blue-700 underline" href={authUrl} target="_blank" rel="noreferrer">
-            {authUrl}
-          </a>
-        </div>
-      )}
     </div>
   );
 }

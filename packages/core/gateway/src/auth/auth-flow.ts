@@ -61,7 +61,11 @@ export async function ensureLogin(
             "open the URL below in your browser to authorize (Ctrl+click or copy); login continues automatically once authorized.",
             url,
           ),
+        // 二维码图片：扫码必须用这张（授权页每次加载都会换一个新的二维码会话）
+        onQr: (qr) => ui.setQr?.(qr),
         onStatus: (msg) => ui.setState("login", msg),
+        // 兜底：回调页线上是 404，code 只在地址栏里 —— 由用户粘回来
+        pasteCode: () => ui.takePastedCallback?.(),
       });
     } catch (err) {
       ui.setState("error", `login failed: ${String(err)}`);

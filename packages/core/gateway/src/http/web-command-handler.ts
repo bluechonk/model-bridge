@@ -26,6 +26,13 @@ import type { WebCommandBody, WebCommandResult, WebChannelStatus } from "./web-t
 export interface WebCommandDeps {
   /** 触发某渠道的交互式登录（浏览器授权等）。实现方负责异步执行与错误上报。 */
   triggerLogin?: (cid: string, force: boolean) => void;
+  /**
+   * 提交用户粘回的回调链接（一次性授权 code 的兜底通道）。
+   *
+   * 回调页线上是 404（微信只校验 `redirect_uri` 域名、官方客户端在内嵌窗口里
+   * 拦跳转），所以没有浏览器的进程只能靠用户把地址栏那条链接粘回来。
+   */
+  submitCallback?: (raw: string) => void;
 }
 
 export type WebCommandHandler = (body: WebCommandBody) => Promise<WebCommandResult>;
@@ -131,6 +138,17 @@ export function createWebCommandHandler(deps: WebCommandDeps = {}): WebCommandHa
         if (cid === undefined || !hasChannel(cid)) return err("参数 cid 必须是已注册渠道");
         runInChannel(cid, () => syncPool(cid));
         return ok({});
+      }
+      case "pasteCallback": {
+        // 兜底路径：回调页线上是 404，code 只在用户浏览器地址栏里。
+        // 长轮询拿不到时，由用户把那条链接粘回来完成登录。
+        const raw = typeof args["url"] === "string" ? args["url"] : "";
+        if (!raw.trim()) return err("参数 url 必填（粘贴浏览器地址栏里的回调链接）");
+        if (!deps.submitCallback) {
+          return err("当前运行形态不支持粘贴回调链接（未注入 submitCallback）");
+        }
+        deps.submitCallback(raw);
+        return ok({ submitted: true, message: "已收到回调链接，登录流程将继续" });
       }
       default:
         return err(`未知 action: ${String(action)}`);

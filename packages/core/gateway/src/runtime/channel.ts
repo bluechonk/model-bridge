@@ -64,6 +64,18 @@ export interface CreditsResult {
 /** 登录流程的界面能力（打到 stdout / 窗口状态机都可以满足）。 */
 export interface LoginUi {
   setState(state: string, message?: string, url?: string): void;
+  /**
+   * 二维码图片 URL（可选）。扫码必须用这一张：它对应本轮长轮询的 uuid，
+   * 而授权页每次加载都会生成新的 uuid。
+   */
+  setQr?(url: string): void;
+  /**
+   * 取走用户粘回的回调链接（可选，只消费一次）。
+   *
+   * 回调页线上是 404，`code` 只出现在浏览器地址栏；没有浏览器的进程
+   * （网关/CLI）只能靠用户把它粘回来。
+   */
+  takePastedCallback?(): string | undefined;
 }
 
 /*
@@ -80,7 +92,14 @@ export interface CredModule {
   save(c: any): Promise<void>;
   login(
     baseUrl: string,
-    options?: { onUrl?: (url: string) => void; onStatus?: (msg: string) => void },
+    options?: {
+      onUrl?: (url: string) => void;
+      onStatus?: (msg: string) => void;
+      /** 二维码图片 URL（loomy 的微信扫码用；扫码必须用这张）。 */
+      onQr?: (url: string) => void;
+      /** 取走用户粘回的回调链接（回调页 404，code 只在地址栏里）。 */
+      pasteCode?: () => string | undefined;
+    },
   ): Promise<any>;
   refresh(c: any): Promise<any>;
   resolveBaseUrl(realm?: string): string;

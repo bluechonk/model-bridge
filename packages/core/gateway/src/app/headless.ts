@@ -38,14 +38,26 @@ class StdoutLoginUi implements authFlow.LoginUi {
     private readonly observer?: authFlow.LoginUi,
   ) {}
 
-  setState(state: string, message = "", url = ""): void {
+  /** 二维码图片 URL：转发给观察者（控制台据此渲染 `<img>`）。 */
+  setQr(url: string): void {
+    this.observer?.setQr?.(url);
+  }
+
+  /** 取走用户粘回的回调链接（转发给观察者）。 */
+  takePastedCallback(): string | undefined {
+    return this.observer?.takePastedCallback?.();
+  }
+
+  setState(state: string, message = "", url = "", qr = ""): void {
     if (url) this.authUrl = url;
+    if (qr) this.observer?.setQr?.(qr);
     this.observer?.setState(state, message, url);
     const tag = this.cid ? `[${this.cid}] ` : "";
     if (this.jsonMode) {
       const event: Record<string, unknown> = { event: "login", state, message };
       if (this.cid) event["cid"] = this.cid;
       if (url) event["auth_url"] = url;
+      if (qr) event["qr_url"] = qr;
       emit(event);
     } else {
       console.log(`[login] ${tag}${state}: ${message}`);
@@ -63,8 +75,11 @@ class ServiceState {
   private uiState = "probing"; // 状态取值（英文枚举）：probing / login / error / running
   private stateMessage = "";
   private authUrl = "";
+  private qrUrl = "";
   private gatewayError = "";
   private modelsShown: string[] = [];
+  /** 用户粘回的回调链接（一次性消费，见 `takePastedCallback`）。 */
+  private pastedCallback = "";
   retryRequested = false;
   quitting = false;
 
@@ -82,6 +97,28 @@ class ServiceState {
     if (state === "running") this.gatewayError = "";
   }
 
+  /** 设置本轮扫码的二维码图片 URL（真正该给用户扫的那张）。 */
+  setQr(url: string): void {
+    this.qrUrl = url;
+  }
+
+  /** 登录结束后清掉上一轮的二维码，避免界面显示已过期的码。 */
+  clearQr(): void {
+    this.qrUrl = "";
+  }
+
+  /** 供登录流程取走用户粘回的回调链接（只消费一次）。 */
+  takePastedCallback(): string | undefined {
+    const v = this.pastedCallback;
+    this.pastedCallback = "";
+    return v || undefined;
+  }
+
+  /** Web 端提交回调链接（用户在 404 页复制地址栏后粘进来）。 */
+  submitPastedCallback(raw: string): void {
+    this.pastedCallback = raw;
+  }
+
   setGatewayError(error: string): void {
     this.gatewayError = error;
   }
@@ -93,6 +130,7 @@ class ServiceState {
       ui_state: this.uiState,
       message: this.stateMessage,
       auth_url: this.authUrl,
+      qr_url: this.qrUrl,
       base_url: this.baseUrl,
       chat_url: this.chatUrl,
       models: [...this.modelsShown],
@@ -145,8 +183,13 @@ export async function runLogin(options: {
     try {
       await runInChannel(target.config.cid, () =>
         loginWechat.call(cred, cred.resolveBaseUrl(realm), {
-          onUrl: (url: string) => ui.setState("login", "open this URL and scan the QR code with WeChat", url),
+          // ⚠ auth_url 只是「授权页在哪」；扫码必须用 onQr 给的那张 —— 授权页每次
+          // 加载都会新生成 uuid，扫那一张的码与本轮长轮询不是同一个会话。
+          onUrl: (url: string) => ui.setState("login", "open this URL if you need the authorization page", url),
+          onQr: (qr: string) => ui.setState("login", "scan the QR code with WeChat and confirm on your phone", "", qr),
           onStatus: (msg: string) => ui.setState("login", msg),
+          // 长轮询拿不到时的兜底：让界面能把用户粘回的回调链接喂进来。
+          pasteCode: () => observer?.takePastedCallback?.(),
         }),
       );
       ok = true;
@@ -293,6 +336,8 @@ export async function runServe(options: ServeOptions): Promise<number> {
         // 登录失败会反映在后续 /web/api/state 的 auth_url 或 gateway_error 上
       });
     },
+    // 用户把回调链接粘回来 → 交给正在跑的那轮登录（一次性 code 的兜底通道）
+    submitCallback: (raw) => state.submitPastedCallback(raw),
   };
   // 单端口模式：控制台 handler 挂载进网关的 /web 前缀（不再起独立 server）。
   // `consoleEnabled=false`（--no-console）时不注入，网关保持纯 API 行为。
